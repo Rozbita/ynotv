@@ -3162,7 +3162,10 @@ export function ChannelPanel({
       {selectedChannel ? (
         <>
           {/* 3-column live info header */}
-          <div className="guide-alt-live-header">
+          <div
+            className="guide-alt-live-header"
+            title={selectedProgram ? `${selectedProgram.title}${selectedProgram.subtitle ? `\n${selectedProgram.subtitle}` : ''}\n${formatEpgTime(new Date(selectedProgram.start))} - ${formatEpgTime(new Date(selectedProgram.end))}${selectedProgram.description ? `\n\n${selectedProgram.description}` : ''}${(Boolean(selectedChannel.tv_archive) || selectedChannel.tv_archive === 1) ? `\n\n${i18n.t('epg:clickPlayCatchup')}` : ''}` : undefined}
+          >
             <span className="guide-alt-live-badge">● {i18n.t('common:live', { defaultValue: 'LIVE' })}</span>
             <span className="guide-alt-live-channel" title={selectedChannel.name}>
               {selectedChannel.name}
@@ -3194,7 +3197,10 @@ export function ChannelPanel({
               scrollRef={altScheduleRef}
               estimateItemHeight={(index) => {
                 const item = altScheduleDisplay[index];
-                return item?.kind === 'header' ? 30 : item?.row.program.description ? 78 : 52;
+                // Every schedule row is exactly 3 lines (time / title / one-line
+                // description slot), so all boxes are the same height even when
+                // a program has no description.
+                return item?.kind === 'header' ? 30 : 78;
               }}
               overscan={6}
               getKey={(item) => item.key}
@@ -3203,9 +3209,14 @@ export function ChannelPanel({
                   return <div className="guide-alt-schedule-day">{item.dateLabel}</div>;
                 }
                 const { program, startMs, endMs, isCurrent, clickable } = item.row;
+                // Same hover tooltip as the timeline grid (ProgramBlock): program
+                // name, subtitle, start–end time, && description — plus the catch-up
+                // hint when the program is playable.
+                const scheduleTooltip = `${program.title}${program.subtitle ? `\n${program.subtitle}` : ''}\n${formatEpgTime(new Date(startMs))} - ${formatEpgTime(new Date(endMs))}${program.description ? `\n\n${program.description}` : ''}${clickable ? `\n\n${i18n.t('epg:clickPlayCatchup')}` : ''}`;
                 return (
                   <button
                     className={`guide-alt-schedule-row ${isCurrent ? 'running' : ''} ${clickable ? 'clickable' : ''}`}
+                    title={scheduleTooltip}
                     onClick={() => {
                       if (!clickable) return;
                       const durationMins = Math.max(1, Math.round((endMs - startMs) / 60000));
@@ -3219,13 +3230,14 @@ export function ChannelPanel({
                         {formatEpgTime(new Date(startMs))} - {formatEpgTime(new Date(endMs))}
                       </span>
                     </div>
-                    <span className="guide-alt-schedule-title" title={program.title}>
+                    <span className="guide-alt-schedule-title">
                       {program.title}
                       {isCurrent && <span className="guide-alt-schedule-running">{i18n.t('common:running', { defaultValue: 'Running' })}</span>}
                     </span>
-                    {program.description && (
-                      <span className="guide-alt-schedule-desc">{program.description}</span>
-                    )}
+                    {/* Description always rendered so the description slot is
+                        reserved — every program box keeps the same height even
+                        when a program has no/short description. */}
+                    <span className="guide-alt-schedule-desc">{program.description}</span>
                   </button>
                 );
               }}

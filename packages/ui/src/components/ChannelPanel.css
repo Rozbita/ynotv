@@ -3686,9 +3686,15 @@ html[data-theme]:has(.guide-transparent-mode) .category-strip {
   line-height: 1.45;
   color: var(--text-secondary, rgba(255, 255, 255, 0.65));
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  /* Reserve exactly one line even when a program has no description, so every
+     schedule box is exactly 3 rows (time / title / description) at the same
+     height — reserving a second line made short descriptions show a big gap
+     (a "4th row"). The full description is available on hover via the title
+     tooltip. */
+  min-height: 1.45em;
 }
 
 .guide-alt-schedule .virtual-list {
