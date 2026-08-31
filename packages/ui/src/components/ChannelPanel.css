@@ -3609,6 +3609,12 @@ html[data-theme]:has(.guide-transparent-mode) .category-strip {
   align-items: stretch;
   gap: 2px;
   text-align: left;
+  /* Always span the full width of the program panel, even when a program has
+     no/short description — a content-shrunk box looks broken next to the long
+     ones and doesn't match the panel's width. */
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   padding: 10px 14px;
   background: var(--glass-info-bg, var(--bg-overlay, rgba(0, 0, 0, 0.95)));
   border: var(--glass-surface-border, none);
