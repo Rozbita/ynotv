@@ -147,7 +147,7 @@ describe('useSettingsStore consumer contract', () => {
       'setTraktSettings', 'simklEnabled', 'simklAccessToken', 'simklScrobbleEnabled',
       'setSimklSettings', 'tvCalendarAutoSync', 'setTvCalendarAutoSync',
       'showAllChannels', 'showFavorites', 'showWatchlist', 'showRecentlyViewed',
-      'favoritesMode', 'setCategorySettings', 'collapseSourceCategoriesOnStartup',
+      'favoritesMode', 'alwaysSortFavoritesAlphabetically', 'setCategorySettings', 'collapseSourceCategoriesOnStartup',
       'setCollapseSourceCategoriesOnStartup',
       'showVodAll', 'showVodFavorites', 'showVodPlaylists', 'showVodLocal', 'showVodRecent',
       'setVodNavigationSettings',

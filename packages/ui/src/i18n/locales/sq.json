@@ -782,6 +782,8 @@
       "favoritesModeGlobal": "Global",
       "favoritesModePerSource": "Sipas burimit",
       "favoritesModeBoth": "Global + sipas burimit",
+      "alwaysSortFavoritesAlphabetically": "Gjithmonë rendit favoritët sipas alfabetit",
+      "alwaysSortFavoritesAlphabeticallySub": "Mbaji kanalet e preferuara në rend A-Z brenda Favoritëve, duke injoruar çdo rend të personalizuar që ke vendosur.",
       "epgVisibleHours": "Orët e dukshme në EPG",
       "epgVisibleHoursSub": "Rregullo numrin e orëve të dukshme në rrjet (Automatik përdor 2–5 orë dinamikisht bazuar në gjerësi).",
       "autoDefault": "Automatik (parazgjedhur)",

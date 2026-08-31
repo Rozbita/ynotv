@@ -103,6 +103,26 @@ describe('settings store hydration', () => {
     expect(s.language).toBe('en');
   });
 
+  it('hydrates the favorites A-Z sort flag from storage (survives restart)', async () => {
+    storageBackend.alwaysSortFavoritesAlphabetically = true;
+
+    await ensureSettingsHydration();
+    await vi.waitFor(() => expect(useSettingsStore.getState().layoutSettingsLoaded).toBe(true));
+
+    expect(useSettingsStore.getState().alwaysSortFavoritesAlphabetically).toBe(true);
+  });
+
+  it('rejects corrupted values for the favorites A-Z sort flag', async () => {
+    // A malformed persisted shape must be sanitized to the boolean default,
+    // not leak through the hydration path.
+    storageBackend.alwaysSortFavoritesAlphabetically = 'yes' as unknown as boolean;
+
+    await ensureSettingsHydration();
+    await vi.waitFor(() => expect(useSettingsStore.getState().layoutSettingsLoaded).toBe(true));
+
+    expect(useSettingsStore.getState().alwaysSortFavoritesAlphabetically).toBe(false);
+  });
+
   it('rejects corrupted shapes instead of hydrating them in', async () => {
     // Corrupted persisted values must not take over the store.
     storageBackend.theme = { not: 'a string' } as unknown as string;

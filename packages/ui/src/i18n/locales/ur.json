@@ -782,6 +782,8 @@
       "favoritesModeGlobal": "گلوبل",
       "favoritesModePerSource": "فی ماخذ",
       "favoritesModeBoth": "گلوبل + فی ماخذ",
+      "alwaysSortFavoritesAlphabetically": "پسندیدہ کو ہمیشہ حروفِ تہجی کے مطابق ترتیب دیں",
+      "alwaysSortFavoritesAlphabeticallySub": "پسندیدہ چینلز کو پسندیدہ کے اندر A-Z ترتیب میں رکھیں، آپ کی سیٹ کردہ کسی بھی حسبِ مرضی ترتیب کو نظر انداز کرتے ہوئے۔",
       "epgVisibleHours": "ای پی جی نظر آنے والے گھنٹے",
       "epgVisibleHoursSub": "گرڈ میں نظر آنے والے گھنٹوں کی تعداد اپنی مرضی کے مطابق بنائیں (خودکار چوڑائی کی بنیاد پر متحرک طور پر 2-5 گھنٹے استعمال کرتا ہے)۔",
       "autoDefault": "خودکار (ڈیفالٹ)",

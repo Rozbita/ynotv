@@ -782,6 +782,8 @@
       "favoritesModeGlobal": "سراسری",
       "favoritesModePerSource": "بر اساس منبع",
       "favoritesModeBoth": "سراسری + بر اساس منبع",
+      "alwaysSortFavoritesAlphabetically": "همیشه مرتب‌سازی علاقه‌مندی‌ها به ترتیب حروف الفبا",
+      "alwaysSortFavoritesAlphabeticallySub": "نگه‌داشتن کانال‌های موردعلاقه به ترتیب حروف الفبا در بخش علاقه‌مندی‌ها، صرف‌نظر از هر ترتیب سفارشی که تنظیم کرده‌اید.",
       "epgVisibleHours": "ساعت‌های قابل مشاهده EPG",
       "epgVisibleHoursSub": "تعداد ساعت‌های قابل‌مشاهده در شبکه را سفارشی کنید (حالت خودکار بسته به عرض به‌صورت پویا از ۲ تا ۵ ساعت استفاده می‌کند).",
       "autoDefault": "خودکار (پیش‌فرض)",

@@ -185,16 +185,22 @@ describe('settings store write path', () => {
   it('setCategorySettings dispatches the legacy category-settings-changed event', () => {
     const store = useSettingsStore;
     const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
-    store.getState().setCategorySettings({ favoritesMode: 'perSource', showFavorites: true });
+    store.getState().setCategorySettings({
+      favoritesMode: 'perSource',
+      showFavorites: true,
+      alwaysSortFavoritesAlphabetically: true,
+    });
 
     expect(store.getState().favoritesMode).toBe('perSource');
     expect(store.getState().showFavorites).toBe(true);
+    expect(store.getState().alwaysSortFavoritesAlphabetically).toBe(true);
     const dispatched = dispatchSpy.mock.calls.find((c) =>
       (c[0] as CustomEvent).type === 'ynotv:category-settings-changed'
     );
     expect(dispatched).toBeTruthy();
     const detail = (dispatched![0] as CustomEvent).detail;
     expect(detail.favoritesMode).toBe('perSource');
+    expect(detail.alwaysSortFavoritesAlphabetically).toBe(true);
   });
 
   it('setVodNavigationSettings dispatches the ynotv:vod-navigation-settings-changed event', () => {

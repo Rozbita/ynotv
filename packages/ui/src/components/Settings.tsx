@@ -690,6 +690,7 @@ export function Settings({
   const [showWatchlist, setShowWatchlist] = useState(true);
   const [showRecentlyViewed, setShowRecentlyViewed] = useState(true);
   const [favoritesMode, setFavoritesMode] = useState<'global' | 'perSource' | 'both'>('global');
+  const [alwaysSortFavoritesAlphabetically, setAlwaysSortFavoritesAlphabetically] = useState(false);
 
   // VOD Category settings state
   const [showVodAll, setShowVodAll] = useState(true);
@@ -1070,6 +1071,7 @@ export function Settings({
         showWatchlist?: boolean;
         showRecentlyViewed?: boolean;
         favoritesMode?: 'global' | 'perSource' | 'both';
+        alwaysSortFavoritesAlphabetically?: boolean;
         showNuvioHoverDetails?: boolean;
         nuvioAutoPlayMode?: StreamAutoPlayMode;
         nuvioAutoPlayTimeout?: number;
@@ -1104,6 +1106,7 @@ export function Settings({
       setShowVodRecent(settings.showVodRecent ?? true);
       const favMode = settings.favoritesMode;
       setFavoritesMode(favMode === 'perSource' || favMode === 'both' || favMode === 'global' ? favMode : 'global');
+      setAlwaysSortFavoritesAlphabetically(settings.alwaysSortFavoritesAlphabetically ?? false);
 
       if (settings.castEnabled !== undefined) {
         setCastEnabled(settings.castEnabled);
@@ -1846,6 +1849,11 @@ export function Settings({
   const handleFavoritesModeChange = async (mode: 'global' | 'perSource' | 'both') => {
     setFavoritesMode(mode);
     useSettingsStore.getState().setCategorySettings({ favoritesMode: mode });
+  };
+
+  const handleAlwaysSortFavoritesAlphabeticallyChange = async (enabled: boolean) => {
+    setAlwaysSortFavoritesAlphabetically(enabled);
+    useSettingsStore.getState().setCategorySettings({ alwaysSortFavoritesAlphabetically: enabled });
   };
 
   const handleShowWatchlistChange = async (enabled: boolean) => {
@@ -3146,6 +3154,8 @@ export function Settings({
             onSportsBgOpacityChange={handleSportsBgOpacityChange}
             favoritesMode={favoritesMode}
             onFavoritesModeChange={handleFavoritesModeChange}
+            alwaysSortFavoritesAlphabetically={alwaysSortFavoritesAlphabetically}
+            onAlwaysSortFavoritesAlphabeticallyChange={handleAlwaysSortFavoritesAlphabeticallyChange}
             modernUiEnabled={uiSettings.modernUiEnabled}
           />
         );

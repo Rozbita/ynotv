@@ -782,6 +782,8 @@
       "favoritesModeGlobal": "Genel",
       "favoritesModePerSource": "Kaynak Başına",
       "favoritesModeBoth": "Genel + Kaynak Başına",
+      "alwaysSortFavoritesAlphabetically": "Favorileri her zaman alfabetik sırala",
+      "alwaysSortFavoritesAlphabeticallySub": "Favori kanalları, ayarladığınız özel sırayı yok sayarak Favoriler içinde A-Z sırasında tut.",
       "epgVisibleHours": "Rehber Görünür Saatleri",
       "epgVisibleHoursSub": "Izgarada görünen saat sayısını özelleştirin (Otomatik, genişliğe göre dinamik olarak 2-5 saat kullanır).",
       "autoDefault": "Otomatik (Varsayılan)",

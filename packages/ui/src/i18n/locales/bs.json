@@ -782,6 +782,8 @@
       "favoritesModeGlobal": "Globalno",
       "favoritesModePerSource": "Po izvoru",
       "favoritesModeBoth": "Globalno + po izvoru",
+      "alwaysSortFavoritesAlphabetically": "Uvijek sortiraj favorite abecedno",
+      "alwaysSortFavoritesAlphabeticallySub": "Drži omiljene kanale u A-Z redoslijedu unutar Favorita, zanemarujući bilo koji prilagođeni redoslijed koji ste postavili.",
       "epgVisibleHours": "Vidljivi sati u EPG-u",
       "epgVisibleHoursSub": "Prilagodite broj vidljivih sati u mreži (Automatski koristi 2–5 sati dinamički na osnovu širine).",
       "autoDefault": "Automatski (podrazumijevano)",

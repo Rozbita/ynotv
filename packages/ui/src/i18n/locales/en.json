@@ -782,6 +782,8 @@
       "favoritesModeGlobal": "Global",
       "favoritesModePerSource": "Per Source",
       "favoritesModeBoth": "Global + Per Source",
+      "alwaysSortFavoritesAlphabetically": "Always Sort Favorites Alphabetically",
+      "alwaysSortFavoritesAlphabeticallySub": "Keep favorited channels in A-Z order inside Favorites, ignoring any custom order you have set.",
       "epgVisibleHours": "EPG Visible Hours",
       "epgVisibleHoursSub": "Customize the number of hours visible in the grid (Automatic uses 2-5 hours dynamically based on width).",
       "autoDefault": "Automatic (Default)",

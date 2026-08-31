@@ -782,6 +782,8 @@
       "favoritesModeGlobal": "全域",
       "favoritesModePerSource": "按來源",
       "favoritesModeBoth": "全域 + 按來源",
+      "alwaysSortFavoritesAlphabetically": "始終按字母順序排列收藏",
+      "alwaysSortFavoritesAlphabeticallySub": "讓收藏夾中的頻道始終按 A-Z 順序排列，忽略您設定的自訂順序。",
       "epgVisibleHours": "EPG 可見小時數",
       "epgVisibleHoursSub": "自訂網格中可見的小時數（自動模式根據寬度動態使用 2-5 小時）。",
       "autoDefault": "自動（預設）",

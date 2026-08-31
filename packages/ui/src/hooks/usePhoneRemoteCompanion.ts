@@ -1016,12 +1016,18 @@ export function usePhoneRemoteCompanion({
         // Apply home-category filter words before sorting (the desktop does the
         // same) so names and order match the app.
         const cleaned = await applyHomeCategoryFilterWords(favs);
-        cleaned.sort((a, b) => {
-          if (a.fav_order != null && b.fav_order != null) return a.fav_order - b.fav_order;
-          if (a.fav_order != null) return -1;
-          if (b.fav_order != null) return 1;
-          return (a.alias || a.name).localeCompare(b.alias || b.name);
-        });
+        // Mirror the desktop's 'always sort favorites alphabetically' setting
+        // so the remote's Favorites list matches the app.
+        if (useSettingsStore.getState().alwaysSortFavoritesAlphabetically) {
+          cleaned.sort((a, b) => (a.alias || a.name).localeCompare(b.alias || b.name));
+        } else {
+          cleaned.sort((a, b) => {
+            if (a.fav_order != null && b.fav_order != null) return a.fav_order - b.fav_order;
+            if (a.fav_order != null) return -1;
+            if (b.fav_order != null) return 1;
+            return (a.alias || a.name).localeCompare(b.alias || b.name);
+          });
+        }
         await sendGuideChannels(cleaned, targetCatId);
         return;
       }

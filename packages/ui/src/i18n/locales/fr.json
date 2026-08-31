@@ -782,6 +782,8 @@
       "favoritesModeGlobal": "Global",
       "favoritesModePerSource": "Par source",
       "favoritesModeBoth": "Global + par source",
+      "alwaysSortFavoritesAlphabetically": "Toujours trier les favoris par ordre alphabétique",
+      "alwaysSortFavoritesAlphabeticallySub": "Conserver les chaînes favorites en ordre A-Z dans Favoris, en ignorant tout ordre personnalisé que vous avez défini.",
       "epgVisibleHours": "Heures visibles EPG",
       "epgVisibleHoursSub": "Personnalisez le nombre d'heures visibles dans la grille (Automatique utilise 2 à 5 heures selon la largeur).",
       "autoDefault": "Automatique (Par défaut)",

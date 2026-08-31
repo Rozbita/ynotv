@@ -782,6 +782,8 @@
       "favoritesModeGlobal": "ग्लोबल",
       "favoritesModePerSource": "प्रति स्रोत",
       "favoritesModeBoth": "ग्लोबल + प्रति स्रोत",
+      "alwaysSortFavoritesAlphabetically": "पसंदीदा को हमेशा वर्णानुक्रम में क्रमबद्ध करें",
+      "alwaysSortFavoritesAlphabeticallySub": "पसंदीदा चैनलों को पसंदीदा के भीतर A-Z क्रम में रखें, आपके द्वारा निर्धारित किसी भी कस्टम क्रम को अनदेखा करते हुए।",
       "epgVisibleHours": "EPG दृश्य घंटे",
       "epgVisibleHoursSub": "ग्रिड में दिखाई देने वाले घंटों की संख्या कस्टमाइज़ करें (स्वचालित चौड़ाई के आधार पर गतिशील रूप से 2-5 घंटे उपयोग करता है)।",
       "autoDefault": "स्वतः (डिफ़ॉल्ट)",

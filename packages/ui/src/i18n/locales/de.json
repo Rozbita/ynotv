@@ -782,6 +782,8 @@
       "favoritesModeGlobal": "Global",
       "favoritesModePerSource": "Pro Quelle",
       "favoritesModeBoth": "Global + pro Quelle",
+      "alwaysSortFavoritesAlphabetically": "Favoriten immer alphabetisch sortieren",
+      "alwaysSortFavoritesAlphabeticallySub": "Favorisierte Sender innerhalb der Favoriten in A-Z-Reihenfolge halten und dabei eine festgelegte benutzerdefinierte Reihenfolge ignorieren.",
       "epgVisibleHours": "Im EPG sichtbare Stunden",
       "epgVisibleHoursSub": "Passen Sie die Anzahl der im Raster sichtbaren Stunden an (Automatisch verwendet dynamisch 2 bis 5 Stunden je nach Breite).",
       "autoDefault": "Automatisch (Standard)",

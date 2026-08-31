@@ -110,6 +110,7 @@ export interface CategorySettings {
   showWatchlist: boolean;
   showRecentlyViewed: boolean;
   favoritesMode: 'global' | 'perSource' | 'both';
+  alwaysSortFavoritesAlphabetically: boolean;
 }
 
 export interface VodNavigationSettings {
@@ -374,6 +375,7 @@ export interface SettingsState {
   showWatchlist: boolean;
   showRecentlyViewed: boolean;
   favoritesMode: 'global' | 'perSource' | 'both';
+  alwaysSortFavoritesAlphabetically: boolean;
   collapseSourceCategoriesOnStartup: boolean;
   setCategorySettings: (partial: Partial<CategorySettings>) => void;
   setCollapseSourceCategoriesOnStartup: (enabled: boolean) => void;
@@ -1732,6 +1734,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   showWatchlist: true,
   showRecentlyViewed: true,
   favoritesMode: 'global',
+  alwaysSortFavoritesAlphabetically: false,
   defaultCategory: (cachedSettings?.defaultCategory as string) ?? '__last__',
   setDefaultCategory: (mode) => {
     set({ defaultCategory: mode });
@@ -1744,6 +1747,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (partial.showWatchlist !== undefined) patch.showWatchlist = partial.showWatchlist;
     if (partial.showRecentlyViewed !== undefined) patch.showRecentlyViewed = partial.showRecentlyViewed;
     if (partial.favoritesMode !== undefined) patch.favoritesMode = partial.favoritesMode;
+    if (partial.alwaysSortFavoritesAlphabetically !== undefined) patch.alwaysSortFavoritesAlphabetically = partial.alwaysSortFavoritesAlphabetically;
     set(patch);
     persistSettings(patch);
     if (Object.keys(patch).length > 0) {

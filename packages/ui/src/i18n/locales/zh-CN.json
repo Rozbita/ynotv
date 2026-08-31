@@ -782,6 +782,8 @@
       "favoritesModeGlobal": "全局",
       "favoritesModePerSource": "按来源",
       "favoritesModeBoth": "全局 + 按来源",
+      "alwaysSortFavoritesAlphabetically": "始终按字母顺序排列收藏",
+      "alwaysSortFavoritesAlphabeticallySub": "让收藏夹中的频道始终按 A-Z 顺序排列，忽略您设置的自定义顺序。",
       "epgVisibleHours": "EPG 可见小时数",
       "epgVisibleHoursSub": "自定义网格中可见的小时数（自动模式根据宽度动态使用 2-5 小时）。",
       "autoDefault": "自动（默认）",

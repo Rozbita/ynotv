@@ -782,6 +782,8 @@
       "favoritesModeGlobal": "Globális",
       "favoritesModePerSource": "Forrásonként",
       "favoritesModeBoth": "Globális + forrásonként",
+      "alwaysSortFavoritesAlphabetically": "Kedvencek mindig ábécérendben",
+      "alwaysSortFavoritesAlphabeticallySub": "A kedvenc csatornákat tartsa A-Z sorrendben a Kedvenceken belül, figyelmen kívül hagyva bármilyen beállított egyéni sorrendet.",
       "epgVisibleHours": "Látható EPG-órák",
       "epgVisibleHoursSub": "A rácsban látható órák számának testreszabása (az Automatikus 2–5 órát használ dinamikusan a szélesség alapján).",
       "autoDefault": "Automatikus (alapértelmezett)",

@@ -782,6 +782,8 @@
       "favoritesModeGlobal": "Глобально",
       "favoritesModePerSource": "По источнику",
       "favoritesModeBoth": "Глобально + по источнику",
+      "alwaysSortFavoritesAlphabetically": "Всегда сортировать избранное по алфавиту",
+      "alwaysSortFavoritesAlphabeticallySub": "Держать избранные каналы в порядке A–Z внутри «Избранного», игнорируя любой заданный вами пользовательский порядок.",
       "epgVisibleHours": "Видимые часы EPG",
       "epgVisibleHoursSub": "Настройте количество часов, видимых в сетке («Автоматически» использует 2–5 часов динамически в зависимости от ширины).",
       "autoDefault": "Автоматически (по умолчанию)",

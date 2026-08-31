@@ -2331,6 +2331,8 @@
       "favoritesModeGlobal": "Toàn cục",
       "favoritesModePerSource": "Theo nguồn",
       "favoritesModeBoth": "Toàn cục + theo nguồn",
+      "alwaysSortFavoritesAlphabetically": "Luôn sắp xếp kênh yêu thích theo bảng chữ cái",
+      "alwaysSortFavoritesAlphabeticallySub": "Giữ các kênh yêu thích theo thứ tự A-Z trong Mục yêu thích, bỏ qua mọi thứ tự tùy chỉnh bạn đã đặt.",
       "epgVisibleHours": "Số Giờ Hiển Thị EPG",
       "epgVisibleHoursSub": "Tùy chỉnh số giờ hiển thị trong lưới (Tự Động dùng 2-5 giờ động theo chiều rộng).",
       "autoDefault": "Tự Động (Mặc Định)",

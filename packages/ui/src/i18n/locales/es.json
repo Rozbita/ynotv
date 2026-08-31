@@ -782,6 +782,8 @@
       "favoritesModeGlobal": "Global",
       "favoritesModePerSource": "Por fuente",
       "favoritesModeBoth": "Global + por fuente",
+      "alwaysSortFavoritesAlphabetically": "Ordenar siempre los favoritos alfabéticamente",
+      "alwaysSortFavoritesAlphabeticallySub": "Mantener los canales favoritos en orden A-Z dentro de Favoritos, ignorando cualquier orden personalizado que hayas establecido.",
       "epgVisibleHours": "Horas visibles de EPG",
       "epgVisibleHoursSub": "Personaliza el número de horas visibles en la cuadrícula (Automático usa de 2 a 5 horas dinámicamente según el ancho).",
       "autoDefault": "Automático (predeterminado)",

@@ -782,6 +782,8 @@
       "favoritesModeGlobal": "Globaal",
       "favoritesModePerSource": "Per bron",
       "favoritesModeBoth": "Globaal + per bron",
+      "alwaysSortFavoritesAlphabetically": "Favorieten altijd alfabetisch sorteren",
+      "alwaysSortFavoritesAlphabeticallySub": "Houd favoriete zenders in A-Z-volgorde binnen Favorieten, waarbij eventuele door jou ingestelde aangepaste volgorde wordt genegeerd.",
       "epgVisibleHours": "Zichtbare EPG-uren",
       "epgVisibleHoursSub": "Pas het aantal zichtbare uren in het raster aan (Automatisch gebruikt dynamisch 2-5 uur op basis van breedte).",
       "autoDefault": "Automatisch (standaard)",

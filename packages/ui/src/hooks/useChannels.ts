@@ -340,7 +340,7 @@ function applyFilterWordsToChannel(ch: StoredChannel, filterWords: string[]): St
  * categories, so they have no single category filter_words to apply — instead
  * we look up each channel's own categories and apply their words.
  */
-async function applyHomeCategoryFilterWords(results: StoredChannel[]): Promise<StoredChannel[]> {
+export async function applyHomeCategoryFilterWords(results: StoredChannel[]): Promise<StoredChannel[]> {
   if (results.length === 0) return results;
 
   const categoryIds = new Set<string>();
@@ -381,6 +381,9 @@ async function applyHomeCategoryFilterWords(results: StoredChannel[]): Promise<S
 export function useChannels(categoryId: string | null, sortOrder: 'alphabetical' | 'number' | 'provider' = 'alphabetical', options?: { skip?: boolean }) {
   const enabledSourceIds = useEnabledSources();
   const epgPreferEpgLogos = useSettingsStore((s) => s.epgPreferEpgLogos);
+  // When enabled, Favorites views ignore the custom fav_order and always show
+  // channels in A-Z order (global, per-source, and both modes alike).
+  const alwaysSortFavoritesAlphabetically = useSettingsStore((s) => s.alwaysSortFavoritesAlphabetically);
   const enabledSourceKey = useMemo(
     () => (enabledSourceIds ? Array.from(enabledSourceIds).sort().join(',') : 'loading'),
     [enabledSourceIds]
@@ -461,13 +464,19 @@ export function useChannels(categoryId: string | null, sortOrder: 'alphabetical'
         // Apply filter words from each channel's home category before sorting,
         // so the sort uses the same cleaned names as the category view.
         results = await applyHomeCategoryFilterWords(results);
-        // Sort by fav_order (nulls last, then by name for items without order)
-        results.sort((a, b) => {
-          if (a.fav_order != null && b.fav_order != null) return a.fav_order - b.fav_order;
-          if (a.fav_order != null) return -1;
-          if (b.fav_order != null) return 1;
-          return (a.alias || a.name).localeCompare(b.alias || b.name);
-        });
+        // Sort by fav_order (nulls last, then by name for items without order).
+        // When 'always sort favorites alphabetically' is enabled, ignore the
+        // custom order and keep the whole list in A-Z order instead.
+        if (alwaysSortFavoritesAlphabetically) {
+          results.sort((a, b) => (a.alias || a.name).localeCompare(b.alias || b.name));
+        } else {
+          results.sort((a, b) => {
+            if (a.fav_order != null && b.fav_order != null) return a.fav_order - b.fav_order;
+            if (a.fav_order != null) return -1;
+            if (b.fav_order != null) return 1;
+            return (a.alias || a.name).localeCompare(b.alias || b.name);
+          });
+        }
         orderingIsFixed = true;
       } else if (categoryId && categoryId.startsWith('__favsrc_')) {
         // Per-source favorites: favorites scoped to a single source
@@ -480,33 +489,38 @@ export function useChannels(categoryId: string | null, sortOrder: 'alphabetical'
         // matching the global Favorites and standard category views.
         results = await applyHomeCategoryFilterWords(results);
         // Per-source custom order (stored independently per provider).
-        // Falls back to the global fav_order for sources without a saved order.
-        const savedOrder = await getFavoriteSourceOrder(sourceId);
-        if (savedOrder.length > 0) {
-          const byId = new Map(results.map(ch => [ch.stream_id, ch]));
-          const ordered: StoredChannel[] = [];
-          for (const id of savedOrder) {
-            const ch = byId.get(id);
-            if (ch) {
-              ordered.push(ch);
-              byId.delete(id);
-            }
-          }
-          const remaining = Array.from(byId.values()).sort((a, b) => {
-            if (a.fav_order != null && b.fav_order != null) return a.fav_order - b.fav_order;
-            if (a.fav_order != null) return -1;
-            if (b.fav_order != null) return 1;
-            return (a.alias || a.name).localeCompare(b.alias || b.name);
-          });
-          results = [...ordered, ...remaining];
+        // When 'always sort favorites alphabetically' is enabled, A-Z sort
+        // overrides any per-source custom order.
+        if (alwaysSortFavoritesAlphabetically) {
+          results.sort((a, b) => (a.alias || a.name).localeCompare(b.alias || b.name));
         } else {
-          // Sort by fav_order (nulls last, then by name for items without order)
-          results.sort((a, b) => {
-            if (a.fav_order != null && b.fav_order != null) return a.fav_order - b.fav_order;
-            if (a.fav_order != null) return -1;
-            if (b.fav_order != null) return 1;
-            return (a.alias || a.name).localeCompare(b.alias || b.name);
-          });
+          const savedOrder = await getFavoriteSourceOrder(sourceId);
+          if (savedOrder.length > 0) {
+            const byId = new Map(results.map(ch => [ch.stream_id, ch]));
+            const ordered: StoredChannel[] = [];
+            for (const id of savedOrder) {
+              const ch = byId.get(id);
+              if (ch) {
+                ordered.push(ch);
+                byId.delete(id);
+              }
+            }
+            const remaining = Array.from(byId.values()).sort((a, b) => {
+              if (a.fav_order != null && b.fav_order != null) return a.fav_order - b.fav_order;
+              if (a.fav_order != null) return -1;
+              if (b.fav_order != null) return 1;
+              return (a.alias || a.name).localeCompare(b.alias || b.name);
+            });
+            results = [...ordered, ...remaining];
+          } else {
+            // Sort by fav_order (nulls last, then by name for items without order)
+            results.sort((a, b) => {
+              if (a.fav_order != null && b.fav_order != null) return a.fav_order - b.fav_order;
+              if (a.fav_order != null) return -1;
+              if (b.fav_order != null) return 1;
+              return (a.alias || a.name).localeCompare(b.alias || b.name);
+            });
+          }
         }
         orderingIsFixed = true;
       } else if (categoryId && categoryId.startsWith('__plcat_')) {
@@ -892,7 +906,7 @@ export function useChannels(categoryId: string | null, sortOrder: 'alphabetical'
 
       return results;
     },
-    [categoryId, sortOrder, enabledSourceKey, options?.skip, epgPreferEpgLogos],
+    [categoryId, sortOrder, enabledSourceKey, options?.skip, epgPreferEpgLogos, alwaysSortFavoritesAlphabetically],
     undefined, // defaultResult  
     15000, // staleTime: 15 seconds - instant switching between recently viewed categories
     // Watch only the tables this category type reads (channels + the lookup

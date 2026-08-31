@@ -168,6 +168,8 @@ interface LiveTVTabProps {
   onTransparentGuideSidebarOpacityChange: (opacity: number) => void;
   favoritesMode: 'global' | 'perSource' | 'both';
   onFavoritesModeChange: (mode: 'global' | 'perSource' | 'both') => void;
+  alwaysSortFavoritesAlphabetically: boolean;
+  onAlwaysSortFavoritesAlphabeticallyChange: (enabled: boolean) => void;
   modernUiEnabled?: boolean | string;
 }
 
@@ -323,6 +325,8 @@ export function LiveTVTab({
   onTransparentGuideSidebarOpacityChange,
   favoritesMode,
   onFavoritesModeChange,
+  alwaysSortFavoritesAlphabetically,
+  onAlwaysSortFavoritesAlphabeticallyChange,
   modernUiEnabled,
 }: LiveTVTabProps) {
   useTranslation();
@@ -1277,6 +1281,22 @@ export function LiveTVTab({
                   <option value="perSource">{i18n.t('settings:livetv.favoritesModePerSource')}</option>
                   <option value="both">{i18n.t('settings:livetv.favoritesModeBoth')}</option>
                 </select>
+              </div>
+
+              {/* Always Sort Favorites Alphabetically */}
+              <div className="timeshift-toggle-row" style={{ marginTop: '12px' }}>
+                <div className="timeshift-toggle-info">
+                  <span className="timeshift-toggle-label">{i18n.t('settings:livetv.alwaysSortFavoritesAlphabetically')}</span>
+                  <span className="timeshift-toggle-sub">{i18n.t('settings:livetv.alwaysSortFavoritesAlphabeticallySub')}</span>
+                </div>
+                <label className="switch">
+                  <input
+                    type="checkbox"
+                    checked={alwaysSortFavoritesAlphabetically}
+                    onChange={(e) => onAlwaysSortFavoritesAlphabeticallyChange(e.target.checked)}
+                  />
+                  <span className="slider"></span>
+                </label>
               </div>
             </div>
           </div>

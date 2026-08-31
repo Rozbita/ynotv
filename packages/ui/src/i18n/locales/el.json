@@ -782,6 +782,8 @@
       "favoritesModeGlobal": "Καθολικά",
       "favoritesModePerSource": "Ανά πηγή",
       "favoritesModeBoth": "Καθολικά + ανά πηγή",
+      "alwaysSortFavoritesAlphabetically": "Πάντα αλφαβητική ταξινόμηση αγαπημένων",
+      "alwaysSortFavoritesAlphabeticallySub": "Διατήρηση των αγαπημένων καναλιών σε αλφαβητική σειρά (A-Z) στα Αγαπημένα, αγνοώντας οποιαδήποτε προσαρμοσμένη σειρά έχετε ορίσει.",
       "epgVisibleHours": "Ορατές Ώρες EPG",
       "epgVisibleHoursSub": "Προσαρμόστε τον αριθμό ωρών που είναι ορατές στο πλέγμα (Αυτόματο χρησιμοποιεί 2-5 ώρες δυναμικά βάσει πλάτους).",
       "autoDefault": "Αυτόματο (Προεπιλογή)",
