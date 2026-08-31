@@ -747,6 +747,18 @@ html.disable-theme-backdrop-blur * {
   -webkit-backdrop-filter: none !important;
 }
 
+/* With the blur gone, the translucent glass sidebar would let the LiveTV EPG
+   content show through sharply (nothing left to mask it). Give the category
+   strip a solid theme background so it reads as an opaque panel. --bg-primary
+   is the per-theme opaque base (dark hex / near-white in light). The OLED rule
+   (solid #000) and the transparent-guide rule (intentionally transparent to
+   show video) already carry higher specificity and take precedence where
+   relevant. */
+html.disable-theme-backdrop-blur .category-strip {
+  background: var(--strip-solid-bg, var(--bg-primary, #0f0f0f)) !important;
+  border-color: var(--surface-border, rgba(255, 255, 255, 0.1)) !important;
+}
+
 /* With the blur gone, glass surfaces can no longer mask the layers sitting
    behind them, so anything meant for the hero screen would show sharp
    through the transparent page panels (Movies/Series/DVR/Sports/Stremio/
