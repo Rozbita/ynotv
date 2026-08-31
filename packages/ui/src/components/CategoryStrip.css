@@ -78,6 +78,41 @@
   opacity: 1;
 }
 
+/* Autohide sidebar slides over the guide (including the preview video). In glass
+   themes the strip background is near-transparent and relies on backdrop-filter,
+   but the browser can't backdrop-blur the hardware video surface, so the half
+   covering the live preview stays see-through while the channel-list half blurs
+   fine. Give the autohide strip a strongly frosted (near-opaque) background for
+   full-height readability while keeping the blur over the channel list.
+
+   Two mode-specific overrides are needed because broader rules outrank a plain
+   [data-theme*="glass-"] .category-strip.autohide: (1) the non-transparent-guide
+   cover (.app.active-view-guide:not(.guide-transparent) .category-strip) is more
+   specific and in V3 resolves --guide-solid-bg to the transparent glass token;
+   (2) V3 transparent-EPG forces a transparent background with !important. Both
+   are scoped to .autohide so the normal docked sidebar keeps its existing
+   behavior in every mode/theme. */
+.app.active-view-guide:not(.guide-transparent) .category-strip.autohide {
+  background: var(--strip-autohide-bg, color-mix(in srgb, var(--bg-primary, #0a0a0f) 90%, transparent));
+  backdrop-filter: var(--strip-filter, blur(24px) saturate(180%));
+  -webkit-backdrop-filter: var(--strip-filter, blur(24px) saturate(180%));
+}
+
+html[data-theme]:has(.guide-transparent-mode) .category-strip.autohide {
+  background: var(--strip-autohide-bg, color-mix(in srgb, var(--bg-primary, #0a0a0f) 90%, transparent)) !important;
+  backdrop-filter: var(--strip-filter, blur(24px) saturate(180%)) !important;
+  -webkit-backdrop-filter: var(--strip-filter, blur(24px) saturate(180%)) !important;
+}
+
+/* V3's transparent-guide strip rule (html.modern-ui-v3[data-theme]:has(...),
+   0,4,1 + !important) ties this rule's specificity, so keep an explicit
+   v3-scoped copy to win regardless of stylesheet load order. */
+html.modern-ui-v3[data-theme]:has(.guide-transparent-mode) .category-strip.autohide {
+  background: var(--strip-autohide-bg, color-mix(in srgb, var(--bg-primary, #0a0a0f) 90%, transparent)) !important;
+  backdrop-filter: var(--strip-filter, blur(24px) saturate(180%)) !important;
+  -webkit-backdrop-filter: var(--strip-filter, blur(24px) saturate(180%)) !important;
+}
+
 .category-strip.hidden {
   transform: translateX(-100%);
   opacity: 0;

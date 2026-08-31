@@ -2769,7 +2769,7 @@ export const CategoryStrip = memo(function CategoryStrip({ selectedCategoryId, o
     <CategoryStripVisibilityContext.Provider value={visible}>
     <>
       <div
-        className={`category-strip ${visible ? 'visible' : 'hidden'} ${isDragActive ? 'drag-hotkey-active' : ''}`}
+        className={`category-strip ${visible ? 'visible' : 'hidden'} ${isDragActive ? 'drag-hotkey-active' : ''}${autohide ? ' autohide' : ''}`}
         onMouseEnter={clearAutohideClose}
         onMouseLeave={scheduleAutohideClose}
       >

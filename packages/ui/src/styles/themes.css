@@ -1154,6 +1154,20 @@
   border-right: var(--strip-border-right, var(--glass-border));
 }
 
+/* Autohide sidebar frosted overlay background — the strip slides over the
+   preview video when autohide is on, and the browser can't backdrop-blur the
+   hardware video surface. Glass themes get a 90% theme tint (the strip's own
+   blur handles the rest); solid themes set --bg-primary to an opaque gradient
+   (color-mix can't take a gradient), so they use it directly. Other themes
+   fall back to the color-mix tint in CategoryStrip.css. */
+[data-theme*="glass-"] {
+  --strip-autohide-bg: color-mix(in srgb, var(--bg-primary, #0a0a0f) 90%, transparent);
+}
+
+[data-theme*="solid-"] {
+  --strip-autohide-bg: var(--bg-primary, #0a0a0f);
+}
+
 /* Channel panel glass effect */
 [data-theme*="glass-"] .channel-panel {
   background: var(--surface-color);
