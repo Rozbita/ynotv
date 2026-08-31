@@ -1801,6 +1801,11 @@ export const CategoryStrip = memo(function CategoryStrip({ selectedCategoryId, o
   }, [autohide, clearAutohideClose, onClose]);
   useEffect(() => () => clearAutohideClose(), [clearAutohideClose]);
 
+  // The handle stays mounted while autohide is on; its visibility is driven by
+  // CSS (`.hidden` = sidebar open), with the fade-in delayed to match the panel's
+  // close transition — so the thin left-edge line never flashes in while the
+  // sidebar is still sliding away.
+
   // Custom Groups additions
   const { showModal, showConfirm, showPrompt, ModalComponent } = useModal();
   const [managingGroup, setManagingGroup] = useState<{ id: string, name: string } | null>(null);
@@ -3494,9 +3499,9 @@ export const CategoryStrip = memo(function CategoryStrip({ selectedCategoryId, o
       {/* Auto-hide: full-length left-edge handle. Pops the sidebar open over
           the guide (overlay — the guide never reflows in this mode) on hover.
           Replaces the small chevron button / hint in autohide mode. */}
-      {autohide && !visible && isLiveTV && (
+      {autohide && isLiveTV && (
         <div
-          className="category-strip-autohide-handle"
+          className={`category-strip-autohide-handle${visible ? ' hidden' : ''}`}
           onMouseEnter={() => onShow?.()}
           onClick={() => onShow?.()}
           title={t('showSidebar')}

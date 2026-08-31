@@ -228,7 +228,20 @@
   cursor: pointer;
   background: linear-gradient(90deg, rgba(128, 128, 128, 0.35), transparent);
   border-right: 1px solid var(--border-color, rgba(255, 255, 255, 0.12));
-  transition: width 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+  opacity: 1;
+  /* Fade the line back in only AFTER the sidebar has finished sliding away
+     (--strip-transition is transform 0.4s / opacity 0.3s), so it never flashes
+     in beside the still-open/retreating panel when the cursor crosses the left
+     edge. The `.hidden` state overrides the delay for an instant fade-out. */
+  transition: width 0.15s ease, background 0.15s ease, box-shadow 0.15s ease,
+    opacity 0.18s ease 0.42s;
+}
+
+.category-strip-autohide-handle.hidden {
+  opacity: 0;
+  pointer-events: none;
+  transition: width 0.15s ease, background 0.15s ease, box-shadow 0.15s ease,
+    opacity 0.18s ease 0s;
 }
 
 .category-strip-autohide-handle:hover {
