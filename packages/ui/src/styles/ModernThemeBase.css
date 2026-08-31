@@ -155,12 +155,14 @@ html, body, button, input, select, textarea {
   transition: opacity 0.5s ease;
 }
 
-/* v1/v2 solid cover behind the guide's multiview grid (2x2/bigbottom). The
-   guide keeps its opaque surface via `--guide-solid-bg` on .guide-grid-section
-   and .guide-info-pane, but the 1x4 multiview top section renders with no info
-   pane and is intentionally transparent so the primary MPV video shows through.
-   App.tsx punches the same preview clip-path hole into this layer, so it fills
-   the gaps around the cells without covering the main video (slots 2-4 are DOM
+/* v1/v2 solid cover behind the guide where the top section would otherwise be
+   transparent: the multiview grid (2x2/bigbottom) renders with no info pane,
+   and the 3-column/alternate layout centers a 16:9 preview pane with space
+   around it. The guide keeps its opaque surface via `--guide-solid-bg` on
+   .guide-grid-section and .guide-info-pane, but neither covers these regions,
+   so without this layer the desktop bleeds through around the video. App.tsx
+   punches the same preview clip-path hole into this layer, so it fills the
+   gaps around the video without covering it (multiview slots 2-4 are DOM
    overlays at z-index 1000, above this). Sits at the same z-index as the v3
    glass backdrop — above the page, below the guide panel (z-index: 80). */
 .livetv-multiview-solid-cover {

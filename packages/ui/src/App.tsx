@@ -84,7 +84,9 @@ import {
   useSetEpgVisibleHours,
   useSetEpgClockFormat,
   useSetEpgShowDate,
-  useSetIncludeAllChannelsToPlaylist
+  useSetIncludeAllChannelsToPlaylist,
+  useEpgThreeColumn,
+  useEpgView
 } from './stores/uiStore';
 import { getAdjacentEpisode, recordVodWatch, recordEpisodeWatch, getEpisodeProgress } from './db';
 import { getLocalEpisodeList, localEntryToVodPlayInfo } from './services/local-library/local-library';
@@ -2210,6 +2212,8 @@ function useTmdbPresencePoster(
   useEffect(() => {
     setLiveTvDesign(modernUiEnabled === 'v3' ? 'v3' : (modernUiEnabled === false || modernUiEnabled === 'v1' ? 'v1' : 'v2'));
   }, [modernUiEnabled]);
+  const epgThreeColumn = useEpgThreeColumn();
+  const epgView = useEpgView();
   const [randomScheme, setRandomScheme] = useState<string>('scheme-apple');
   const [previewVideoRect, setPreviewVideoRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
 
@@ -6188,8 +6192,15 @@ function useTmdbPresencePoster(
         // that gap. Split layouts still render .guide-info-pane, so they stay
         // covered by the existing CSS rule and don't need this.
         const isGridMultiview = multiviewLayout === '2x2' || multiviewLayout === 'bigbottom';
+        // The 3-column/alternate layout centers a 16:9 preview pane with space
+        // around it. v1/v2 have no liquid-glass backdrop, so without a cover
+        // that surrounding area is transparent and the desktop bleeds through.
+        // Render the same opaque solid cover (with the preview clip-path hole)
+        // as for multiview grids so the pane gets a background + video cutout.
+        const isThreeColumnLayout = epgThreeColumn || epgView === 'alternate';
         const shouldRenderSolidCover = liveTvDesign !== 'v3' &&
-          activeView === 'guide' && !guideTransparent && isGridMultiview;
+          activeView === 'guide' && !guideTransparent &&
+          (isGridMultiview || isThreeColumnLayout);
 
         if (!shouldRenderGlassBg && !shouldRenderSolidCover) return null;
 
