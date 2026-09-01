@@ -393,6 +393,7 @@
       "calendar": "Takvim",
       "cast": "Yayınla",
       "dvr": "DVR",
+      "jellyfin": "Jellyfin",
       "movies": "Filmler",
       "nuvio": "Nuvio",
       "series": "Diziler",
@@ -415,6 +416,7 @@
       "cache": "Önbellek",
       "debug": "Hata Ayıklama",
       "discord": "Discord Zengin Varlık",
+      "jellyfin": "Jellyfin",
       "export-import": "Dışa / İçe Aktarma",
       "livetv": "Canlı TV",
       "metadata": "Meta Veriler",
@@ -1292,6 +1294,20 @@
       "disconnect": "Trakt Hesabını Bağlantısını Kes",
       "disconnectConfirm": "Trakt hesabınızın bağlantısını kesmek istediğinizden emin misiniz?",
       "failedGenerateTraktCode": "Trakt cihaz kodu oluşturulamadı"
+    },
+    "jellyfin": {
+      "title": "Jellyfin",
+      "configured": "Configured",
+      "description": "Browse your Jellyfin server inside an embedded window and play everything through ynoTV's own mpv player. Login happens inside the window, so web-only skins and plugins keep working.",
+      "serverUrlLabel": "Jellyfin Server URL",
+      "urlRequired": "Please enter your Jellyfin server URL.",
+      "openBtn": "Open Jellyfin",
+      "opening": "Opening...",
+      "closeBtn": "Close Window",
+      "openFailed": "Failed to open the Jellyfin window.",
+      "closeFailed": "Failed to close the Jellyfin window.",
+      "notes": "Playback started inside the Jellyfin window is handed off to ynoTV's mpv player. Position is reported back to the server so Jellyfin shows Now Playing and resume positions are saved.",
+      "disclaimer": "Jellyfin is a third-party media server. ynoTV is not affiliated with the Jellyfin project. The embedded window loads the web UI directly from your configured server."
     },
     "simkl": {
       "title": "Simkl",

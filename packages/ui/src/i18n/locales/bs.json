@@ -393,6 +393,7 @@
       "calendar": "Kalendar",
       "cast": "Cast",
       "dvr": "DVR",
+      "jellyfin": "Jellyfin",
       "movies": "Filmovi",
       "nuvio": "Nuvio",
       "series": "Serije",
@@ -415,6 +416,7 @@
       "cache": "Keš",
       "debug": "Otklanjanje grešaka",
       "discord": "Discord Rich Presence",
+      "jellyfin": "Jellyfin",
       "export-import": "Izvoz / Uvoz",
       "livetv": "TV uživo",
       "metadata": "Metapodaci",
@@ -1292,6 +1294,20 @@
       "disconnect": "Prekini vezu Trakt naloga",
       "disconnectConfirm": "Da li ste sigurni da želite da prekinete vezu svog Trakt naloga?",
       "failedGenerateTraktCode": "Generisanje Trakt koda uređaja nije uspjelo"
+    },
+    "jellyfin": {
+      "title": "Jellyfin",
+      "configured": "Configured",
+      "description": "Browse your Jellyfin server inside an embedded window and play everything through ynoTV's own mpv player. Login happens inside the window, so web-only skins and plugins keep working.",
+      "serverUrlLabel": "Jellyfin Server URL",
+      "urlRequired": "Please enter your Jellyfin server URL.",
+      "openBtn": "Open Jellyfin",
+      "opening": "Opening...",
+      "closeBtn": "Close Window",
+      "openFailed": "Failed to open the Jellyfin window.",
+      "closeFailed": "Failed to close the Jellyfin window.",
+      "notes": "Playback started inside the Jellyfin window is handed off to ynoTV's mpv player. Position is reported back to the server so Jellyfin shows Now Playing and resume positions are saved.",
+      "disclaimer": "Jellyfin is a third-party media server. ynoTV is not affiliated with the Jellyfin project. The embedded window loads the web UI directly from your configured server."
     },
     "simkl": {
       "title": "Simkl",

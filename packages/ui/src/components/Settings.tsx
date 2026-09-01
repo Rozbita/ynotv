@@ -21,6 +21,7 @@ import { LiveTVTab } from './settings/LiveTVTab';
 import { SubtitlesTab, type SubtitleSettings } from './settings/SubtitlesTab';
 import { ScrobblingTab } from './settings/ScrobblingTab';
 import { SimklTab } from './settings/SimklTab';
+import { JellyfinTab } from './settings/JellyfinTab';
 import { StremTab } from './settings/StremTab';
 import { NuvioTab } from './settings/NuvioTab';
 import { ProxyTab } from './settings/ProxyTab';
@@ -3165,6 +3166,8 @@ export function Settings({
         return <ScrobblingTab />;
       case 'simkl':
         return <SimklTab />;
+      case 'jellyfin':
+        return <JellyfinTab />;
       case 'controllers':
         return <ControllersTab />;
       default:

@@ -393,6 +393,7 @@
       "calendar": "कैलेंडर",
       "cast": "Cast",
       "dvr": "DVR",
+      "jellyfin": "Jellyfin",
       "movies": "फ़िल्में",
       "nuvio": "Nuvio",
       "series": "सीरीज़",
@@ -415,6 +416,7 @@
       "cache": "कैश",
       "debug": "डीबग",
       "discord": "Discord Rich Presence",
+      "jellyfin": "Jellyfin",
       "export-import": "निर्यात / आयात",
       "livetv": "लाइव टीवी",
       "metadata": "मेटाडेटा",
@@ -1292,6 +1294,20 @@
       "disconnect": "Trakt खाता डिस्कनेक्ट करें",
       "disconnectConfirm": "क्या आप वाकई अपना Trakt खाता डिस्कनेक्ट करना चाहते हैं?",
       "failedGenerateTraktCode": "Trakt डिवाइस कोड उत्पन्न करने में विफल"
+    },
+    "jellyfin": {
+      "title": "Jellyfin",
+      "configured": "Configured",
+      "description": "Browse your Jellyfin server inside an embedded window and play everything through ynoTV's own mpv player. Login happens inside the window, so web-only skins and plugins keep working.",
+      "serverUrlLabel": "Jellyfin Server URL",
+      "urlRequired": "Please enter your Jellyfin server URL.",
+      "openBtn": "Open Jellyfin",
+      "opening": "Opening...",
+      "closeBtn": "Close Window",
+      "openFailed": "Failed to open the Jellyfin window.",
+      "closeFailed": "Failed to close the Jellyfin window.",
+      "notes": "Playback started inside the Jellyfin window is handed off to ynoTV's mpv player. Position is reported back to the server so Jellyfin shows Now Playing and resume positions are saved.",
+      "disclaimer": "Jellyfin is a third-party media server. ynoTV is not affiliated with the Jellyfin project. The embedded window loads the web UI directly from your configured server."
     },
     "simkl": {
       "title": "Simkl",

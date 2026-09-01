@@ -2,7 +2,7 @@ import { PlaybackHeader } from './PlaybackHeader';
 
 interface BackButtonOverlayProps {
   visible: boolean;
-  sourceView: 'movies' | 'series' | 'dvr' | 'stremio' | 'nuvio' | null;
+  sourceView: 'movies' | 'series' | 'dvr' | 'stremio' | 'nuvio' | 'jellyfin' | null;
   onBack: () => void;
   title?: string | null;
   subtitle?: string | null;

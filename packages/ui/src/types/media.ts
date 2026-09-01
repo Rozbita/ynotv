@@ -65,4 +65,20 @@ export interface VodPlayInfo {
   tmdbId?: number | string; // TMDB ID if available
   imdbId?: string;        // IMDb ID if available
   preferredMode?: 'embedded' | 'popout' | 'external'; // Optional target player mode override
+  // Jellyfin playback metadata used to load its external subtitle streams.
+  jellyfinServerUrl?: string;
+  jellyfinApiKey?: string;
+  jellyfinItemId?: string;
+  jellyfinMediaSourceId?: string;
+  jellyfinSubtitleStreamId?: number;
+  jellyfinSubtitleTracks?: Array<{
+    index: number;
+    title?: string;
+    lang?: string;
+    codec?: string;
+    isExternal: boolean;
+    deliveryUrl?: string;
+    selected?: boolean;
+    default?: boolean;
+  }>;
 }

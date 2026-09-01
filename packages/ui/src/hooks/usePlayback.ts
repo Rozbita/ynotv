@@ -376,7 +376,7 @@ export interface PlaybackState {
   handlePlayChannel: (channel: StoredChannel, autoSwitched?: boolean, directPlay?: boolean) => void | Promise<void>;
   handlePlayCatchup: (channel: StoredChannel, programTitle: string, startTimeMs: number, durationMinutes: number, programDesc?: string) => Promise<void>;
   handleCatchupSeek: (channel: StoredChannel, programTitle: string, startTimeMs: number, durationMinutes: number, seekSeconds: number, programDesc?: string) => Promise<void>;
-  handlePlayVod: (info: VodPlayInfo, onCloseView?: () => void) => Promise<void>;
+  handlePlayVod: (info: VodPlayInfo, onCloseView?: () => void) => Promise<boolean>;
   handlePlayRecording: (recording: import('../db').DvrRecording, onCloseView?: () => void) => Promise<void>;
   handleStop: () => Promise<void>;
   handleSeek: (seconds: number) => Promise<void>;
@@ -846,12 +846,14 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
     }
   }, [duration, setPosition, seekWithRetry, vodInfo, coreIdle]);
 
-  // Handle pending database resume seek when duration becomes available (immune to load delays)
+  // Handle pending resume seek when duration becomes available (immune to load delays).
+  // Jellyfin supplies its authoritative position as startTimeTicks in the stream
+  // URL; it must use this same deferred seek path as local VOD resumes.
   useEffect(() => {
     if (pendingResumeSeekRef.current !== null && duration > 0 && !coreIdle) {
       const targetSeek = pendingResumeSeekRef.current;
       pendingResumeSeekRef.current = null;
-      logInfo(`[usePlayback] Seeking VOD to database resume position: ${targetSeek} seconds`);
+      logInfo(`[usePlayback] Seeking VOD to resume position: ${targetSeek} seconds`);
       setPosition(targetSeek);
       const cancelSeek = seekWithRetry(targetSeek, 'database resume', () => {
         isInitialSeekPendingRef.current = false;
@@ -864,7 +866,7 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
 
   // Periodic progress saving for VOD playback + save on app close
   useEffect(() => {
-    if (!vodInfo || !playing || duration <= 0 || vodInfo.source_id === 'trailer' || isYouTubeUrl(vodInfo.url)) {
+    if (!vodInfo || !playing || duration <= 0 || vodInfo.source_id === 'trailer' || vodInfo.source_id === 'jellyfin' || isYouTubeUrl(vodInfo.url)) {
       return;
     }
 
@@ -1483,7 +1485,17 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
       // Start the retry from 0 — never re-apply a stale resume seek.
       pendingResumeSeekRef.current = null;
       isInitialSeekPendingRef.current = false;
-      const result = await tryLoadWithFallbacks(resolved.url, false, resolved.userAgent);
+      let playbackUrl = resolved.url;
+      if (info.source_id === 'jellyfin' && info.jellyfinSubtitleStreamId != null) {
+        try {
+          const u = new URL(playbackUrl);
+          u.searchParams.set('SubtitleStreamIndex', String(info.jellyfinSubtitleStreamId));
+          playbackUrl = u.toString();
+        } catch {
+          // Keep the original stream URL if it cannot be augmented.
+        }
+      }
+      const result = await tryLoadWithFallbacks(playbackUrl, false, resolved.userAgent);
       if (!result.success) {
         logWarn('[Trailer] Retry failed to load:', result.error);
         return false;
@@ -1862,8 +1874,10 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
     userPausedRef.current = false;
     setFailoverState(null);
 
-    // Save VOD progress before switching to Live TV
-    if (vodInfo && position > 0 && duration > 0) {
+    // Save local VOD progress before switching to Live TV. Jellyfin owns its
+    // resume position on the server; never create/overwrite a second local
+    // resume record for a Jellyfin handoff.
+    if (vodInfo && vodInfo.source_id !== 'jellyfin' && position > 0 && duration > 0) {
       const mediaId = vodInfo.mediaId || (vodInfo.source_id && vodInfo.url
         ? `${vodInfo.source_id}_${vodInfo.url}`
         : null);
@@ -1942,6 +1956,13 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
   }, [handleLoadStream, resetHealthTracking, vodInfo, position, duration]);
 
   const autoSelectSubtitle = useCallback(async (providedSubTracks?: any[]) => {
+    // Jellyfin supplies the authoritative selected/default subtitle. Do not let
+    // ynoTV's global language preference override it during handoff.
+    if (vodInfoRef.current?.source_id === 'jellyfin') {
+      hasAutoSelectedSubRef.current = true;
+      subAutoSelectEverCompletedRef.current = true;
+      return;
+    }
     const ss = useSettingsStore.getState().subtitleSettings;
     const rawDefaultLanguage = ss?.defaultLanguage || 'en';
 
@@ -2207,8 +2228,9 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
     if (pendingCatchupSeekRef.current === null) {
       clearPendingSeeks();
     }
-    // Save VOD progress before switching to catchup
-    if (vodInfo && position > 0 && duration > 0) {
+    // Save local VOD progress before switching to catchup. Jellyfin progress
+    // is reported to Jellyfin itself, not stored in ynoTV's local history.
+    if (vodInfo && vodInfo.source_id !== 'jellyfin' && position > 0 && duration > 0) {
       const mediaId = vodInfo.mediaId || (vodInfo.source_id && vodInfo.url
         ? `${vodInfo.source_id}_${vodInfo.url}`
         : null);
@@ -2299,10 +2321,8 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
     const isLocal = isLocalUrl(resolved.url);
     if (isLocal) {
       setIgnoreHttpErrors(true);
-    }
-
-    const result = await tryLoadWithFallbacks(resolved.url, false, resolved.userAgent);
-    if (!result.success) {
+    }      const result = await tryLoadWithFallbacks(resolved.url, false, resolved.userAgent);
+      if (!result.success) {
       if (isLocal) setIgnoreHttpErrors(false);
       setError(translateNativeError(result.error) || i18n.t('player:failedToLoadCatchupStream'));
     } else {
@@ -2357,13 +2377,13 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
       logError('Failed to resolve Source info:', err);
       setError(i18n.t('common:contextMenu.failedResolveStreamUrl'));
       setVodLoadingInfo(null);
-      return;
+      return false;
     }
 
     if (resolved.url.startsWith('infoHash:')) {
       setError(i18n.t('player:torrentRequiresTorrServer'));
       setVodLoadingInfo(null);
-      return;
+      return false;
     }
 
     // Stalker/MAC sources require session headers that MPV doesn't send,
@@ -2385,13 +2405,12 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
 
     if (Bridge.getIsCasting?.()) {
       Bridge.setCastMetadata(info.title, info.type || 'VOD');
-    }
-
-    const result = await tryLoadWithFallbacks(resolved.url, false, resolved.userAgent);
-    if (!result.success) {
+    }      const result = await tryLoadWithFallbacks(resolved.url, false, resolved.userAgent);
+      if (!result.success) {
       setIgnoreHttpErrors(false);
       setError(translateNativeError(result.error) || i18n.t('player:failedToLoadStream'));
       setVodLoadingInfo(null);
+      return false;
     } else {
       const workingUrl = result.url;
       
@@ -2404,7 +2423,7 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
       // and stale resume positions make a 30s clip jump straight to the end)
       let resumePosition = 0;
       console.log('[Playback] Checking for progress. mediaId:', mediaId, 'type:', info.type);
-      if (mediaId && info.type !== 'recording' && info.source_id !== 'trailer' && !isYouTubeUrl(info.url)) {
+      if (mediaId && info.type !== 'recording' && info.source_id !== 'trailer' && info.source_id !== 'jellyfin' && !isYouTubeUrl(info.url)) {
         // For series episodes, check episode-level progress first
         if (info.type === 'series' && mediaId.includes('_ep_')) {
           const parts = mediaId.split('_ep_');
@@ -2502,7 +2521,7 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
       console.log('[Playback] Final resume position:', resumePosition);
       
       // Ensure initial watch entry exists in vod_history with full metadata
-      if (mediaId && info.type !== 'recording') {
+      if (mediaId && info.type !== 'recording' && info.source_id !== 'jellyfin') {
         const seriesId = info.type === 'series' && mediaId.includes('_ep_') ? mediaId.split('_ep_')[0] : mediaId;
         void recordVodWatch(
           seriesId,
@@ -2540,16 +2559,52 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
       lastSubTracksCountRef.current = 0;
       lastAudioTracksCountRef.current = 0;
       startAutoSelectPolling();
+
+      // Add all Jellyfin external subtitle tracks to MPV. The existing track
+      // selector reads MPV's track-list, so these become first-class tracks.
+      // Jellyfin's selected/default state is applied after all files load.
+      if (info.source_id === 'jellyfin' && info.jellyfinSubtitleTracks?.length) {
+        const selected = info.jellyfinSubtitleTracks.find((track) => track.selected || track.default);
+        for (const track of info.jellyfinSubtitleTracks) {
+          if (!track.isExternal || !track.deliveryUrl) continue;
+          try {
+            await Bridge.addSubtitleFile(track.deliveryUrl, 'no');
+          } catch (error) {
+            logWarn('[Jellyfin] Failed to load external subtitle:', track.deliveryUrl, error);
+          }
+        }
+        if (selected?.deliveryUrl) {
+          // MPV assigns IDs after sub-add; re-query and select the matching URL.
+          const tracks = await Bridge.getTrackList().catch(() => []);
+          const match = tracks.find((track: any) => track.type === 'sub' && track.external && track['external-filename'] === selected.deliveryUrl);
+          if (match?.id != null) await Bridge.setSubtitleTrack(match.id);
+        }
+      }
       
-      // Resume from saved position if available
-      if (resumePosition > 0) {
-        setPosition(resumePosition);
-        pendingResumeSeekRef.current = resumePosition;
+      // Resume from saved position if available. Jellyfin's server position is
+      // carried in startTimeTicks by the captured URL and must not be replaced
+      // by ynoTV's local history (which is intentionally skipped above).
+      let urlResumePosition = 0;
+      if (info.source_id === 'jellyfin') {
+        try {
+          const parsed = new URL(workingUrl);
+          const ticks = Number(parsed.searchParams.get('startTimeTicks') || 0);
+          if (Number.isFinite(ticks) && ticks > 0) urlResumePosition = ticks / 10_000_000;
+        } catch {
+          // The URL was already accepted by the loader; leave resume at zero
+          // if it cannot be parsed here.
+        }
+      }
+      const initialResumePosition = info.source_id === 'jellyfin' ? urlResumePosition : resumePosition;
+      if (initialResumePosition > 0) {
+        setPosition(initialResumePosition);
+        pendingResumeSeekRef.current = initialResumePosition;
         isInitialSeekPendingRef.current = true;
       }
       
       // Close the VOD page when playing
       onCloseView?.();
+      return true;
     }
   }, [setIgnoreHttpErrors, setPosition, setDuration, clearPendingSeeks]);
 
@@ -2656,7 +2711,7 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
     // Save progress before stopping if playing VOD and initial seek is not pending
     if (isInitialSeekPendingRef.current) {
       console.log('[Playback] Initial seek was still pending on stop, skipping progress save');
-    } else if (vodInfo && position > 0 && duration > 0 && vodInfo.source_id !== 'trailer' && !isYouTubeUrl(vodInfo.url)) {
+    } else if (vodInfo && position > 0 && duration > 0 && vodInfo.source_id !== 'trailer' && vodInfo.source_id !== 'jellyfin' && !isYouTubeUrl(vodInfo.url)) {
       if (vodInfo.type === 'recording') {
         console.log('[Playback] Saving progress for recording on stop:', position, '/', duration);
         if (vodInfo.recordingId) {

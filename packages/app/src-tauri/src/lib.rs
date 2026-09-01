@@ -249,8 +249,7 @@ mod mpv_render_mac;
 mod mpv_macos;
 #[cfg(target_os = "windows")]
 mod mpv_windows;
-mod mpv_canvas;
-mod mpv_popout;
+mod mpv_canvas;mod mpv_popout;
 mod audio_capture;
 
 // Re-export the MPV state and functions based on platform
@@ -326,6 +325,7 @@ mod local_lib;
 mod gamepad;
 mod raw_hid_gamepad;
 mod web_server;
+mod jellyfin_web;
 
 #[tauri::command]
 fn get_connected_gamepads() -> Vec<gamepad::GamepadInfo> {
@@ -5116,6 +5116,7 @@ pub fn run() {
         .manage(std::sync::Arc::new(cast::CastManager::new()))
         .setup(|app| {
             app.manage(WindowStateTracker::default());
+            app.manage(jellyfin_web::JellyfinEmbedState::default());
 
             // Show the main window immediately and restore its saved position
             // BEFORE any potentially slow initialization (DVR database open /
@@ -5387,8 +5388,7 @@ pub fn run() {
             mpv_sync_window,
             mpv_set_geometry,
             mpv_kill,
-            mpv_get_cache_debug,
-            mpv_get_params_debug,
+            mpv_get_cache_debug,            mpv_get_params_debug,
             // Multiview canvas (software-rendered) commands
             mpv_canvas::multiview_canvas_start,
             mpv_canvas::multiview_canvas_stop,
@@ -5522,7 +5522,15 @@ pub fn run() {
             web_server::web_serve_status,
             web_server::web_serve_start,
             web_server::web_serve_stop,
-            web_server::remote_ws_broadcast
+            web_server::remote_ws_broadcast,
+            // Embedded Jellyfin child WebView commands
+            jellyfin_web::jellyfin_embed_open,
+            jellyfin_web::jellyfin_embed_resize,
+            jellyfin_web::jellyfin_embed_close,
+            jellyfin_web::jellyfin_embed_set_visible,
+            jellyfin_web::jellyfin_embed_is_open,
+            jellyfin_web::jellyfin_confirm_playback,
+            jellyfin_web::jellyfin_embed_reenable
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

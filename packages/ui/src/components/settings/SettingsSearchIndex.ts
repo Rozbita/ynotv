@@ -28,6 +28,7 @@ const TAB_LABELS: Record<SettingsTabId, string> = {
   subtitles: 'Subtitles & Audio',
   strem: 'Strem',
   nuvio: 'Nuvio',
+  jellyfin: 'Jellyfin',
   discord: 'Discord Rich Presence',
   theme: 'Theme',
   ui: 'UI',
@@ -179,6 +180,11 @@ const SETTINGS_SEARCH_INDEX: SettingsSearchResult[] = [
   { id: 'stream-badges', label: 'Enable Stream Badges', description: 'Toggle stream badges on or off.', tabId: 'strem', tabLabel: 'Strem', section: 'Stream Badges' },
   { id: 'badge-scale', label: 'Badge Scale', description: 'Adjust the size of stream badges.', tabId: 'strem', tabLabel: 'Strem', section: 'Stream Badges' },
   { id: 'custom-badge-rules', label: 'Custom Badge Rules', tabId: 'strem', tabLabel: 'Strem', section: 'Stream Badges' },
+
+  // --- Jellyfin ---
+  { id: 'jellyfin-tab', label: 'Jellyfin', description: 'Embedded Jellyfin server web UI with mpv playback.', tabId: 'jellyfin', tabLabel: 'Jellyfin', section: 'Jellyfin' },
+  { id: 'jellyfin-server-url', label: 'Jellyfin Server URL', description: 'Address of your Jellyfin server, e.g. http://192.168.1.10:8096.', tabId: 'jellyfin', tabLabel: 'Jellyfin', section: 'Jellyfin' },
+  { id: 'jellyfin-open', label: 'Open Jellyfin', description: 'Open the embedded Jellyfin window to browse and play through ynoTV.', tabId: 'jellyfin', tabLabel: 'Jellyfin', section: 'Jellyfin' },
 
   // --- Theme ---
   { id: 'theme-tab', label: 'Theme', tabId: 'theme', tabLabel: 'Theme', section: 'Theme' },

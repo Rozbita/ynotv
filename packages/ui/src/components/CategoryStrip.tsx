@@ -1766,6 +1766,26 @@ export const CategoryStrip = memo(function CategoryStrip({ selectedCategoryId, o
   // -------------------------------------------------------------------------
   const autohide = useSettingsStore((s) => s.categorySidebarAutohide);
 
+  // Continuously track the cursor's x so the auto-close logic can tell whether
+  // the mouse is parked at the left-edge grab zone (important in fullscreen, where
+  // parking at the very edge shadows the panel boundary and can drop it for a frame).
+  const autohideMouseXRef = useRef(0);
+  useEffect(() => {
+    if (!autohide || !isLiveTV) return;
+    const handleMouseMove = (e: MouseEvent) => {
+      autohideMouseXRef.current = e.clientX;
+    };
+    document.addEventListener('mousemove', handleMouseMove);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+    };
+  }, [autohide, isLiveTV]);
+
+  // Width of the left-edge "grab" strip: while the mouse stays within this band
+  // of the window's left edge the open panel is held open, so fullscreen users who
+  // rest the cursor right at the edge don't trigger an endless hide/show flicker.
+  const AUTOHIDE_EDGE_GRAB_PX = 12;
+
   // Auto-close after the user picks a category (one interaction, then done).
   // While hidden the ref tracks the selection so the reopen-restore path that
   // fires in the same render as visible=true never immediately closes it.
@@ -1793,6 +1813,15 @@ export const CategoryStrip = memo(function CategoryStrip({ selectedCategoryId, o
   }, []);
   const scheduleAutohideClose = useCallback(() => {
     if (!autohide) return;
+    // If the cursor is parked at the left-edge grab band, treat it as still
+    // "holding" the panel open rather than scheduling a close. This stops the
+    // hide/show stutter when the exact screen edge momentarily drops the
+    // cursor (common in fullscreen), while a deliberate move away from the
+    // edge (or away from the panel) still closes it normally.
+    if (autohideMouseXRef.current <= AUTOHIDE_EDGE_GRAB_PX) {
+      clearAutohideClose();
+      return;
+    }
     clearAutohideClose();
     autohideCloseTimer.current = window.setTimeout(() => {
       autohideCloseTimer.current = null;

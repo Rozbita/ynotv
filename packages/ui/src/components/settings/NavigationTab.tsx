@@ -38,6 +38,7 @@ const NAV_ITEMS = [
   { id: 'sports' },
   { id: 'stremio' },
   { id: 'nuvio' },
+  { id: 'jellyfin' },
   { id: 'calendar' },
   { id: 'cast' },
 ] as const;
@@ -65,6 +66,7 @@ const NAV_ITEM_LABEL_KEYS = {
   sports: 'items.sports',
   stremio: 'items.stremio',
   nuvio: 'items.nuvio',
+  jellyfin: 'items.jellyfin',
   calendar: 'items.calendar',
   cast: 'items.cast',
 } as const satisfies Record<NavItemId, `items.${NavItemId}`>;

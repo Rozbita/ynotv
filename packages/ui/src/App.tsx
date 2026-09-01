@@ -134,8 +134,8 @@ import { useLayoutPersistence, type LayoutMode } from './hooks/useLayoutPersiste
 import { useMpvListeners } from './hooks/useMpvListeners';
 import { AdvancedSearchModal, type AdvancedSearchConfig } from './components/AdvancedSearchModal';
 import { ChannelProbeModal } from './components/ChannelProbeModal';
-import { StremioPage } from './components/stremio/StremioPage';
-import { NuvioPage } from './components/nuvio/NuvioPage';
+import { StremioPage } from './components/stremio/StremioPage';import { NuvioPage } from './components/nuvio/NuvioPage';
+import { JellyfinPage } from './components/JellyfinPage';
 import { useStremioAddonStore } from './stores/stremioAddonStore';
 import { useStremioWatchStore } from './stores/stremioWatchStore';
 import { useStremioAuthStore } from './stores/stremioAuthStore';
@@ -150,8 +150,7 @@ import { BackButtonOverlay } from './components/BackButtonOverlay';
 import { PlaybackDetailsModal } from './components/PlaybackDetailsModal';
 import { SourcePickerModal } from './components/SourcePickerModal';
 import type { RecommendationItem } from './hooks/useLazyStremioRecommendations';
-import { DEFAULT_BADGE_SOURCES, mergeDefaultBadgeSources, compileBadgeSources } from './utils/streamBadges';
-import { initUiDesign } from './utils/uiDesign';
+import { DEFAULT_BADGE_SOURCES, mergeDefaultBadgeSources, compileBadgeSources } from './utils/streamBadges';import { initUiDesign } from './utils/uiDesign';
 
 // Apply the persisted UI design (v1/v2/v3) before first paint — best effort
 // from the settings cache. The DOM applier re-applies authoritatively once the
@@ -239,9 +238,11 @@ async function resolveChannelNavList(
 interface TransitionViewProps {
   visible: boolean;
   children: React.ReactNode;
+  /** Keep stateful native-child pages mounted while their view is hidden. */
+  keepMounted?: boolean;
 }
 
-function TransitionView({ visible, children }: TransitionViewProps) {
+function TransitionView({ visible, children, keepMounted = false }: TransitionViewProps) {
   const [shouldRender, setShouldRender] = useState(visible);
   const [animationClass, setAnimationClass] = useState(visible ? 'view-enter-active' : 'view-exit');
 
@@ -261,7 +262,7 @@ function TransitionView({ visible, children }: TransitionViewProps) {
     }
   }, [visible]);
 
-  if (!shouldRender) return null;
+  if (!shouldRender && !keepMounted) return null;
 
   return (
     <div className={`view-transition-container ${animationClass}`}>
@@ -947,6 +948,7 @@ function App() {
     seekPopout,
   } = popout;
 
+
   const handleTogglePopoutAlwaysOnTop = useCallback(async () => {
     const nextVal = !popoutAlwaysOnTop;
     setPopoutAlwaysOnTop(nextVal);
@@ -1064,7 +1066,7 @@ function App() {
   }, []);
 
   // Playback source view state to know where to go back when stopped
-  const [playbackSourceView, setPlaybackSourceView] = useState<'movies' | 'series' | 'dvr' | 'stremio' | 'nuvio' | null>(null);
+  const [playbackSourceView, setPlaybackSourceView] = useState<'movies' | 'series' | 'dvr' | 'stremio' | 'nuvio' | 'jellyfin' | null>(null);
   const [showPlaybackDetailsModal, setShowPlaybackDetailsModal] = useState(false);
   const [sourcePickerParams, setSourcePickerParams] = useState<{
     source: 'stremio' | 'nuvio';
@@ -1797,10 +1799,11 @@ function useTmdbPresencePoster(
 
   const [showShortcutsOverlay, setShowShortcutsOverlay] = useState(false);
 
-  // Wrap handleStop to restore Stremio/Nuvio page if stopped from a media context
-  const handleStop = useCallback(async () => {
+  // Wrap handleStop to restore the source page if stopped from a media context.
+  const handleStop = useCallback(async (returnView?: 'movies' | 'series' | 'dvr' | 'stremio' | 'nuvio' | 'jellyfin') => {
     const isStremio = vodInfo?.source_id === 'stremio' || vodInfo?.source_id === 'trailer';
     const isNuvio = vodInfo?.source_id === 'nuvio';
+    const isJellyfin = vodInfo?.source_id === 'jellyfin';
     
     // Save final progress before stopping
     if (isStremio || isNuvio) {
@@ -1875,8 +1878,13 @@ function useTmdbPresencePoster(
     setShowPlaybackDetailsModal(false);
     setActiveStremioMeta(null);
     setActiveStremioEpisode(null);
-    if (playbackSourceView) {
-      setActiveView(playbackSourceView);
+    // The Jellyfin handoff sets playbackSourceView asynchronously after the
+    // stream has loaded. If the user presses Stop during that transition (or a
+    // native mpv end event races the React update), infer the destination from
+    // the active VOD source instead of leaving the app on the black player view.
+    const sourceView = returnView || playbackSourceView || (isJellyfin ? 'jellyfin' : null);
+    if (sourceView) {
+      setActiveView(sourceView);
       setPlaybackSourceView(null);
     } else if (isStremio) {
       setActiveView('stremio');
@@ -1884,6 +1892,68 @@ function useTmdbPresencePoster(
       setActiveView('nuvio');
     }
   }, [vodInfo, handleStopRaw, setActiveView, playbackSourceView]);
+
+  // Jellyfin handoff: play the captured direct-stream URL through the app's
+  // normal VOD pipeline (same as any movie) so the frontend's own player takes
+  // over. Switch to the transparent fullscreen player view (hiding every page
+  // background, exactly like Live TV / Stremio / Nuvio) and remember to return
+  // to the Jellyfin tab when playback stops.
+  const handleJellyfinPlay = useCallback(
+    async (payload: import('./components/JellyfinPage').JellyfinPlayPayload) => {
+      try {
+        const ok = await handlePlayVod(
+          {
+            url: payload.url,
+            title: payload.title?.trim() || 'Jellyfin',
+            type: 'movie',
+            source_id: 'jellyfin',
+            mediaId: `jellyfin_${payload.url}`,
+            jellyfinItemId: payload.itemId,
+            jellyfinMediaSourceId: payload.mediaSourceId,
+            jellyfinSubtitleStreamId: payload.subtitleStreamId,
+            jellyfinSubtitleTracks: payload.subtitleTracks,
+          },
+          () => {
+            setPlaybackSourceView('jellyfin');
+            setActiveView('none');
+          },
+        );
+        return ok;
+      } catch (e) {
+        console.warn('[Jellyfin] Failed to start playback:', e);
+        return false;
+      }
+    },
+    [handlePlayVod, setActiveView],
+  );
+
+  // When a Jellyfin stream ends in mpv (idle), Rust emits playing:false —
+  // stop the stream cleanly and let handleStop return to the Jellyfin tab.
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    let disposed = false;
+    import('@tauri-apps/api/event')
+      .then(async ({ listen }) => {
+        if (disposed) return;
+        unlisten = await listen('jellyfin:playback-state', (e: any) => {
+          if (e.payload?.playing === false) {
+            // Rust's listener is app-wide. Ignore a delayed Jellyfin event if
+            // the user has already started a different VOD; otherwise a stale
+            // last_hidden_at value could stop that unrelated playback.
+            if (vodInfo?.source_id !== 'jellyfin' && playbackSourceView !== 'jellyfin') return;
+            // State updates are asynchronous; pass the destination directly so
+            // this event cannot call a stale handleStop closure that still sees
+            // playbackSourceView as null.
+            void handleStop('jellyfin');
+          }
+        });
+      })
+      .catch((e) => console.warn('[Jellyfin] Failed to attach playback-state listener:', e));
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [handleStop, setPlaybackSourceView, vodInfo?.source_id, playbackSourceView]);
 
   // Built-in "back" navigation triggered by the configured mouse back button
   // (or any key/button the user rebinds `mouseBackNavigation` to). Matching is
@@ -1894,7 +1964,8 @@ function useTmdbPresencePoster(
       activeView === 'movies' ||
       activeView === 'series' ||
       activeView === 'stremio' ||
-      activeView === 'nuvio'
+      activeView === 'nuvio' ||
+      activeView === 'jellyfin'
     ) {
       return;
     }
@@ -4507,11 +4578,15 @@ function useTmdbPresencePoster(
           setCats(false);
           setView(curView === 'stremio' ? 'none' : 'stremio');
           setTimeout(() => focusViewOnOpen(), 120);
-          break;
-
-        case 'nuvio':
+          break;        case 'nuvio':
           setCats(false);
           setView(curView === 'nuvio' ? 'none' : 'nuvio');
+          setTimeout(() => focusViewOnOpen(), 120);
+          break;
+
+        case 'jellyfin':
+          setCats(false);
+          setView(curView === 'jellyfin' ? 'none' : 'jellyfin');
           setTimeout(() => focusViewOnOpen(), 120);
           break;
 
@@ -5339,6 +5414,26 @@ function useTmdbPresencePoster(
                     <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
                   </svg>
                   <span>{i18n.t('nav:items.nuvio')}</span>
+                </button>
+              )}
+
+              {!navHiddenTabs.includes('jellyfin') && (
+                <button
+                  className={`segmented-btn ${activeView === 'jellyfin' ? 'active' : ''}`}
+                  onClick={() => {
+                    setCategoriesOpen(false);
+                    setActiveView(activeView === 'jellyfin' ? 'none' : 'jellyfin');
+                  }}
+                  title={i18n.t('nav:items.jellyfin')}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <path d="M3 9h18" />
+                    <path d="M9 21V9" />
+                    <path d="M15 15l4-4" />
+                    <path d="M11 13l4 4" />
+                  </svg>
+                  <span>{i18n.t('nav:items.jellyfin')}</span>
                 </button>
               )}
             </div>
@@ -6600,6 +6695,11 @@ function useTmdbPresencePoster(
             }
           }}
         />
+      </TransitionView>
+
+      {/* Jellyfin Page (embedded web wrapper) */}
+      <TransitionView visible={activeView === 'jellyfin'} keepMounted>
+        <JellyfinPage visible={activeView === 'jellyfin'} onPlay={handleJellyfinPlay} />
       </TransitionView>
 
       {/* Stremio Page */}

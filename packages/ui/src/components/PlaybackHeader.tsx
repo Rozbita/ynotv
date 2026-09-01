@@ -4,7 +4,7 @@ import './PlaybackHeader.css';
 
 export interface PlaybackHeaderProps {
   visible: boolean;
-  sourceView: 'movies' | 'series' | 'dvr' | 'stremio' | 'nuvio' | null;
+  sourceView: 'movies' | 'series' | 'dvr' | 'stremio' | 'nuvio' | 'jellyfin' | null;
   title?: string | null;
   subtitle?: string | null;
   quality?: string | null;

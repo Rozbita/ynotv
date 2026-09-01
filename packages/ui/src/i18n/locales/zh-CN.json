@@ -393,6 +393,7 @@
       "calendar": "日历",
       "cast": "投射",
       "dvr": "DVR",
+      "jellyfin": "Jellyfin",
       "movies": "电影",
       "nuvio": "Nuvio",
       "series": "剧集",
@@ -415,6 +416,7 @@
       "cache": "缓存",
       "debug": "调试",
       "discord": "Discord 富状态",
+      "jellyfin": "Jellyfin",
       "export-import": "导出 / 导入",
       "livetv": "直播电视",
       "metadata": "元数据",
@@ -1292,6 +1294,20 @@
       "disconnect": "断开 Trakt 帐户",
       "disconnectConfirm": "确定要断开您的 Trakt 帐户吗？",
       "failedGenerateTraktCode": "生成 Trakt 设备代码失败"
+    },
+    "jellyfin": {
+      "title": "Jellyfin",
+      "configured": "Configured",
+      "description": "Browse your Jellyfin server inside an embedded window and play everything through ynoTV's own mpv player. Login happens inside the window, so web-only skins and plugins keep working.",
+      "serverUrlLabel": "Jellyfin Server URL",
+      "urlRequired": "Please enter your Jellyfin server URL.",
+      "openBtn": "Open Jellyfin",
+      "opening": "Opening...",
+      "closeBtn": "Close Window",
+      "openFailed": "Failed to open the Jellyfin window.",
+      "closeFailed": "Failed to close the Jellyfin window.",
+      "notes": "Playback started inside the Jellyfin window is handed off to ynoTV's mpv player. Position is reported back to the server so Jellyfin shows Now Playing and resume positions are saved.",
+      "disclaimer": "Jellyfin is a third-party media server. ynoTV is not affiliated with the Jellyfin project. The embedded window loads the web UI directly from your configured server."
     },
     "simkl": {
       "title": "Simkl",
