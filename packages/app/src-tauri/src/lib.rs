@@ -5530,7 +5530,8 @@ pub fn run() {
             jellyfin_web::jellyfin_embed_set_visible,
             jellyfin_web::jellyfin_embed_is_open,
             jellyfin_web::jellyfin_confirm_playback,
-            jellyfin_web::jellyfin_embed_reenable
+            jellyfin_web::jellyfin_embed_reenable,
+            jellyfin_web::jellyfin_embed_notify_playback_ended
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

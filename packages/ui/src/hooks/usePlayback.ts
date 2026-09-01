@@ -1955,12 +1955,92 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
     handleLoadStream(channelToPlay);
   }, [handleLoadStream, resetHealthTracking, vodInfo, position, duration]);
 
+  const applyJellyfinSubtitleSelection = useCallback(
+    async (vod: VodPlayInfo, resolvedExternalUrls?: Map<string, string>): Promise<boolean> => {
+      if (vod.source_id !== 'jellyfin') return false;
+
+      const targetSubId = vod.jellyfinSubtitleStreamId;
+      if (targetSubId === -1) {
+        logInfo('[Jellyfin] Subtitle explicitly set to None (-1). Disabling subtitles in MPV.');
+        await Bridge.setSubtitleTrack(0).catch(() => {});
+        return true;
+      }
+
+      if (targetSubId == null) {
+        return false;
+      }
+
+      const metaTracks = vod.jellyfinSubtitleTracks || [];
+      const pickedMeta = metaTracks.find((t) => t.index === targetSubId) || metaTracks.find((t) => t.selected || t.default);
+
+      // 1. If the target is an external subtitle track
+      if (pickedMeta?.isExternal && pickedMeta.deliveryUrl) {
+        const resolvedPath = resolvedExternalUrls?.get(pickedMeta.deliveryUrl) || pickedMeta.deliveryUrl;
+        const trackList = (await Bridge.getTrackList().catch(() => [])) as any[];
+        const subTracks = trackList.filter((t: any) => t.type === 'sub');
+        const match = subTracks.find(
+          (t: any) => t.external && (t['external-filename'] === resolvedPath || t['external-filename'] === pickedMeta.deliveryUrl),
+        );
+        if (match?.id != null) {
+          logInfo(`[Jellyfin] Selected external subtitle track ${match.id} (${pickedMeta.title || pickedMeta.lang || 'external'})`);
+          await Bridge.setSubtitleTrack(match.id).catch(() => {});
+          return true;
+        }
+      }
+
+      // 2. If the target is an embedded subtitle track
+      const trackList = (await Bridge.getTrackList().catch(() => [])) as any[];
+      const subTracks = trackList.filter((t: any) => t.type === 'sub');
+      const embeddedSubTracks = subTracks.filter((t: any) => !t.external);
+
+      if (embeddedSubTracks.length > 0) {
+        // Calculate 1-based relative index among non-external subtitle streams (matching jellyfin-desktop)
+        let relIndex = 1;
+        for (const st of metaTracks) {
+          if (st.isExternal) continue;
+          if (st.index === targetSubId) break;
+          relIndex++;
+        }
+
+        // Match by 1-based relative index among embedded tracks
+        const matchByRel = embeddedSubTracks[relIndex - 1] || embeddedSubTracks.find((t: any) => t.id === relIndex);
+        if (matchByRel?.id != null) {
+          logInfo(`[Jellyfin] Selected embedded subtitle track by relative index: track ${matchByRel.id} (relIndex ${relIndex}, stream ${targetSubId})`);
+          await Bridge.setSubtitleTrack(matchByRel.id).catch(() => {});
+          return true;
+        }
+
+        // Fallback: match by language or title
+        if (pickedMeta) {
+          const wantLang = (pickedMeta.lang || '').toLowerCase();
+          const wantTitle = (pickedMeta.title || '').toLowerCase();
+          const match = embeddedSubTracks.find((t: any) => {
+            const lang = String(t.lang || '').toLowerCase();
+            const title = String(t.title || '').toLowerCase();
+            return (wantLang && lang === wantLang) || (wantTitle && title === wantTitle);
+          });
+          if (match?.id != null) {
+            logInfo(`[Jellyfin] Selected embedded subtitle track by metadata match: track ${match.id} (${wantLang || wantTitle})`);
+            await Bridge.setSubtitleTrack(match.id).catch(() => {});
+            return true;
+          }
+        }
+      }
+
+      return false;
+    },
+    [],
+  );
+
   const autoSelectSubtitle = useCallback(async (providedSubTracks?: any[]) => {
-    // Jellyfin supplies the authoritative selected/default subtitle. Do not let
-    // ynoTV's global language preference override it during handoff.
+    // Jellyfin supplies the authoritative selected/default subtitle.
     if (vodInfoRef.current?.source_id === 'jellyfin') {
-      hasAutoSelectedSubRef.current = true;
-      subAutoSelectEverCompletedRef.current = true;
+      const currentVod = vodInfoRef.current;
+      const done = await applyJellyfinSubtitleSelection(currentVod);
+      if (done || currentVod.jellyfinSubtitleStreamId === -1 || currentVod.jellyfinSubtitleStreamId == null) {
+        hasAutoSelectedSubRef.current = true;
+        subAutoSelectEverCompletedRef.current = true;
+      }
       return;
     }
     const ss = useSettingsStore.getState().subtitleSettings;
@@ -2577,28 +2657,23 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
       // Add all Jellyfin external subtitle tracks to MPV. The existing track
       // selector reads MPV's track-list, so these become first-class tracks.
       // Jellyfin's selected/default state is applied after all files load.
-      if (info.source_id === 'jellyfin' && info.jellyfinSubtitleTracks?.length) {
-        const selected = info.jellyfinSubtitleTracks.find((track) => track.selected || track.default);
-        // 'cached' = add without auto-selecting (mpv rejects other flags). Rust
-        // downloads Jellyfin subtitle URLs to local temp files (mpv can't probe
-        // URLs ending in `?api_key=...`), so the returned path is what
-        // track-list's external-filename will actually contain.
+      if (info.source_id === 'jellyfin') {
         const resolvedByUrl = new Map<string, string>();
-        for (const track of info.jellyfinSubtitleTracks) {
-          if (!track.isExternal || !track.deliveryUrl) continue;
-          try {
-            const resolved = await Bridge.addSubtitleFile(track.deliveryUrl, 'cached');
-            resolvedByUrl.set(track.deliveryUrl, resolved || track.deliveryUrl);
-          } catch (error) {
-            logWarn('[Jellyfin] Failed to load external subtitle:', track.deliveryUrl, error);
+        if (info.jellyfinSubtitleTracks?.length) {
+          for (const track of info.jellyfinSubtitleTracks) {
+            if (!track.isExternal || !track.deliveryUrl) continue;
+            try {
+              const resolved = await Bridge.addSubtitleFile(track.deliveryUrl, 'cached');
+              resolvedByUrl.set(track.deliveryUrl, resolved || track.deliveryUrl);
+            } catch (error) {
+              logWarn('[Jellyfin] Failed to load external subtitle:', track.deliveryUrl, error);
+            }
           }
         }
-        if (selected?.deliveryUrl) {
-          // MPV assigns IDs after sub-add; re-query and select the matching track.
-          const resolved = resolvedByUrl.get(selected.deliveryUrl) || selected.deliveryUrl;
-          const tracks = await Bridge.getTrackList().catch(() => []);
-          const match = tracks.find((track: any) => track.type === 'sub' && track.external && track['external-filename'] === resolved);
-          if (match?.id != null) await Bridge.setSubtitleTrack(match.id);
+        const applied = await applyJellyfinSubtitleSelection(info, resolvedByUrl);
+        if (applied || info.jellyfinSubtitleStreamId === -1 || info.jellyfinSubtitleStreamId == null) {
+          hasAutoSelectedSubRef.current = true;
+          subAutoSelectEverCompletedRef.current = true;
         }
       }
       

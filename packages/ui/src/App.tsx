@@ -60,6 +60,7 @@ import { useSelectedCategory, useChannelSearch, useProgramSearch, useChannels, u
 import { epgTimeMs } from './utils/epgTime';
 import { usePhoneRemoteCompanion } from './hooks/usePhoneRemoteCompanion';
 import { getPrimaryChannelForGroup } from './services/failover-groups';
+import { jellyfinEmbedNotifyPlaybackEnded } from './services/jellyfin';
 import { useSportsSettingsStore } from './stores/sportsSettingsStore';
 import { useSportsPolling, isSportsCacheFresh } from './hooks/useSportsPolling';
 import { useActiveTmdbToken } from './hooks/useTmdbLists';
@@ -1888,6 +1889,10 @@ function useTmdbPresencePoster(
       }
     }
 
+    if (isJellyfin) {
+      void jellyfinEmbedNotifyPlaybackEnded().catch(() => {});
+    }
+
     await handleStopRaw();
     setShowPlaybackDetailsModal(false);
     setActiveStremioMeta(null);
@@ -1943,6 +1948,7 @@ function useTmdbPresencePoster(
             jellyfinEpisodeIndexNumber: payload.episodeIndex ?? undefined,
             jellyfinEpisodeParentIndexNumber: payload.episodeParentIndex ?? undefined,
             jellyfinEpisodes: payload.episodes,
+            jellyfinSubtitlePrefs: payload.subtitlePrefs,
           },
           () => {
             setPlaybackSourceView('jellyfin');
@@ -1999,7 +2005,12 @@ function useTmdbPresencePoster(
           const ms = pi?.MediaSources?.[0];
           if (ms) {
             const token = key;
-            subtitleStreamId = ms.DefaultSubtitleStreamIndex != null ? ms.DefaultSubtitleStreamIndex : undefined;
+            // The user's remembered subtitle for this item wins over the
+            // server's DefaultSubtitleStreamIndex (which only reflects the
+            // account default, not what they actually watched with).
+            const remembered = current.jellyfinSubtitlePrefs?.[target.id];
+            const defaultIdx = ms.DefaultSubtitleStreamIndex != null ? ms.DefaultSubtitleStreamIndex : undefined;
+            subtitleStreamId = typeof remembered === 'number' && remembered != null ? remembered : defaultIdx;
             for (const st of ms.MediaStreams || []) {
               if (!st || !st.Type) continue;
               if (st.Type === 'Subtitle') {
@@ -2050,6 +2061,7 @@ function useTmdbPresencePoster(
         jellyfinEpisodeIndexNumber: target.indexNumber ?? undefined,
         jellyfinEpisodeParentIndexNumber: target.parentIndexNumber ?? undefined,
         jellyfinEpisodes: current.jellyfinEpisodes,
+        jellyfinSubtitlePrefs: current.jellyfinSubtitlePrefs,
         jellyfinSubtitleStreamId: subtitleStreamId ?? undefined,
         jellyfinSubtitleTracks: subtitleTracks,
         jellyfinAudioTracks: audioTracks,

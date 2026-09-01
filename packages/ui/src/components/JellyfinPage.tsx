@@ -4,6 +4,8 @@ import {
   jellyfinAuthenticate,
   jellyfinConfirmPlayback,
   jellyfinEmbedClose,
+  jellyfinEmbedIsOpen,
+  jellyfinEmbedNotifyPlaybackEnded,
   jellyfinEmbedOpen,
   jellyfinEmbedReenable,
   jellyfinEmbedResize,
@@ -75,6 +77,10 @@ export interface JellyfinPlayPayload {
   episodeIndex?: number | null;
   episodeParentIndex?: number | null;
   episodeName?: string | null;
+  // Remembered per-item subtitle selections (itemId -> stream index), captured
+  // from the web client's own localStorage so prev/next and re-plays can start
+  // with the user's subtitle.
+  subtitlePrefs?: Record<string, number>;
   episodes?: Array<{
     id: string;
     indexNumber?: number | null;
@@ -169,15 +175,13 @@ export function JellyfinPage({ visible, onPlay }: JellyfinPageProps) {
     })();
   }, []);
 
-  // The child is closed when the tab leaves view and recreated on return. A
-  // hidden WebView2 surface can come back blank/black, so keep-alive is not
-  // reliable; the shared WebView2 profile preserves the Jellyfin session, and
-  // the injected page script restores the last SPA route from localStorage on
-  // reload — so returning lands on the page the user left, not the home page.
+  // Keep the child WebView alive while connected so the page state, scroll
+  // position, and navigation history are preserved when returning from video
+  // playback or switching tabs. It is hidden while off-screen and revealed
+  // (with updated geometry) on return.
   useEffect(() => {
     if (!visible) {
-      connectedRef.current = false;
-      void jellyfinEmbedClose().catch(() => {});
+      void jellyfinEmbedSetVisible(false).catch(() => {});
       return;
     }
     const url = serverUrlRef.current;
@@ -186,26 +190,41 @@ export function JellyfinPage({ visible, onPlay }: JellyfinPageProps) {
     connectedRef.current = true;
     let cancelled = false;
     let timer: number | undefined;
-    // Re-opening can race the close from the outgoing TransitionView. Retry a
-    // few times after the transition has settled so a transient native child
-    // WebView failure cannot leave the app showing only the black MPV surface.
-    const delays = [120, 400, 1000];
-    const openAttempt = (attempt: number) => {
-      timer = window.setTimeout(async () => {
+
+    (async () => {
+      try {
+        const isOpen = await jellyfinEmbedIsOpen();
         if (cancelled || !aliveRef.current) return;
-        const opened = await applyBoundsOpen(url);
-        if (!opened && !cancelled && attempt + 1 < delays.length) {
-          openAttempt(attempt + 1);
+        if (isOpen) {
+          const bounds = computeBounds();
+          if (bounds) {
+            await jellyfinEmbedResize(bounds).catch(() => {});
+          }
+          await jellyfinEmbedSetVisible(true).catch(() => {});
+          await jellyfinEmbedNotifyPlaybackEnded().catch(() => {});
+        } else {
+          const delays = [120, 400, 1000];
+          const openAttempt = (attempt: number) => {
+            timer = window.setTimeout(async () => {
+              if (cancelled || !aliveRef.current) return;
+              const opened = await applyBoundsOpen(url);
+              if (!opened && !cancelled && attempt + 1 < delays.length) {
+                openAttempt(attempt + 1);
+              }
+            }, delays[attempt]);
+          };
+          openAttempt(0);
         }
-      }, delays[attempt]);
-    };
-    openAttempt(0);
+      } catch (e) {
+        console.warn('[Jellyfin] Failed to sync webview visibility:', e);
+      }
+    })();
 
     return () => {
       cancelled = true;
       if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [visible, state, applyBoundsOpen]);
+  }, [visible, state, applyBoundsOpen, computeBounds]);
 
   // Keep the child WebView synced to the window on resize while connected.
   useEffect(() => {
@@ -214,7 +233,7 @@ export function JellyfinPage({ visible, onPlay }: JellyfinPageProps) {
       try {
         const win = getCurrentWindow();
         unlisten = await win.onResized(() => {
-          if (connectedRef.current) {
+          if (connectedRef.current && visible) {
             const bounds = computeBounds();
             if (bounds) {
               jellyfinEmbedResize(bounds).catch((e) =>
@@ -230,7 +249,7 @@ export function JellyfinPage({ visible, onPlay }: JellyfinPageProps) {
     return () => {
       unlisten?.();
     };
-  }, [computeBounds]);
+  }, [computeBounds, visible]);
 
   // Keep the onPlay prop fresh (it may be re-created by App on re-renders).
   const onPlayRef = useRef(onPlay);

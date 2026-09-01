@@ -109,4 +109,7 @@ export interface VodPlayInfo {
     name?: string;
     positionTicks?: number;
   }>;
+  // Remembered subtitle stream index per Jellyfin item id (captured from the
+  // web client), so prev/next episodes start with the user's subtitle.
+  jellyfinSubtitlePrefs?: Record<string, number>;
 }

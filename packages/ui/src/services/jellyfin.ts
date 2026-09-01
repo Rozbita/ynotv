@@ -108,3 +108,16 @@ export async function jellyfinConfirmPlayback(url: string): Promise<void> {
 export async function jellyfinEmbedReenable(): Promise<void> {
   await invoke('jellyfin_embed_reenable');
 }
+
+/**
+ * Notify the embedded Jellyfin child WebView that video playback has stopped
+ * or ended, dismissing any active loading spinners or player overlays and
+ * restoring the page state.
+ */
+export async function jellyfinEmbedNotifyPlaybackEnded(): Promise<void> {
+  try {
+    await invoke('jellyfin_embed_notify_playback_ended');
+  } catch (e) {
+    // Ignore errors if the child webview is not running
+  }
+}

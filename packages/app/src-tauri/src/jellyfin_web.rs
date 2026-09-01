@@ -254,6 +254,9 @@ struct PlayPayload {
     episode_parent_index: Option<i64>,
     episode_name: Option<String>,
     episodes: Option<Vec<serde_json::Value>>,
+    /// Remembered per-item subtitle selections (itemId -> stream index) so
+    /// prev/next episodes and re-plays can start with the user's subtitle.
+    subtitle_prefs: Option<serde_json::Value>,
     /// Bounded tail of recent bridge diagnostics (piggybacked so the diagnostics
     /// never race the play signal on the document.title channel).
     diags: Option<Vec<serde_json::Value>>,
@@ -372,6 +375,9 @@ fn ensure_status_listener<R: Runtime>(app: &AppHandle<R>) {
             "jellyfin:playback-state",
             serde_json::json!({ "playing": false }),
         );
+        if let Some(wv) = listener_app.get_webview(JELLYFIN_LABEL) {
+            let _ = wv.eval("window.__ynotvOnPlaybackEnded && window.__ynotvOnPlaybackEnded();");
+        }
     });
 }
 
@@ -467,6 +473,7 @@ pub async fn jellyfin_embed_open<R: Runtime>(
                                         "episodeParentIndex": payload.episode_parent_index,
                                         "episodeName": payload.episode_name,
                                         "episodes": payload.episodes,
+                                        "subtitlePrefs": payload.subtitle_prefs,
                                     }),
                                 );
                                 // Ride-along diagnostics: forward each buffered
@@ -655,6 +662,19 @@ pub async fn jellyfin_embed_reenable<R: Runtime>(app: AppHandle<R>) -> Result<()
     Ok(())
 }
 
+/// Notify the child WebView that playback in ynoTV has stopped or ended,
+/// dismissing any pending loading spinner/overlay and returning the page to the
+/// active item view.
+#[tauri::command]
+pub async fn jellyfin_embed_notify_playback_ended<R: Runtime>(
+    app: AppHandle<R>,
+) -> Result<(), String> {
+    if let Some(wv) = app.get_webview(JELLYFIN_LABEL) {
+        let _ = wv.eval("window.__ynotvOnPlaybackEnded && window.__ynotvOnPlaybackEnded();");
+    }
+    Ok(())
+}
+
 /// The init script injected into the Jellyfin page before it boots.
 ///
 /// Jellyfin 10.10 removed the `window.playbackManager` / `window.playerManager`
@@ -761,6 +781,9 @@ const INIT_SCRIPT: &str = r##"
             try { json = JSON.stringify(payload); } catch (e) { return; }
             try { localStorage.setItem('ynotv_jf_pending', json); } catch (e) {}
             window.__ynotvPendingPayload = json;
+            // Playback is now owned by ynoTV: stop remembering SPA routes until
+            // the page is recreated fresh.
+            window.__ynotvPlaybackActive = true;
             document.title = SIGNAL;
         } catch (e) {}
     }
@@ -772,40 +795,330 @@ const INIT_SCRIPT: &str = r##"
     // root, so it never yanks the user away from a page they already navigated
     // to.
     var ROUTE_KEY = "ynotv_jf_route";
-    var bootStartedAt = Date.now();
     function saveRoute() {
         try {
-            // Ignore hash changes during the boot window: Jellyfin's SPA sets
-            // #/home.html (or a similar landing hash) on startup, which would
-            // overwrite the route restoreRoute captured below BEFORE the
-            // restore attempt at ~1-4s — leaving the user on the home page
-            // instead of the item/series page they were on.
-            if (Date.now() - bootStartedAt < 7000) return;
             var h = location.hash || "";
             if (!h) return;
             if (/videoosd/i.test(h)) return; // never remember the player screen
+            // While a ynoTV handoff is active the child WebView is hidden but
+            // still running — Jellyfin's blanked player frequently auto-
+            // navigates back to home, which would clobber the item route saved
+            // for the return-to-tab restore. The user cannot navigate the
+            // hidden page themselves, so suppress ALL saves during playback.
+            if (window.__ynotvPlaybackActive) return;
             localStorage.setItem(ROUTE_KEY, h);
         } catch (e) {}
     }
+    // When playback started from somewhere that was never a real SPA route
+    // (e.g. the home page's Continue Watching row), synthesize the item page
+    // route so Back/Stop returns to the ITEM, not the home page.
+    function saveItemRoute(itemOrSeriesId) {
+        try {
+            if (!itemOrSeriesId) return;
+            var cur = localStorage.getItem(ROUTE_KEY) || '';
+            if (cur && cur !== '#/home.html' && cur !== '#/' && cur !== '') return; // an explicit browse route wins
+            localStorage.setItem(ROUTE_KEY, '#/itemdetails.html?id=' + encodeURIComponent(String(itemOrSeriesId)));
+        } catch (e) {}
+    }
     try { window.addEventListener("hashchange", saveRoute); } catch (e) {}
+    try { window.addEventListener("popstate", saveRoute); } catch (e) {}
+    try {
+        var origPushState = history.pushState;
+        if (origPushState && !origPushState.__ynotvPatched) {
+            history.pushState = function () {
+                var res = origPushState.apply(this, arguments);
+                saveRoute();
+                return res;
+            };
+            history.pushState.__ynotvPatched = true;
+        }
+        var origReplaceState = history.replaceState;
+        if (origReplaceState && !origReplaceState.__ynotvPatched) {
+            history.replaceState = function () {
+                var res = origReplaceState.apply(this, arguments);
+                saveRoute();
+                return res;
+            };
+            history.replaceState.__ynotvPatched = true;
+        }
+    } catch (e) {}
     saveRoute();
     (function restoreRoute() {
-        try {
-            var saved = localStorage.getItem(ROUTE_KEY);
-            if (!saved) return;
-            var apply = function () {
-                try {
-                    var cur = location.hash || "";
-                    if (cur === "" || cur === "#/" || cur === "#/home.html") {
-                        if (cur !== saved) location.hash = saved;
+        console.log('[ynoTV Jellyfin bridge] route-restore starting');
+        // localStorage may be unavailable at init-script time in some engines,
+        // so read it lazily (and repeatedly) until it resolves.
+        var saved = null;
+        var savedRead = false;
+        var bootT = Date.now();
+        var WINDOW_MS = 60000;
+        function readSaved() {
+            if (savedRead) return saved;
+            try { saved = localStorage.getItem(ROUTE_KEY); savedRead = true; } catch (e) {}
+            return saved;
+        }
+        // NEVER touch the hash before Jellyfin has BOTH its router AND a live
+        // user session. Writing a deep link (`#/itemdetails.html?id=...`) into
+        // a document that is still booting — worse, at document_start, while
+        // the initial navigation is pending — corrupts Jellyfin's own connect
+        // flow: item views fire with a null user, `Users/null/...` requests 400,
+        // the login handshake stalls and the tab is stuck on the loading page.
+        // The user check uses the ACTIVE API client only (never the stored
+        // credentials fallback), so we wait out boot/login before ever writing.
+        function readyToNavigate() {
+            try {
+                if (!window.Emby || !window.Emby.Page) {
+                    if (!window.AppRouter) return false;
+                }
+                var api = pickApiClient();
+                if (!api || typeof api.getCurrentUserId !== "function") return false;
+                if (!api.getCurrentUserId()) return false;
+                return true;
+            } catch (e) { return false; }
+        }
+        // The view is still the Jellyfin home page (by page element class, or
+        // by document.title as a fallback). Used to distinguish "router missed
+        // our hash" from "the user navigated somewhere else".
+        function viewNotHome() {
+            try {
+                var pages = document.querySelectorAll('[data-role="page"]');
+                for (var i = 0; i < pages.length; i++) {
+                    var p = pages[i];
+                    var cls = (p.className || '');
+                    if (/\bhomePage\b/.test(cls)) continue;
+                    // Boot/login/loading surfaces are not real destinations.
+                    if (/\b(loginPage|selectServerPage|splash|startup|wizard|error)\b/i.test(cls)) continue;
+                    // Only consider VISIBLE pages (hidden ones are stale DOM).
+                    try {
+                        if (p.getBoundingClientRect) {
+                            var r = p.getBoundingClientRect();
+                            if (r && !r.width && !r.height) continue;
+                        } else if (p.offsetWidth === 0 && p.offsetHeight === 0) {
+                            continue;
+                        }
+                    } catch (e) {}
+                    if (/\b(itemDetailPage|collectionPage|libraryPage|personPage|userProfilePage)\b/.test(cls)) return true;
+                }
+            } catch (e) {}
+            try {
+                var t = (document.title || '');
+                if (/ - Jellyfin\s*$/i.test(t) && !/^\s*(home|start)\s*-/i.test(t)) return true;
+            } catch (e) {}
+            return false;
+        }
+        var kicks = 0;
+        var KICK_MAX = 90;
+        var straySince = 0;
+        // A synchronous "#/" -> target pair yields a fresh hashchange the
+        // (now-ready) router actually handles, even if the first attempt raced
+        // its boot and the event was consumed by nobody.
+        function kickTo(target) {
+            kicks++;
+            try {
+                var cleanTarget = target.replace(/^#\/?/, '');
+                if (window.AppRouter && typeof window.AppRouter.show === "function") {
+                    window.AppRouter.show(cleanTarget);
+                    return;
+                }
+                if (window.Emby && window.Emby.Page && typeof window.Emby.Page.show === "function") {
+                    window.Emby.Page.show(cleanTarget);
+                    return;
+                }
+            } catch (e) {}
+            location.hash = "#/";
+            location.hash = target;
+        }
+        var logged = {};
+        function logOnce(key) {
+            if (logged[key]) return;
+            logged[key] = true;
+            console.log('[ynoTV Jellyfin bridge] route-restore', key);
+        }
+        function attempt() {
+            try {
+                if (!readyToNavigate()) { logOnce('waiting-for-boot'); return; }
+                var target = readSaved();
+                if (!target) { logOnce('no-saved-route'); return; }
+                var cur = location.hash || "";
+                var notHome = viewNotHome();
+                if (cur === target) {
+                    if (notHome) { logOnce('done-view-rendered'); done = true; return; }
+                    if (kicks < KICK_MAX && Date.now() - bootT < WINDOW_MS) { kickTo(target); return; }
+                    logOnce('done-gave-up');
+                    done = true;
+                    return;
+                }
+                if (cur === "" || cur === "#/" || cur === "#/home.html") {
+                    // Rootish — apply the saved route; later ticks re-assert it
+                    // via the kick path while the view is still home.
+                    logOnce('applying target=' + target);
+                    kickTo(target);
+                    straySince = 0;
+                    return;
+                }
+                if (!notHome) {
+                    // Stray hash but the view is still unmistakably home (a
+                    // missed handler or Jellyfin's own boot nav). Re-assert only
+                    // after the stray persisted briefly, so a fresh user click
+                    // that hasn't rendered yet isn't yanked back.
+                    if (!straySince) straySince = Date.now();
+                    if (kicks < KICK_MAX && Date.now() - bootT < WINDOW_MS && Date.now() - straySince > 2000) {
+                        straySince = 0;
+                        logOnce('re-asserting cur=' + cur);
+                        kickTo(target);
                     }
-                } catch (e) {}
-            };
-            setTimeout(apply, 900);
-            setTimeout(apply, 2200);
-            setTimeout(apply, 4200);
-        } catch (e) {}
+                    return;
+                }
+                logOnce('done-user-navigated cur=' + cur);
+                done = true; // view left home on its own — user navigated or router rendered
+            } catch (e) {}
+        }
+        var done = false;
+        var iv = setInterval(function () {
+            if (done) { clearInterval(iv); return; }
+            if (Date.now() - bootT > WINDOW_MS) { clearInterval(iv); return; }
+            attempt();
+        }, 400);
+        setTimeout(function () { try { clearInterval(iv); } catch (e) {} }, WINDOW_MS + 5000);
     })();
+
+    // Remember the subtitle the user actually watched with per Jellyfin item
+    // (stream index keyed by item id, persisted in this webview's own
+    // localStorage) so a later play/restart of the same item starts with the
+    // same subtitle even when Jellyfin's server default didn't pick it.
+    var SUBPREF_KEY = 'ynotv_jf_subprefs';
+    function readSubPref(itemId) {
+        try {
+            if (!itemId) return null;
+            var raw = localStorage.getItem(SUBPREF_KEY);
+            if (!raw) return null;
+            var map = JSON.parse(raw);
+            var v = map && map[itemId];
+            return typeof v === 'number' ? v : null;
+        } catch (e) { return null; }
+    }
+    function readAllSubPrefs() {
+        try {
+            var raw = localStorage.getItem(SUBPREF_KEY);
+            if (!raw) return {};
+            var map = JSON.parse(raw);
+            return map && typeof map === 'object' ? map : {};
+        } catch (e) { return {}; }
+    }
+    function rememberSubPref(itemId, streamIndex) {
+        try {
+            if (!itemId || streamIndex == null) return;
+            var map = {};
+            var raw = localStorage.getItem(SUBPREF_KEY);
+            if (raw) { try { var parsed = JSON.parse(raw); if (parsed && typeof parsed === 'object') map = parsed; } catch (e) {} }
+            map[itemId] = streamIndex;
+            try { localStorage.setItem(SUBPREF_KEY, JSON.stringify(map)); } catch (e) {}
+        } catch (e) {}
+    }
+
+    // Active subtitle choices made by the user in the Jellyfin web UI (dropdowns / selects)
+    var activeSubChoiceByItem = {};
+    var lastPlaybackInfoReq = null; // { itemId, subtitleStreamIndex, audioStreamIndex, mediaSourceId, at }
+
+    function recordPlaybackInfoReq(url, body) {
+        try {
+            var u = String(url || '');
+            if (!/PlaybackInfo/i.test(u)) return;
+            var itemId = null;
+            var m = u.match(/\/Items\/([^/?#]+)/i);
+            if (m) itemId = m[1];
+            var subIdx = null;
+            var audioIdx = null;
+            var mediaSourceId = null;
+
+            var qm = u.match(/[?&]SubtitleStreamIndex=(-?\d+)/i);
+            if (qm && qm[1] !== '') subIdx = parseInt(qm[1], 10);
+            var qma = u.match(/[?&]AudioStreamIndex=(-?\d+)/i);
+            if (qma && qma[1] !== '') audioIdx = parseInt(qma[1], 10);
+            var qms = u.match(/[?&]MediaSourceId=([^&]+)/i);
+            if (qms) mediaSourceId = decodeURIComponent(qms[1]);
+
+            if (body) {
+                var parsed = null;
+                if (typeof body === 'string') {
+                    try { parsed = JSON.parse(body); } catch (e) {}
+                } else if (typeof body === 'object') {
+                    parsed = body;
+                }
+                if (parsed) {
+                    if (parsed.Id && !itemId) itemId = String(parsed.Id);
+                    if (parsed.ItemId && !itemId) itemId = String(parsed.ItemId);
+                    if (parsed.SubtitleStreamIndex !== undefined && parsed.SubtitleStreamIndex !== null) {
+                        var si = parseInt(parsed.SubtitleStreamIndex, 10);
+                        if (!isNaN(si)) subIdx = si;
+                    }
+                    if (parsed.AudioStreamIndex !== undefined && parsed.AudioStreamIndex !== null) {
+                        var ai = parseInt(parsed.AudioStreamIndex, 10);
+                        if (!isNaN(ai)) audioIdx = ai;
+                    }
+                    if (parsed.MediaSourceId) mediaSourceId = String(parsed.MediaSourceId);
+                }
+            }
+            lastPlaybackInfoReq = {
+                itemId: itemId,
+                subtitleStreamIndex: subIdx,
+                audioStreamIndex: audioIdx,
+                mediaSourceId: mediaSourceId,
+                at: Date.now()
+            };
+            if (itemId && subIdx !== null && subIdx !== undefined) {
+                activeSubChoiceByItem[itemId] = subIdx;
+                rememberSubPref(itemId, subIdx);
+            }
+            diag('playback-info-request', lastPlaybackInfoReq);
+        } catch (e) {}
+    }
+
+    try {
+        document.addEventListener('change', function (e) {
+            try {
+                var target = e.target;
+                if (!target || target.tagName !== 'SELECT') return;
+                var isSub = (target.className && /\bselectSubtitles\b/i.test(target.className)) ||
+                            target.id === 'selectSubtitles' ||
+                            target.getAttribute('data-track') === 'subtitle' ||
+                            target.name === 'selectSubtitles' ||
+                            (target.closest && target.closest('.selectSubtitles'));
+                if (isSub) {
+                    var val = parseInt(target.value, 10);
+                    if (!isNaN(val)) {
+                        var page = target.closest ? target.closest('[data-role="page"]') : null;
+                        var itemId = (page && (page.getAttribute('data-itemid') || (page.dataset && page.dataset.itemid))) || null;
+                        if (!itemId) {
+                            var hm = (location.hash || '').match(/[?&]id=([^&]+)/i);
+                            if (hm) itemId = decodeURIComponent(hm[1]);
+                        }
+                        if (itemId) {
+                            activeSubChoiceByItem[itemId] = val;
+                            rememberSubPref(itemId, val);
+                        }
+                        diag('in-page-sub-select-change', { itemId: itemId, val: val });
+                    }
+                }
+            } catch (err) {}
+        }, true);
+    } catch (e) {}
+
+    function getInPageSubtitleSelection(itemId) {
+        try {
+            if (itemId && activeSubChoiceByItem[itemId] !== undefined) {
+                return activeSubChoiceByItem[itemId];
+            }
+            var selects = document.querySelectorAll('select.selectSubtitles, select#selectSubtitles, select[data-track="subtitle"], .selectSubtitles select');
+            for (var i = 0; i < selects.length; i++) {
+                var sel = selects[i];
+                if (sel.offsetParent !== null || (sel.getBoundingClientRect && sel.getBoundingClientRect().width > 0)) {
+                    var val = parseInt(sel.value, 10);
+                    if (!isNaN(val)) return val;
+                }
+            }
+        } catch (e) {}
+        return null;
+    }
 
     function describeMedia(elem, event) {
         try {
@@ -941,22 +1254,149 @@ const INIT_SCRIPT: &str = r##"
                             codec: st.Codec || '',
                             isExternal: isExt,
                             deliveryUrl: isExt ? delivery : '',
-                            selected: st.IsDefault === true,
-                            default: st.IsDefault === true
+                            selected: false,
+                            default: false
                         });
                     }
                 }
-                if (src.DefaultSubtitleStreamIndex != null) {
-                    meta.subtitleStreamId = src.DefaultSubtitleStreamIndex;
-                    // IsDefault flags can be missing on remuxes; the server's
-                    // DefaultSubtitleStreamIndex is the authoritative pick.
-                    for (var k = 0; k < meta.subtitleTracks.length; k++) {
-                        meta.subtitleTracks[k].selected = meta.subtitleTracks[k].default = (meta.subtitleTracks[k].index === meta.subtitleStreamId);
+
+                // Determine the authoritative target subtitle stream index
+                var targetSubIdx = null;
+
+                // 1. PlaybackInfo request (if recent < 15s and matches itemId)
+                if (lastPlaybackInfoReq && (Date.now() - lastPlaybackInfoReq.at < 15000)) {
+                    if (!itemId || !lastPlaybackInfoReq.itemId || lastPlaybackInfoReq.itemId === itemId) {
+                        if (lastPlaybackInfoReq.subtitleStreamIndex !== null && lastPlaybackInfoReq.subtitleStreamIndex !== undefined) {
+                            targetSubIdx = lastPlaybackInfoReq.subtitleStreamIndex;
+                        }
                     }
+                }
+
+                // 2. In-page active select dropdown
+                if (targetSubIdx === null && itemId) {
+                    var inPageChoice = getInPageSubtitleSelection(itemId);
+                    if (inPageChoice !== null && inPageChoice !== undefined) {
+                        targetSubIdx = inPageChoice;
+                    }
+                }
+
+                // 3. Query param on stream URL (SubtitleStreamIndex)
+                if (targetSubIdx === null) {
+                    var smTxt = String(capturedSrc || '');
+                    var sm = smTxt.match(/[?&]SubtitleStreamIndex=(-?\d+)/i);
+                    if (sm && sm[1] !== '') {
+                        var smIdx = parseInt(sm[1], 10);
+                        if (!isNaN(smIdx)) targetSubIdx = smIdx;
+                    }
+                }
+
+                // 4. Active textTrack on element
+                if (targetSubIdx === null && elem && elem.textTracks) {
+                    for (var tt = 0; tt < elem.textTracks.length; tt++) {
+                        if (elem.textTracks[tt].mode === 'showing') {
+                            var tUrl = elem.textTracks[tt].src;
+                            for (var stIdx = 0; stIdx < meta.subtitleTracks.length; stIdx++) {
+                                if (meta.subtitleTracks[stIdx].isExternal && meta.subtitleTracks[stIdx].deliveryUrl && tUrl && meta.subtitleTracks[stIdx].deliveryUrl.indexOf(tUrl) >= 0) {
+                                    targetSubIdx = meta.subtitleTracks[stIdx].index;
+                                    break;
+                                }
+                            }
+                            break;
+                        }
+                    }
+                }
+
+                // 5. Remembered user preference for this item
+                if (targetSubIdx === null && itemId) {
+                    var pref = readSubPref(itemId);
+                    if (pref !== null && pref !== undefined) targetSubIdx = pref;
+                }
+
+                // 6. Server's DefaultSubtitleStreamIndex from PlaybackInfo response
+                if (targetSubIdx === null && src.DefaultSubtitleStreamIndex != null) {
+                    targetSubIdx = src.DefaultSubtitleStreamIndex;
+                }
+
+                // Apply the resolved subtitle index
+                if (targetSubIdx !== null && targetSubIdx !== undefined) {
+                    meta.subtitleStreamId = targetSubIdx;
+                    if (targetSubIdx === -1) {
+                        // Explicitly None / off
+                        for (var k = 0; k < meta.subtitleTracks.length; k++) {
+                            meta.subtitleTracks[k].selected = false;
+                            meta.subtitleTracks[k].default = false;
+                        }
+                    } else {
+                        for (var kk = 0; kk < meta.subtitleTracks.length; kk++) {
+                            var isMatch = (meta.subtitleTracks[kk].index === targetSubIdx);
+                            meta.subtitleTracks[kk].selected = isMatch;
+                            meta.subtitleTracks[kk].default = isMatch;
+                            if (isMatch && meta.subtitleTracks[kk].isExternal && meta.subtitleTracks[kk].deliveryUrl) {
+                                meta.subtitleUrl = meta.subtitleTracks[kk].deliveryUrl;
+                            }
+                        }
+                    }
+                    if (itemId) rememberSubPref(itemId, targetSubIdx);
                 }
             }
         } catch (e) {}
         return meta;
+    }
+
+    // The user may have picked a different subtitle inside Jellyfin's own
+    // player before the handoff (OSD subtitle menu). Promote whichever text
+    // track the web player is actually showing right now.
+    function applyInPageSubtitleSelection(meta, elem, itemId) {
+        try {
+            if (!meta || !elem || !meta.subtitleTracks || !meta.subtitleTracks.length) return meta;
+            var tracks = elem.textTracks ? elem.textTracks : [];
+            var active = null;
+            for (var i = 0; i < tracks.length; i++) {
+                if (tracks[i].mode === 'showing') { active = tracks[i]; break; }
+            }
+            if (!active) return meta;
+
+            function normUrl(u) {
+                try { return (new URL(u)).pathname.replace(/\/+$/, '').toLowerCase(); } catch (e) { return (u || '').split('?')[0].replace(/\/+$/, '').toLowerCase(); }
+            }
+            var activePath = active.src ? normUrl(active.src) : null;
+            var activeLang = (active.language || '').toLowerCase();
+            var activeLabel = (active.label || '').toLowerCase();
+
+            var matchIdx = null;
+            for (var j = 0; j < meta.subtitleTracks.length; j++) {
+                var t = meta.subtitleTracks[j];
+                // External: same delivery URL (query strings/order may differ).
+                if (activePath && t.isExternal && t.deliveryUrl && normUrl(t.deliveryUrl) === activePath) {
+                    matchIdx = j;
+                    break;
+                }
+                // Embedded: language or display title overlap.
+                var tLang = (t.lang || '').toLowerCase();
+                var tTitle = (t.title || '').toLowerCase();
+                if (activeLang && tLang && (activeLang === tLang || activeLang.indexOf(tLang) === 0 || tLang.indexOf(activeLang) === 0)) {
+                    matchIdx = j;
+                    break;
+                }
+                if (activeLabel && tTitle && (activeLabel === tTitle || activeLabel.indexOf(tTitle) === 0 || tTitle.indexOf(activeLabel) === 0)) {
+                    matchIdx = j;
+                    break;
+                }
+            }
+            if (matchIdx == null) return meta;
+
+            for (var k = 0; k < meta.subtitleTracks.length; k++) {
+                meta.subtitleTracks[k].selected = false;
+                meta.subtitleTracks[k].default = false;
+            }
+            var picked = meta.subtitleTracks[matchIdx];
+            picked.selected = true;
+            picked.default = true;
+            meta.subtitleStreamId = picked.index != null ? picked.index : matchIdx;
+            if (picked.isExternal && picked.deliveryUrl) meta.subtitleUrl = picked.deliveryUrl;
+            if (itemId) rememberSubPref(itemId, meta.subtitleStreamId);
+            return meta;
+        } catch (e) { return meta; }
     }
 
     function accessToken() {
@@ -1213,6 +1653,21 @@ const INIT_SCRIPT: &str = r##"
         // handoff payload's title, series, poster and chapter context.
         var subtitle = subtitleStreamInfo(elem, src);
         var meta = playbackInfoMeta(elem, src);
+        // The web player's own subtitle picker may have changed the active
+        // track — promote that over the server default before blanking. When
+        // nothing in the current page says which track is wanted (no URL param,
+        // no active <track>), fall back to the remembered per-item pick from a
+        // previous play of this item.
+        applyInPageSubtitleSelection(meta, elem, subtitle.itemId);
+        if (meta.subtitleStreamId == null) {
+            var pref = readSubPref(subtitle.itemId);
+            if (pref != null) {
+                meta.subtitleStreamId = pref;
+                for (var p = 0; p < meta.subtitleTracks.length; p++) {
+                    meta.subtitleTracks[p].selected = meta.subtitleTracks[p].default = (meta.subtitleTracks[p].index === pref);
+                }
+            }
+        }
 
         blankMedia(elem);
 
@@ -1251,6 +1706,10 @@ const INIT_SCRIPT: &str = r##"
             // element instead.
             var cur = elem.__ynotvLastSrc || "";
             if (cur !== src || !elem.isConnected) return;
+            // If playback started from a route that was never a "real" SPA
+            // page (Continue Watching on home), remember the ITEM page so
+            // stopping playback returns somewhere useful.
+            saveItemRoute((itemInfo && itemInfo.seriesId) || subtitle.itemId);
             var diags = diagTail();
             signal({
                 url: built.url,
@@ -1276,6 +1735,7 @@ const INIT_SCRIPT: &str = r##"
                 episode_parent_index: itemInfo ? itemInfo.parentIndexNumber : null,
                 episode_name: (itemInfo && itemInfo.name) || null,
                 episodes: Array.isArray(episodes) ? episodes : null,
+                subtitle_prefs: readAllSubPrefs(),
                 diags: diags
             });
         }
@@ -1345,9 +1805,42 @@ const INIT_SCRIPT: &str = r##"
         setInterval(function () { scanMedia(document); }, 300);
     }
 
+    // Dismiss any Jellyfin Web player loading overlays, spinners, or backdrop covers
+    function dismissPlaybackOverlay() {
+        try {
+            if (window.loading && typeof window.loading.hide === 'function') {
+                try { window.loading.hide(); } catch (e) {}
+            }
+            if (window.Loading && typeof window.Loading.hide === 'function') {
+                try { window.Loading.hide(); } catch (e) {}
+            }
+            if (window.playbackManager) {
+                if (typeof window.playbackManager.resetPlayer === 'function') {
+                    try { window.playbackManager.resetPlayer(); } catch (e) {}
+                }
+                if (typeof window.playbackManager.stop === 'function') {
+                    try { window.playbackManager.stop(); } catch (e) {}
+                }
+            }
+            if (window.Events && window.playbackManager) {
+                try { window.Events.trigger(window.playbackManager, 'playbackstop', [{ isLocal: true }]); } catch (e) {}
+            }
+            var overlays = document.querySelectorAll('.docspinner, .loading-spinner, .itemLoading, .videoPlayerContainer, .videoPlayerPage, .mdl-spinner, [data-role="page"].videoPlayerPage');
+            for (var i = 0; i < overlays.length; i++) {
+                var el = overlays[i];
+                if (el.classList.contains('videoPlayerContainer') || el.classList.contains('docspinner') || el.classList.contains('videoPlayerPage')) {
+                    try { el.remove(); } catch (e) {}
+                } else if (el.style) {
+                    el.style.display = 'none';
+                }
+            }
+            document.body.classList.remove('hide-scroll');
+        } catch (e) {}
+    }
+
     // The play() choke point: htmlVideoPlayer assigns src then calls play().
-    // Return a pending promise so Jellyfin's own player waits forever instead
-    // of surfacing a playback error for media we've handed to mpv.
+    // Resolve immediately so Jellyfin's own web player cleans up its loading
+    // state, and dismiss any active loading spinners/overlays.
     (function patchPlay() {
         try {
             var orig = HTMLMediaElement.prototype.play;
@@ -1356,7 +1849,9 @@ const INIT_SCRIPT: &str = r##"
                 diag('play-intercept', describeMedia(this, 'play-called'));
                 if (captureMedia(this, true)) {
                     this.__ynotvHandled = true;
-                    return new Promise(function () {});
+                    setTimeout(dismissPlaybackOverlay, 80);
+                    setTimeout(dismissPlaybackOverlay, 350);
+                    return Promise.resolve();
                 }
                 return orig.apply(this, arguments);
             };
@@ -1366,7 +1861,7 @@ const INIT_SCRIPT: &str = r##"
     })();
 
     // Observe network calls used by Jellyfin to obtain PlaybackInfo/MediaStreams.
-    // This is diagnostics-only for now; the response remains untouched.
+    // This captures the requested subtitle/audio stream choices from PlaybackInfo requests.
     (function patchNetwork() {
         // The latest PlaybackInfo response is stored (not just logged) so the
         // handoff payload can carry the authoritative stream metadata.
@@ -1382,7 +1877,10 @@ const INIT_SCRIPT: &str = r##"
             if (originalFetch && !originalFetch.__ynotvPatched) {
                 var wrappedFetch = function () {
                     var request = arguments[0];
+                    var init = arguments[1];
                     var url = typeof request === 'string' ? request : (request && request.url) || '';
+                    var reqBody = (init && init.body) || (request && request.body) || null;
+                    if (/PlaybackInfo/i.test(url)) recordPlaybackInfoReq(url, reqBody);
                     if (/PlaybackInfo|Sessions\/Playing|Videos\/[^/]+\/stream/i.test(url)) diag('fetch', { url: url });
                     return originalFetch.apply(this, arguments).then(function (response) {
                         if (/PlaybackInfo/i.test(url)) {
@@ -1405,12 +1903,13 @@ const INIT_SCRIPT: &str = r##"
         } catch (e) { diag('fetch-patch-error', String(e)); }
         try {
             var originalOpen = XMLHttpRequest.prototype.open;
+            var originalSend = XMLHttpRequest.prototype.send;
             if (originalOpen && !originalOpen.__ynotvPatched) {
                 var wrappedOpen = function (method, url) {
-                    var u = String(url || '');
-                    if (/PlaybackInfo|Sessions\/Playing|Videos\/[^/]+\/stream/i.test(u)) diag('xhr-open', { method: method, url: u });
+                    this.__ynotvUrl = String(url || '');
+                    if (/PlaybackInfo|Sessions\/Playing|Videos\/[^/]+\/stream/i.test(this.__ynotvUrl)) diag('xhr-open', { method: method, url: this.__ynotvUrl });
                     var result = originalOpen.apply(this, arguments);
-                    if (/PlaybackInfo/i.test(u)) {
+                    if (/PlaybackInfo/i.test(this.__ynotvUrl)) {
                         try {
                             var self = this;
                             this.addEventListener('loadend', function () {
@@ -1419,7 +1918,7 @@ const INIT_SCRIPT: &str = r##"
                                 } catch (e) {}
                             });
                         } catch (e) {}
-                    } else if (/\/Items\/[^?/]+(?:\?|$)|[?&]Ids=/i.test(u)) {
+                    } else if (/\/Items\/[^?/]+(?:\?|$)|[?&]Ids=/i.test(this.__ynotvUrl)) {
                         try {
                             var self2 = this;
                             this.addEventListener('loadend', function () {
@@ -1428,7 +1927,7 @@ const INIT_SCRIPT: &str = r##"
                                 } catch (e) {}
                             });
                         } catch (e) {}
-                    } else if (/\/Shows\/[^?/]+\/Episodes/i.test(u)) {
+                    } else if (/\/Shows\/[^?/]+\/Episodes/i.test(this.__ynotvUrl)) {
                         try {
                             var self3 = this;
                             this.addEventListener('loadend', function () {
@@ -1443,6 +1942,16 @@ const INIT_SCRIPT: &str = r##"
                 wrappedOpen.__ynotvPatched = true;
                 XMLHttpRequest.prototype.open = wrappedOpen;
             }
+            if (originalSend && !originalSend.__ynotvPatched) {
+                var wrappedSend = function (body) {
+                    if (this.__ynotvUrl && /PlaybackInfo/i.test(this.__ynotvUrl)) {
+                        recordPlaybackInfoReq(this.__ynotvUrl, body);
+                    }
+                    return originalSend.apply(this, arguments);
+                };
+                wrappedSend.__ynotvPatched = true;
+                XMLHttpRequest.prototype.send = wrappedSend;
+            }
         } catch (e) { diag('xhr-patch-error', String(e)); }
     })();
 
@@ -1452,6 +1961,29 @@ const INIT_SCRIPT: &str = r##"
             for (var i = 0; i < els.length; i++) releaseMedia(els[i]);
         } catch (e) {}
         warn("re-enabled Jellyfin web player after failed mpv handoff");
+    };
+
+    window.__ynotvOnPlaybackEnded = function () {
+        try {
+            window.__ynotvPlaybackActive = false;
+            dismissPlaybackOverlay();
+            var cur = location.hash || "";
+            var saved = localStorage.getItem(ROUTE_KEY) || "";
+            if (/videoosd/i.test(cur) || cur === "" || cur === "#/") {
+                if (saved && saved !== cur && !/videoosd/i.test(saved)) {
+                    var cleanTarget = saved.replace(/^#\/?/, '');
+                    if (window.AppRouter && typeof window.AppRouter.show === "function") {
+                        window.AppRouter.show(cleanTarget);
+                    } else if (window.Emby && window.Emby.Page && typeof window.Emby.Page.show === "function") {
+                        window.Emby.Page.show(cleanTarget);
+                    } else {
+                        location.hash = saved;
+                    }
+                } else if (window.AppRouter && typeof window.AppRouter.back === "function") {
+                    window.AppRouter.back();
+                }
+            }
+        } catch (e) {}
     };
 
 })();
