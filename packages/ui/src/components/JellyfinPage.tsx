@@ -65,6 +65,23 @@ export interface JellyfinPlayPayload {
     startPositionTicks?: number;
     name?: string;
   }>;
+  // Series/episode context: server + token let the frontend build direct-play
+  // URLs for adjacent episodes (prev/next nav), and the S/E numbers feed the
+  // header info pill. `episodes` is the compact episode list for the series.
+  serverUrl?: string;
+  apiKey?: string;
+  seriesId?: string;
+  seriesName?: string;
+  episodeIndex?: number | null;
+  episodeParentIndex?: number | null;
+  episodeName?: string | null;
+  episodes?: Array<{
+    id: string;
+    indexNumber?: number | null;
+    parentIndexNumber?: number | null;
+    name?: string;
+    positionTicks?: number;
+  }>;
 }
 
 interface JellyfinPageProps {
@@ -152,10 +169,11 @@ export function JellyfinPage({ visible, onPlay }: JellyfinPageProps) {
     })();
   }, []);
 
-  // A TransitionView can keep its child mounted briefly during an exit
-  // animation. Native child WebViews do not follow the React container's
-  // opacity, so close it as soon as this tab becomes inactive. Reopen it on a
-  // quick return as well as after a normal remount.
+  // The child is closed when the tab leaves view and recreated on return. A
+  // hidden WebView2 surface can come back blank/black, so keep-alive is not
+  // reliable; the shared WebView2 profile preserves the Jellyfin session, and
+  // the injected page script restores the last SPA route from localStorage on
+  // reload — so returning lands on the page the user left, not the home page.
   useEffect(() => {
     if (!visible) {
       connectedRef.current = false;
@@ -171,7 +189,7 @@ export function JellyfinPage({ visible, onPlay }: JellyfinPageProps) {
     // Re-opening can race the close from the outgoing TransitionView. Retry a
     // few times after the transition has settled so a transient native child
     // WebView failure cannot leave the app showing only the black MPV surface.
-    const delays = [350, 750, 1500];
+    const delays = [120, 400, 1000];
     const openAttempt = (attempt: number) => {
       timer = window.setTimeout(async () => {
         if (cancelled || !aliveRef.current) return;
@@ -275,10 +293,8 @@ export function JellyfinPage({ visible, onPlay }: JellyfinPageProps) {
     };
   }, []);
 
-  // Close the native child on tab exit rather than retaining a hidden
-  // WebView2 surface, which can come back blank after hide/show. The shared
-  // WebView2 profile still preserves Jellyfin's login/session data when the
-  // child is recreated on the next mount.
+  // The shared WebView2 profile preserves Jellyfin's login/session data when
+  // the child is recreated; close it for real only on unmount (app teardown).
   useEffect(() => {
     aliveRef.current = true;
     return () => {

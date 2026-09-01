@@ -95,4 +95,18 @@ export interface VodPlayInfo {
     startPositionTicks?: number;
     name?: string;
   }>;
+  // Jellyfin series/episode context (header pill S/E info + prev/next episode
+  // navigation). Episodes are the compact list captured from the series page;
+  // the frontend rebuilds direct-play URLs for adjacent episodes.
+  jellyfinSeriesId?: string;
+  jellyfinSeriesName?: string;
+  jellyfinEpisodeIndexNumber?: number;
+  jellyfinEpisodeParentIndexNumber?: number;
+  jellyfinEpisodes?: Array<{
+    id: string;
+    indexNumber?: number | null;
+    parentIndexNumber?: number | null;
+    name?: string;
+    positionTicks?: number;
+  }>;
 }

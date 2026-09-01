@@ -1901,11 +1901,18 @@ function useTmdbPresencePoster(
   const handleJellyfinPlay = useCallback(
     async (payload: import('./components/JellyfinPage').JellyfinPlayPayload) => {
       try {
+        const isSeries = Boolean(payload.seriesId && payload.episodeIndex != null);
         const ok = await handlePlayVod(
           {
             url: payload.url,
-            title: payload.title?.trim() || 'Jellyfin',
-            type: 'movie',
+            title: isSeries ? (payload.seriesName?.trim() || payload.title?.trim() || 'Jellyfin') : (payload.title?.trim() || 'Jellyfin'),
+            type: isSeries ? 'series' : 'movie',
+            episodeInfo: isSeries
+              ? `${payload.episodeParentIndex != null ? `S${payload.episodeParentIndex} E${payload.episodeIndex}` : `E${payload.episodeIndex}`}${payload.episodeName ? ` · ${payload.episodeName}` : ''}`
+              : undefined,
+            seriesId: payload.seriesId,
+            seasonNum: payload.episodeParentIndex ?? undefined,
+            episodeNum: payload.episodeIndex ?? undefined,
             source_id: 'jellyfin',
             mediaId: `jellyfin_${payload.url}`,
             jellyfinItemId: payload.itemId,
@@ -1915,6 +1922,13 @@ function useTmdbPresencePoster(
             posterUrl: payload.posterUrl,
             jellyfinAudioTracks: payload.audioTracks,
             jellyfinChapters: payload.chapters,
+            jellyfinServerUrl: payload.serverUrl,
+            jellyfinApiKey: payload.apiKey,
+            jellyfinSeriesId: payload.seriesId,
+            jellyfinSeriesName: payload.seriesName,
+            jellyfinEpisodeIndexNumber: payload.episodeIndex ?? undefined,
+            jellyfinEpisodeParentIndexNumber: payload.episodeParentIndex ?? undefined,
+            jellyfinEpisodes: payload.episodes,
           },
           () => {
             setPlaybackSourceView('jellyfin');
@@ -1928,6 +1942,50 @@ function useTmdbPresencePoster(
       }
     },
     [handlePlayVod, setActiveView],
+  );
+
+  // Play an adjacent Jellyfin episode in place (prev/next nav) through the
+  // same VOD pipeline, rebuilding the direct-play URL from the captured
+  // server + token. Position carries the server's resume point for the target.
+  const playJellyfinEpisode = useCallback(
+    async (
+      current: import('./types/media').VodPlayInfo,
+      target: {
+        id: string;
+        indexNumber?: number | null;
+        parentIndexNumber?: number | null;
+        name?: string;
+        positionTicks?: number;
+      },
+    ) => {
+      const server = (current.jellyfinServerUrl || '').replace(/\/+$/, '');
+      const key = current.jellyfinApiKey || '';
+      if (!server || !key) return;
+      const url = `${server}/Videos/${encodeURIComponent(target.id)}/stream?Static=true&mediaSourceId=${encodeURIComponent(target.id)}&api_key=${encodeURIComponent(key)}${target.positionTicks ? `&startTimeTicks=${target.positionTicks}` : ''}`;
+      await handlePlayVod({
+        url,
+        title: current.title || 'Jellyfin',
+        type: 'series',
+        episodeInfo: `${target.parentIndexNumber != null ? `S${target.parentIndexNumber} E${target.indexNumber}` : `E${target.indexNumber}`}${target.name ? ` · ${target.name}` : ''}`,
+        source_id: 'jellyfin',
+        mediaId: `jellyfin_${url}`,
+        seriesId: current.seriesId || current.jellyfinSeriesId,
+        seasonNum: target.parentIndexNumber ?? undefined,
+        episodeNum: target.indexNumber ?? undefined,
+        jellyfinItemId: target.id,
+        jellyfinServerUrl: current.jellyfinServerUrl,
+        jellyfinApiKey: current.jellyfinApiKey,
+        jellyfinSeriesId: current.jellyfinSeriesId,
+        jellyfinSeriesName: current.jellyfinSeriesName,
+        jellyfinEpisodeIndexNumber: target.indexNumber ?? undefined,
+        jellyfinEpisodeParentIndexNumber: target.parentIndexNumber ?? undefined,
+        jellyfinEpisodes: current.jellyfinEpisodes,
+        // NOTE: subtitle/audio track lists are NOT carried over — they belong
+        // to the current episode's stream and would attach wrong tracks here.
+        posterUrl: current.posterUrl,
+      });
+    },
+    [handlePlayVod],
   );
 
   // When a Jellyfin stream ends in mpv (idle), Rust emits playing:false —
@@ -3924,6 +3982,21 @@ function useTmdbPresencePoster(
   const handleChannelUp = useCallback(async () => {
     // Check if we're watching a series with episode info
     if (vodInfo?.type === 'series' && vodInfo.seriesId && vodInfo.seasonNum && vodInfo.episodeNum) {
+      // Jellyfin series: play the adjacent episode in place via the captured
+      // server + token + episode list (no local DB round-trip needed).
+      if (vodInfo.source_id === 'jellyfin') {
+        const episodes = vodInfo.jellyfinEpisodes;
+        const currentId = vodInfo.jellyfinItemId;
+        if (episodes?.length && currentId) {
+          const idx = episodes.findIndex((ep) => ep.id === currentId);
+          const target = idx > 0 ? episodes[idx - 1] : null;
+          if (target) {
+            await playJellyfinEpisode(vodInfo, target);
+            return;
+          }
+        }
+        return;
+      }
       // Stremio series: navigate through videos stored in meta
       if (vodInfo.source_id === 'stremio') {
         const meta = stremioMetaRef.current;
@@ -4101,11 +4174,26 @@ function useTmdbPresencePoster(
         handlePlayChannel(nextChannel);
       }
     }
-  }, [currentChannels, currentChannel, handlePlayChannel, vodInfo, handlePlayVod, handleStop, setCategoryId]);
+  }, [currentChannels, currentChannel, handlePlayChannel, vodInfo, handlePlayVod, handleStop, setCategoryId, playJellyfinEpisode]);
 
   const handleChannelDown = useCallback(async () => {
     // Check if we're watching a series with episode info
     if (vodInfo?.type === 'series' && vodInfo.seriesId && vodInfo.seasonNum && vodInfo.episodeNum) {
+      // Jellyfin series: play the adjacent episode in place via the captured
+      // server + token + episode list (no local DB round-trip needed).
+      if (vodInfo.source_id === 'jellyfin') {
+        const episodes = vodInfo.jellyfinEpisodes;
+        const currentId = vodInfo.jellyfinItemId;
+        if (episodes?.length && currentId) {
+          const idx = episodes.findIndex((ep) => ep.id === currentId);
+          const target = idx >= 0 && idx < episodes.length - 1 ? episodes[idx + 1] : null;
+          if (target) {
+            await playJellyfinEpisode(vodInfo, target);
+            return;
+          }
+        }
+        return;
+      }
       // Stremio series: navigate through videos stored in meta
       if (vodInfo.source_id === 'stremio') {
         const meta = stremioMetaRef.current;
@@ -4298,7 +4386,7 @@ function useTmdbPresencePoster(
         handlePlayChannel(nextChannel);
       }
     }
-  }, [currentChannels, currentChannel, handlePlayChannel, vodInfo, handlePlayVod, handleStop, setCategoryId]);
+  }, [currentChannels, currentChannel, handlePlayChannel, vodInfo, handlePlayVod, handleStop, setCategoryId, playJellyfinEpisode]);
 
   // The channel the guide grid should highlight and scroll to. With
   // failoverKeepView, the row the user picked stays visually selected even
@@ -5091,6 +5179,7 @@ function useTmdbPresencePoster(
       if (playbackSourceView === 'stremio') return 'Stremio';
       return null;
     }
+    if (playbackSourceView === 'jellyfin') return 'Jellyfin';
     if (vodInfo?.source_id && sourceNameMap) {
       const found = sourceNameMap.get(vodInfo.source_id);
       if (found) return found;

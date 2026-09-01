@@ -36,8 +36,28 @@ use tauri::{
 /// Label used for the embedded Jellyfin child webview.
 const JELLYFIN_LABEL: &str = "jellyfin-embed";
 
-/// Prefix used to signal a play request from the injected page script.
+/// Prefix used to signal a play request from the injected page script. The
+/// title itself only carries this tiny marker — the full payload lives in the
+/// page (window + localStorage), because the browser truncates document.title
+/// at ~4096 chars and large payloads (episode lists, chapters, track URLs) get
+/// cut mid-JSON, killing the handoff. Rust responds to the marker by starting
+/// a chunked stop-and-wait flush: each payload chunk is written to the title,
+/// Rust acks it by evaling the next chunk out, and the last chunk triggers the
+/// normal play forwarding.
 const PLAY_PREFIX: &str = "ynotv-jf:play:";
+
+/// Prefix of the per-chunk title writes (`ynotv-jf:chunk:<i>/<total>:<data>`).
+const CHUNK_PREFIX: &str = "ynotv-jf:chunk:";
+
+/// Max payload bytes per title write (document.title caps at ~4096 chars).
+const CHUNK_SIZE: usize = 3000;
+
+/// Evaled when a play marker arrives: splits the pending payload into chunks
+/// and writes chunk 0 to the title.
+const PLAY_START_CHUNK_SCRIPT: &str = "(function(){var v=window.__ynotvPendingPayload;if(!v){try{v=localStorage.getItem('ynotv_jf_pending')}catch(e){}}if(!v)return;try{localStorage.removeItem('ynotv_jf_pending')}catch(e){}window.__ynotvPendingPayload=v;var c=[];for(var i=0;i<v.length;i+=3000)c.push(v.slice(i,i+3000));window.__ynotvChunks=c;window.__ynotvChunkIndex=0;document.title='ynotv-jf:chunk:0/'+c.length+':'+c[0];})();";
+
+/// Evaled after chunk i arrives: writes chunk i+1 (if any) to the title.
+const PLAY_NEXT_CHUNK_SCRIPT: &str = "(function(){var c=window.__ynotvChunks||[];var i=(window.__ynotvChunkIndex||0)+1;if(i>=c.length)return;window.__ynotvChunkIndex=i;document.title='ynotv-jf:chunk:'+i+'/'+c.length+':'+c[i];})();";
 
 /// How long after hiding the webview to wait before an idle mpv status can
 /// re-show it. Skips the brief "core idle" blip that precedes buffering of a
@@ -59,6 +79,8 @@ pub struct JellyfinEmbedState {
     last_hidden_at: Mutex<Option<Instant>>,
     status_listener_registered: AtomicBool,
     report: Mutex<Option<JellyfinReportSession>>,
+    /// Reassembled chunks of the in-flight play payload (chunked title flush).
+    chunk_parts: Mutex<Vec<String>>,
 }
 
 /// Live playback-reporting session for a Jellyfin stream playing through mpv.
@@ -223,6 +245,15 @@ struct PlayPayload {
     /// Chapter markers from the item DTO (StartPositionTicks + Name), surfaced
     /// in the ynoTV seek bar during Jellyfin playback.
     chapters: Option<Vec<serde_json::Value>>,
+    /// Series/episode context (header pill S/E info + prev/next episode list).
+    server_url: Option<String>,
+    api_key: Option<String>,
+    series_id: Option<String>,
+    series_name: Option<String>,
+    episode_index: Option<i64>,
+    episode_parent_index: Option<i64>,
+    episode_name: Option<String>,
+    episodes: Option<Vec<serde_json::Value>>,
     /// Bounded tail of recent bridge diagnostics (piggybacked so the diagnostics
     /// never race the play signal on the document.title channel).
     diags: Option<Vec<serde_json::Value>>,
@@ -376,44 +407,98 @@ pub async fn jellyfin_embed_open<R: Runtime>(
                     if let Ok(payload) = serde_json::from_str::<serde_json::Value>(raw.trim()) {
                         let _ = wv.app_handle().emit("jellyfin:bridge-diagnostic", payload);
                     }
-                } else if let Some(raw) = title.strip_prefix(PLAY_PREFIX) {
-                    match serde_json::from_str::<PlayPayload>(raw.trim()) {
-                        Ok(payload) => {
-                            // Forward the captured stream URL + metadata to the
-                            // frontend, which drives it through the app's normal
-                            // VOD play pipeline (fullscreen player view, Now
-                            // Playing bar, mpv error handling). The frontend
-                            // destroys the child WebView once playback starts.
-                            let app = wv.app_handle().clone();
-                            let _ = app.emit(
-                                "jellyfin:play",
-                                serde_json::json!({
-                                    "url": payload.url,
-                                    "title": payload.title.clone().unwrap_or_default(),
-                                    "itemId": payload.item_id,
-                                    "mediaSourceId": payload.media_source_id,
-                                    "subtitleStreamId": payload.subtitle_stream_id,
-                                    "subtitleUrl": payload.subtitle_url,
-                                    "subtitleTracks": payload.subtitle_tracks,
-                                    "posterUrl": payload.poster_url,
-                                    "audioTracks": payload.audio_tracks,
-                                    "chapters": payload.chapters,
-                                }),
-                            );
-                            // Ride-along diagnostics: forward each buffered item
-                            // so the main DevTools keeps its [Jellyfin bridge]
-                            // log without diagnostics ever writing to the title.
-                            if let Some(diags) = payload.diags {
-                                for item in diags {
-                                    let _ = app.emit("jellyfin:bridge-diagnostic", item);
+                } else if let Some(raw) = title.strip_prefix(CHUNK_PREFIX) {
+                    // `i/total:<data>` — one piece of the play payload. The
+                    // title channel truncates at ~4096 chars, so the page
+                    // streams the payload here in chunks; each chunk is acked
+                    // by evaling the next one out, and the last chunk triggers
+                    // the normal play forwarding.
+                    let (meta, data) = match raw.split_once(':') {
+                        Some((m, d)) => (m, d),
+                        None => (raw, ""),
+                    };
+                    let mut parts = meta.split('/');
+                    let idx: usize = parts.next().and_then(|v| v.parse().ok()).unwrap_or(0);
+                    let total: usize = parts.next().and_then(|v| v.parse().ok()).unwrap_or(1);
+                    let state = wv.app_handle().state::<JellyfinEmbedState>();
+                    let mut acc = state
+                        .chunk_parts
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner());
+                    if idx == 0 {
+                        acc.clear();
+                    }
+                    if acc.len() <= idx {
+                        acc.resize(idx + 1, String::new());
+                    }
+                    acc[idx] = data.to_string();
+                    if idx + 1 < total {
+                        let _ = wv.eval(PLAY_NEXT_CHUNK_SCRIPT);
+                    } else {
+                        let full = acc.concat();
+                        drop(acc);
+                        match serde_json::from_str::<PlayPayload>(full.trim()) {
+                            Ok(payload) => {
+                                // Forward the captured stream URL + metadata to
+                                // the frontend, which drives it through the
+                                // app's normal VOD play pipeline (fullscreen
+                                // player view, Now Playing bar, mpv error
+                                // handling). The frontend destroys the child
+                                // WebView once playback starts.
+                                let app = wv.app_handle().clone();
+                                let _ = app.emit(
+                                    "jellyfin:play",
+                                    serde_json::json!({
+                                        "url": payload.url,
+                                        "title": payload.title.clone().unwrap_or_default(),
+                                        "itemId": payload.item_id,
+                                        "mediaSourceId": payload.media_source_id,
+                                        "subtitleStreamId": payload.subtitle_stream_id,
+                                        "subtitleUrl": payload.subtitle_url,
+                                        "subtitleTracks": payload.subtitle_tracks,
+                                        "posterUrl": payload.poster_url,
+                                        "audioTracks": payload.audio_tracks,
+                                        "chapters": payload.chapters,
+                                        "serverUrl": payload.server_url,
+                                        "apiKey": payload.api_key,
+                                        "seriesId": payload.series_id,
+                                        "seriesName": payload.series_name,
+                                        "episodeIndex": payload.episode_index,
+                                        "episodeParentIndex": payload.episode_parent_index,
+                                        "episodeName": payload.episode_name,
+                                        "episodes": payload.episodes,
+                                    }),
+                                );
+                                // Ride-along diagnostics: forward each buffered
+                                // item so the main DevTools keeps its
+                                // [Jellyfin bridge] log without diagnostics
+                                // ever writing to the title.
+                                if let Some(diags) = payload.diags {
+                                    for item in diags {
+                                        let _ = app.emit("jellyfin:bridge-diagnostic", item);
+                                    }
                                 }
+                                log::info!("[Jellyfin] Play request forwarded to frontend");
                             }
-                            log::info!("[Jellyfin] Play request forwarded to frontend");
-                        }
-                        Err(e) => {
-                            log::error!("[Jellyfin] Failed to parse play payload: {}", e);
+                            Err(e) => {
+                                log::error!("[Jellyfin] Failed to parse play payload: {}", e);
+                            }
                         }
                     }
+                } else if title.starts_with(PLAY_PREFIX) {
+                    // Marker only: the page kept the full payload in window +
+                    // localStorage (document.title truncates at ~4096 chars,
+                    // which used to cut the JSON mid-string and stall
+                    // playback). Start the chunked flush.
+                    if let Ok(mut guard) = wv
+                        .app_handle()
+                        .state::<JellyfinEmbedState>()
+                        .chunk_parts
+                        .lock()
+                    {
+                        guard.clear();
+                    }
+                    let _ = wv.eval(PLAY_START_CHUNK_SCRIPT);
                 }
             });
 
@@ -667,9 +752,60 @@ const INIT_SCRIPT: &str = r##"
     function signal(payload) {
         try {
             console.log('[ynoTV Jellyfin bridge] candidate stream', payload);
-            document.title = SIGNAL + JSON.stringify(payload);
+            // document.title is truncated at ~4096 chars by the browser, which
+            // used to cut large payloads (episode lists, chapters, track URLs)
+            // mid-JSON and stall playback. Keep the full payload in the page
+            // (window + localStorage) and write a tiny marker; Rust streams it
+            // out in chunks, acking each one via eval.
+            var json;
+            try { json = JSON.stringify(payload); } catch (e) { return; }
+            try { localStorage.setItem('ynotv_jf_pending', json); } catch (e) {}
+            window.__ynotvPendingPayload = json;
+            document.title = SIGNAL;
         } catch (e) {}
     }
+
+    // Remember the SPA route (excluding player routes) so a recreated child
+    // WebView — tab switches close the child, and a hidden WebView2 surface can
+    // come back blank — restores the page the user was on instead of the home
+    // page. The route is restored only when the fresh page is still on the app
+    // root, so it never yanks the user away from a page they already navigated
+    // to.
+    var ROUTE_KEY = "ynotv_jf_route";
+    var bootStartedAt = Date.now();
+    function saveRoute() {
+        try {
+            // Ignore hash changes during the boot window: Jellyfin's SPA sets
+            // #/home.html (or a similar landing hash) on startup, which would
+            // overwrite the route restoreRoute captured below BEFORE the
+            // restore attempt at ~1-4s — leaving the user on the home page
+            // instead of the item/series page they were on.
+            if (Date.now() - bootStartedAt < 7000) return;
+            var h = location.hash || "";
+            if (!h) return;
+            if (/videoosd/i.test(h)) return; // never remember the player screen
+            localStorage.setItem(ROUTE_KEY, h);
+        } catch (e) {}
+    }
+    try { window.addEventListener("hashchange", saveRoute); } catch (e) {}
+    saveRoute();
+    (function restoreRoute() {
+        try {
+            var saved = localStorage.getItem(ROUTE_KEY);
+            if (!saved) return;
+            var apply = function () {
+                try {
+                    var cur = location.hash || "";
+                    if (cur === "" || cur === "#/" || cur === "#/home.html") {
+                        if (cur !== saved) location.hash = saved;
+                    }
+                } catch (e) {}
+            };
+            setTimeout(apply, 900);
+            setTimeout(apply, 2200);
+            setTimeout(apply, 4200);
+        } catch (e) {}
+    })();
 
     function describeMedia(elem, event) {
         try {
@@ -705,7 +841,7 @@ const INIT_SCRIPT: &str = r##"
         return window.location.origin;
     }
 
-    function subtitleStreamInfo(elem) {
+    function subtitleStreamInfo(elem, src) {
         try {
             var api = pickApiClient();
             diag('subtitle-metadata-scan', { hasApi: !!api, trackCount: elem && elem.textTracks ? elem.textTracks.length : 0 });
@@ -724,9 +860,12 @@ const INIT_SCRIPT: &str = r##"
             }
             if (!selected && tracks.length) selected = tracks[0];
             var subtitleUrl = selected && selected.src ? selected.src : null;
-            var m = (elem && (elem.currentSrc || elem.src || '')).match(/\/Videos\/([^/]+)/i);
+            // `src` is the URL captured before blankMedia() wiped the element,
+            // so the item/mediaSource can always be derived from it.
+            var raw = src || (elem && (elem.currentSrc || elem.src || '')) || '';
+            var m = raw.match(/\/Videos\/([^/]+)/i);
             if (m) itemId = m[1];
-            var sourceMatch = (elem && (elem.currentSrc || elem.src || '')).match(/[?&]mediaSourceId=([^&]+)/i);
+            var sourceMatch = raw.match(/[?&]mediaSourceId=([^&]+)/i);
             if (sourceMatch) mediaSourceId = decodeURIComponent(sourceMatch[1]);
             var subtitleTracks = [];
             // Jellyfin renders external tracks as <track> elements. Preserve
@@ -759,7 +898,7 @@ const INIT_SCRIPT: &str = r##"
     // Jellyfin's web player uses, and what jellyfin-desktop feeds into its mpv
     // player: poster URL (derived from the item), audio stream list, and the
     // authoritative subtitle track list (absolute delivery URLs + api_key).
-    function playbackInfoMeta(elem) {
+    function playbackInfoMeta(elem, capturedSrc) {
         var meta = { posterUrl: null, audioTracks: [], subtitleTracks: [], subtitleStreamId: null };
         try {
             var src = null;
@@ -767,7 +906,8 @@ const INIT_SCRIPT: &str = r##"
                 src = playbackInfo.MediaSources[0];
             }
             var itemId = null;
-            var m = (elem && (elem.currentSrc || elem.src || '')).match(/\/Videos\/([^/]+)/i);
+            var raw = capturedSrc || (elem && (elem.currentSrc || elem.src || '')) || '';
+            var m = raw.match(/\/Videos\/([^/]+)/i);
             if (m) itemId = m[1];
             if (itemId) {
                 var token = accessToken();
@@ -843,12 +983,24 @@ const INIT_SCRIPT: &str = r##"
     // bounded fallback fetch, guaranteeing the handoff payload carries
     // chapter markers for the seek bar even on a cold handoff.
     var chaptersByItem = {};
-    function rememberItemChapters(body) {
+    var itemById = {};
+    var episodesBySeries = {};
+    function rememberItemDto(body) {
         try {
             if (!body || typeof body !== "object") return;
             if (Array.isArray(body.Chapters) && body.Id) chaptersByItem[body.Id] = body.Chapters;
+            if (body.Id && (body.Name || body.SeriesId || body.IndexNumber != null || body.ParentIndexNumber != null)) {
+                itemById[body.Id] = {
+                    name: body.Name || "",
+                    seriesId: body.SeriesId || null,
+                    seriesName: body.SeriesName || null,
+                    indexNumber: body.IndexNumber != null ? body.IndexNumber : null,
+                    parentIndexNumber: body.ParentIndexNumber != null ? body.ParentIndexNumber : null,
+                    type: body.Type || ""
+                };
+            }
             if (Array.isArray(body.Items)) {
-                for (var i = 0; i < body.Items.length; i++) rememberItemChapters(body.Items[i]);
+                for (var i = 0; i < body.Items.length; i++) rememberItemDto(body.Items[i]);
             }
         } catch (e) {}
     }
@@ -857,6 +1009,36 @@ const INIT_SCRIPT: &str = r##"
             var list = chaptersByItem[itemId];
             return Array.isArray(list) && list.length ? list : null;
         } catch (e) { return null; }
+    }
+    function episodesFor(seriesId) {
+        try {
+            var list = episodesBySeries[seriesId];
+            return Array.isArray(list) && list.length ? list : null;
+        } catch (e) { return null; }
+    }
+    // Episode lists arrive as /Shows/{seriesId}/Episodes responses when the
+    // user opens a series; compact them so prev/next playback can rebuild
+    // direct-play URLs for adjacent episodes.
+    function rememberSeriesEpisodes(body) {
+        try {
+            if (!body || !Array.isArray(body.Items)) return;
+            var seriesId = body.SeriesId || null;
+            var list = [];
+            for (var i = 0; i < body.Items.length && list.length < 150; i++) {
+                var it = body.Items[i];
+                if (!it || !it.Id) continue;
+                if (!seriesId) seriesId = it.SeriesId || null;
+                list.push({
+                    id: it.Id,
+                    indexNumber: it.IndexNumber != null ? it.IndexNumber : null,
+                    parentIndexNumber: it.ParentIndexNumber != null ? it.ParentIndexNumber : null,
+                    name: it.Name || "",
+                    positionTicks: it.UserData && it.UserData.PlaybackPositionTicks ? it.UserData.PlaybackPositionTicks : 0
+                });
+                rememberItemDto(it);
+            }
+            if (seriesId && list.length) episodesBySeries[seriesId] = list;
+        } catch (e) {}
     }
     function currentUserId() {
         try {
@@ -875,27 +1057,55 @@ const INIT_SCRIPT: &str = r##"
         } catch (e) {}
         return "";
     }
-    // Authoritative fallback: fetch the item DTO with Fields=Chapters directly
-    // (bounded), so chapter markers arrive even when the web client never
-    // prefetched them for the played item.
-    function fetchChapters(itemId, cb, timeoutMs) {
-        try {
-            var uid = currentUserId();
-            if (!itemId || !uid) { cb(null); return; }
-            var url = serverOrigin() + "/Users/" + encodeURIComponent(uid) + "/Items/" + encodeURIComponent(itemId) + "?Fields=Chapters";
-            var token = accessToken();
-            if (token) url += "&api_key=" + encodeURIComponent(token);
-            var settled = false;
-            var done = function (ch) { if (!settled) { settled = true; if (typeof cb === "function") cb(ch); } };
-            var timer = setTimeout(function () { done(null); }, timeoutMs || 700);
-            fetch(url).then(function (r) {
-                if (!r.ok) { clearTimeout(timer); done(null); return; }
-                return r.json();
-            }).then(function (b) {
-                clearTimeout(timer);
-                done(Array.isArray(b && b.Chapters) ? b.Chapters : null);
-            }).catch(function () { clearTimeout(timer); done(null); });
-        } catch (e) { cb(null); }
+    // Authoritative fallback: fetch the item DTO (Fields=Chapters) and, when it
+    // is a series episode and no episode list is cached yet, the series'
+    // episode list — bounded, so handoff is never blocked for long. cb receives
+    // (chapters, itemInfo, episodes); any of them may be null.
+    function gatherMetadata(itemId, cb, timeoutMs) {
+        var uid = currentUserId();
+        if (!itemId || !uid) { cb(null, null, null); return; }
+        var item = itemById[itemId] || null;
+        var chapters = chaptersFor(itemId);
+        var episodes = item && item.seriesId ? episodesFor(item.seriesId) : null;
+        if (chapters && item) { cb(chapters, item, episodes); return; }
+        var token = accessToken();
+        var origin = serverOrigin();
+        var settled = false;
+        var done = function (ch, it, eps) {
+            if (!settled) { settled = true; if (typeof cb === "function") cb(ch, it, eps); }
+        };
+        var timer = setTimeout(function () { done(chapters, item, episodes); }, timeoutMs || 1100);
+        var itemUrl = origin + "/Users/" + encodeURIComponent(uid) + "/Items/" + encodeURIComponent(itemId) + "?Fields=Chapters";
+        if (token) itemUrl += "&api_key=" + encodeURIComponent(token);
+        fetch(itemUrl).then(function (r) {
+            if (!r.ok) { clearTimeout(timer); done(chapters, item, episodes); return; }
+            return r.json();
+        }).then(function (b) {
+            if (b && b.Id) {
+                rememberItemDto(b);
+                item = itemById[b.Id] || item;
+                chapters = chaptersFor(b.Id) || chapters;
+            }
+            if (item && item.seriesId) {
+                var eps = episodesFor(item.seriesId) || episodes;
+                if (!eps) {
+                    var epsUrl = origin + "/Shows/" + encodeURIComponent(item.seriesId) + "/Episodes?UserId=" + encodeURIComponent(uid) + "&Fields=Chapters";
+                    if (token) epsUrl += "&api_key=" + encodeURIComponent(token);
+                    fetch(epsUrl).then(function (r2) {
+                        if (!r2.ok) { clearTimeout(timer); done(chapters, item, episodes); return; }
+                        return r2.json();
+                    }).then(function (b2) {
+                        clearTimeout(timer);
+                        rememberSeriesEpisodes(b2);
+                        done(chapters, item, episodesFor(item.seriesId));
+                    }).catch(function () { clearTimeout(timer); done(chapters, item, episodes); });
+                    return;
+                }
+                episodes = eps;
+            }
+            clearTimeout(timer);
+            done(chapters, item, episodes);
+        }).catch(function () { clearTimeout(timer); done(chapters, item, episodes); });
     }
 
     function isJellyfinStreamUrl(rawUrl) {
@@ -997,11 +1207,17 @@ const INIT_SCRIPT: &str = r##"
         var built;
         try { built = buildPlayableUrl(src, elem); } catch (e) { return false; }
 
+        // Capture stream metadata from the element BEFORE blankMedia() wipes
+        // its src/currentSrc — after blanking, itemId/mediaSourceId can no
+        // longer be derived from the element, which silently dropped the
+        // handoff payload's title, series, poster and chapter context.
+        var subtitle = subtitleStreamInfo(elem, src);
+        var meta = playbackInfoMeta(elem, src);
+
         blankMedia(elem);
 
         var key = built.url + "|" + built.position_ticks;
         var now = Date.now();
-        var subtitle = subtitleStreamInfo(elem);
         if (key === lastSignalKey && now - lastSignalAt < 10000) {
             elem.__ynotvSignaled = true;
             return true;
@@ -1019,10 +1235,16 @@ const INIT_SCRIPT: &str = r##"
         // fetch so the seek bar shows chapters even on a cold handoff. The
         // element is already blanked and play() returns a pending promise, so
         // Jellyfin's own player waits while we finish gathering metadata.
-        var meta = playbackInfoMeta(elem);
-        function finish(chapters) {
+        diag('metadata', {
+            itemId: subtitle.itemId || null,
+            uid: !!currentUserId(),
+            token: !!accessToken(),
+            cachedItem: !!itemById[subtitle.itemId || ''],
+            cachedChapters: !!chaptersFor(subtitle.itemId || '')
+        });
+        function finish(chapters, itemInfo, episodes) {
             // The element may have moved on to another stream while the
-            // chapters fetch was in flight (e.g. next episode) — never signal
+            // metadata fetch was in flight (e.g. next episode) — never signal
             // a stale handoff for an abandoned element. IMPORTANT: blankMedia()
             // wipes src/currentSrc, so the live element can never be compared
             // against the captured URL; use the handled URL we recorded on the
@@ -1033,7 +1255,9 @@ const INIT_SCRIPT: &str = r##"
             signal({
                 url: built.url,
                 position_ticks: built.position_ticks,
-                title: itemTitle(),
+                // The item DTO (gathered via the item's own API) carries the
+                // real title; document.title on the player screen is generic.
+                title: (itemInfo && itemInfo.name) || itemTitle(),
                 item_id: subtitle.itemId,
                 media_source_id: subtitle.mediaSourceId,
                 subtitle_stream_id: meta.subtitleStreamId != null ? meta.subtitleStreamId : subtitle.subtitleStreamId,
@@ -1042,15 +1266,20 @@ const INIT_SCRIPT: &str = r##"
                 poster_url: meta.posterUrl,
                 audio_tracks: meta.audioTracks,
                 chapters: Array.isArray(chapters) ? chapters : [],
+                // Series/episode context so the frontend can show proper
+                // S/E info in the header pill and play prev/next episodes.
+                server_url: serverOrigin(),
+                api_key: accessToken(),
+                series_id: itemInfo && itemInfo.seriesId ? itemInfo.seriesId : null,
+                series_name: (itemInfo && itemInfo.seriesName) || null,
+                episode_index: itemInfo ? itemInfo.indexNumber : null,
+                episode_parent_index: itemInfo ? itemInfo.parentIndexNumber : null,
+                episode_name: (itemInfo && itemInfo.name) || null,
+                episodes: Array.isArray(episodes) ? episodes : null,
                 diags: diags
             });
         }
-        var cached = chaptersFor(subtitle.itemId);
-        if (cached) {
-            finish(cached);
-        } else {
-            fetchChapters(subtitle.itemId, finish);
-        }
+        gatherMetadata(subtitle.itemId, finish);
         return true;
     }
 
@@ -1162,7 +1391,10 @@ const INIT_SCRIPT: &str = r##"
                             // Item DTO responses can carry the Chapters array
                             // (Fields=Chapters is requested for playable items)
                             // — remember them for the handoff payload.
-                            try { response.clone().json().then(rememberItemChapters).catch(function () {}); } catch (e) {}
+                            try { response.clone().json().then(rememberItemDto).catch(function () {}); } catch (e) {}
+                        } else if (/\/Shows\/[^?/]+\/Episodes/i.test(url)) {
+                            // Series episode lists power prev/next playback.
+                            try { response.clone().json().then(rememberSeriesEpisodes).catch(function () {}); } catch (e) {}
                         }
                         return response;
                     });
@@ -1192,7 +1424,16 @@ const INIT_SCRIPT: &str = r##"
                             var self2 = this;
                             this.addEventListener('loadend', function () {
                                 try {
-                                    if (self2.responseText) rememberItemChapters(JSON.parse(self2.responseText));
+                                    if (self2.responseText) rememberItemDto(JSON.parse(self2.responseText));
+                                } catch (e) {}
+                            });
+                        } catch (e) {}
+                    } else if (/\/Shows\/[^?/]+\/Episodes/i.test(u)) {
+                        try {
+                            var self3 = this;
+                            this.addEventListener('loadend', function () {
+                                try {
+                                    if (self3.responseText) rememberSeriesEpisodes(JSON.parse(self3.responseText));
                                 } catch (e) {}
                             });
                         } catch (e) {}

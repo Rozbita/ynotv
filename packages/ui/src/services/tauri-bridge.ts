@@ -663,8 +663,14 @@ export const Bridge = {
         return res;
     },
 
-    async addSubtitleFile(filePath: string, flag?: string) {
-        return invoke('mpv_add_subtitle', { filePath, flag });
+    /**
+     * Add an external subtitle file/URL to mpv. Jellyfin subtitle URLs are
+     * downloaded to a local temp file by Rust first (mpv can't detect the
+     * format from a URL ending in `?api_key=...`), so the resolved path that
+     * mpv actually loaded is returned — use it to match track-list entries.
+     */
+    async addSubtitleFile(filePath: string, flag?: string): Promise<string> {
+        return invoke<string>('mpv_add_subtitle', { filePath, flag });
     },
 
     async getMpvLog(tail?: number): Promise<{ log: string; path: string }> {

@@ -958,13 +958,18 @@ pub async fn set_subtitle_track<R: Runtime>(app: &AppHandle<R>, id: i64) -> Resu
     send_command_internal(&state, "set_property", vec![json!("sid"), value]).await.map(|_| ())
 }
 
-pub async fn add_subtitle_file<R: Runtime>(app: &AppHandle<R>, file_path: String, flag: Option<String>) -> Result<(), String> {
+pub async fn add_subtitle_file<R: Runtime>(app: &AppHandle<R>, file_path: String, flag: Option<String>) -> Result<String, String> {
+    // Jellyfin subtitle URLs end in `?api_key=...`, which mpv's runtime sub-add
+    // can't identify (unknown format). Download them to a local temp file first.
+    let resolved = crate::mpv_core::resolve_external_subtitle(&file_path).await;
     let state = app.state::<MpvState>();
     let f = match flag {
         Some(s) if !s.is_empty() => s,
         _ => "select".to_string(),
     };
-    send_command_internal(&state, "sub-add", vec![json!(file_path), json!(f)]).await.map(|_| ())
+    send_command_internal(&state, "sub-add", vec![json!(resolved.clone()), json!(f)])
+        .await
+        .map(|_| resolved)
 }
 
 pub async fn remove_subtitle_file<R: Runtime>(app: &AppHandle<R>, file_path: String) -> Result<(), String> {
@@ -980,7 +985,14 @@ pub async fn remove_subtitle_file<R: Runtime>(app: &AppHandle<R>, file_path: Str
                 if is_sub && external && external_filename == file_path {
                     let id = t.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
                     if id > 0 {
-                        return send_command_internal(&state, "sub-remove", vec![json!(id)]).await.map(|_| ());
+                        return send_command_internal(&state, "sub-remove", vec![json!(id)])
+                            .await
+                            .map(|_| {
+                                // Free the temp file for downloaded Jellyfin subs.
+                                if crate::mpv_core::is_jellyfin_subtitle_temp(&file_path) {
+                                    let _ = std::fs::remove_file(&file_path);
+                                }
+                            });
                     }
                 }
             }

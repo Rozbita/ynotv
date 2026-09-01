@@ -2579,18 +2579,25 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
       // Jellyfin's selected/default state is applied after all files load.
       if (info.source_id === 'jellyfin' && info.jellyfinSubtitleTracks?.length) {
         const selected = info.jellyfinSubtitleTracks.find((track) => track.selected || track.default);
+        // 'cached' = add without auto-selecting (mpv rejects other flags). Rust
+        // downloads Jellyfin subtitle URLs to local temp files (mpv can't probe
+        // URLs ending in `?api_key=...`), so the returned path is what
+        // track-list's external-filename will actually contain.
+        const resolvedByUrl = new Map<string, string>();
         for (const track of info.jellyfinSubtitleTracks) {
           if (!track.isExternal || !track.deliveryUrl) continue;
           try {
-            await Bridge.addSubtitleFile(track.deliveryUrl, 'no');
+            const resolved = await Bridge.addSubtitleFile(track.deliveryUrl, 'cached');
+            resolvedByUrl.set(track.deliveryUrl, resolved || track.deliveryUrl);
           } catch (error) {
             logWarn('[Jellyfin] Failed to load external subtitle:', track.deliveryUrl, error);
           }
         }
         if (selected?.deliveryUrl) {
-          // MPV assigns IDs after sub-add; re-query and select the matching URL.
+          // MPV assigns IDs after sub-add; re-query and select the matching track.
+          const resolved = resolvedByUrl.get(selected.deliveryUrl) || selected.deliveryUrl;
           const tracks = await Bridge.getTrackList().catch(() => []);
-          const match = tracks.find((track: any) => track.type === 'sub' && track.external && track['external-filename'] === selected.deliveryUrl);
+          const match = tracks.find((track: any) => track.type === 'sub' && track.external && track['external-filename'] === resolved);
           if (match?.id != null) await Bridge.setSubtitleTrack(match.id);
         }
       }

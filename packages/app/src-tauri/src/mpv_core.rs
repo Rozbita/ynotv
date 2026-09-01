@@ -711,11 +711,150 @@ pub async fn set_subtitle_track<R: Runtime>(app: &AppHandle<R>, id: i64) -> Resu
     Ok(())
 }
 
+/// Jellyfin serves subtitles from `/Videos/.../Subtitles/.../Stream.vtt?api_key=...`.
+/// The HTTP URL itself is valid (the server returns real WebVTT), but mpv's
+/// runtime `sub-add` cannot detect the format when the URL ends in a query
+/// string — its ffmpeg probe misfires on the `?api_key=` suffix (startup
+/// `--sub-file` handles it, `sub-add` does not). Download such URLs to a local
+/// temp file (keeping the extension) so mpv always gets a clean path it can
+/// identify. Returns the path that was actually handed to mpv.
+pub async fn resolve_external_subtitle(file_path: &str) -> String {
+    let lower = file_path.to_ascii_lowercase();
+    if !(lower.starts_with("http://") || lower.starts_with("https://"))
+        || !lower.contains("/subtitles/")
+    {
+        return file_path.to_string();
+    }
+    // Keep the URL's extension (Stream.vtt -> .vtt) so mpv's demuxer picks the
+    // right subtitle format; default to .vtt.
+    let ext = file_path
+        .split(['?', '#'])
+        .next()
+        .unwrap_or("")
+        .rsplit('.')
+        .next()
+        .filter(|e| (2..=5).contains(&e.len()) && e.chars().all(|c| c.is_ascii_alphanumeric()))
+        .map(|e| format!(".{}", e.to_ascii_lowercase()))
+        .unwrap_or_else(|| ".vtt".to_string());
+
+    let client = match reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+    {
+        Ok(c) => c,
+        Err(_) => return file_path.to_string(),
+    };
+    let resp = match client.get(file_path).send().await {
+        Ok(r) if r.status().is_success() => r,
+        _ => return file_path.to_string(),
+    };
+    let bytes = match resp.bytes().await {
+        Ok(b) => b,
+        Err(_) => return file_path.to_string(),
+    };
+
+    let dir = std::env::temp_dir().join("ynotv-jellyfin-subs");
+    if std::fs::create_dir_all(&dir).is_err() {
+        return file_path.to_string();
+    }
+    // Best-effort sweep of stale downloads (>24h) so temp files don't pile up.
+    if let Ok(rd) = std::fs::read_dir(&dir) {
+        for entry in rd.flatten() {
+            if let Ok(md) = entry.metadata() {
+                if md.is_file()
+                    && md
+                        .modified()
+                        .ok()
+                        .and_then(|t| t.elapsed().ok())
+                        .map(|a| a > std::time::Duration::from_secs(86_400))
+                        .unwrap_or(false)
+                {
+                    let _ = std::fs::remove_file(entry.path());
+                }
+            }
+        }
+    }
+
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    std::hash::Hasher::write(&mut hasher, file_path.as_bytes());
+    let name = format!("jf-{}-{:x}{}", std::process::id(), std::hash::Hasher::finish(&hasher), ext);
+    let dest = dir.join(name);
+    let content = normalize_subtitle_bytes(&bytes);
+    match std::fs::write(&dest, &content) {
+        Ok(_) => dest.to_string_lossy().into_owned(),
+        Err(_) => file_path.to_string(),
+    }
+}
+
+/// Normalize a downloaded subtitle so mpv's demuxer actually parses it.
+///
+/// Jellyfin serves external SRT tracks as WebVTT with a UTF-8 BOM, CRLF line
+/// endings, a `Region:` block and `region:...` cue settings. mpv's webvtt
+/// demuxer silently drops every cue that carries a `region:` setting (verified
+/// against the bundled mpv: a file with `region:subtitle line:90%` cues yields
+/// zero subtitle events, while the same cues without `region:` render fine).
+/// The BOM/CRLF are cleaned too so the header is recognized reliably.
+pub fn normalize_subtitle_bytes(bytes: &[u8]) -> Vec<u8> {
+    // Strip a UTF-8 BOM if present.
+    let mut bytes = bytes;
+    if bytes.starts_with(&[0xEF, 0xBB, 0xBF]) {
+        bytes = &bytes[3..];
+    }
+    let text = match std::str::from_utf8(bytes) {
+        Ok(t) => t,
+        Err(_) => return bytes.to_vec(), // non-text subtitle (e.g. ass) — leave untouched
+    };
+    // Only WebVTT needs the region scrubbing; other formats pass through.
+    if !text.trim_start().starts_with("WEBVTT") {
+        return bytes.to_vec();
+    }
+    let mut out = String::with_capacity(text.len() + 16);
+    let mut seen_cue = false;
+    for raw_line in text.split('\n') {
+        let line = raw_line.strip_suffix('\r').unwrap_or(raw_line);
+        if !seen_cue && line.trim_start().to_ascii_lowercase().starts_with("region:") {
+            // `Region: id:...` header block — the demuxer chokes on the region
+            // reference; drop the block entirely (it is only useful with the
+            // cue setting we strip below).
+            continue;
+        }
+        if line.contains("-->") {
+            seen_cue = true;
+            // Strip `region:<id>` from cue settings (`start --> end region:subtitle line:90%`).
+            let cleaned = if line.contains("region:") {
+                let mut parts = line.splitn(2, "-->").map(|p| p.trim().to_string()).collect::<Vec<_>>();
+                if parts.len() == 2 {
+                    parts[1] = parts[1]
+                        .split_whitespace()
+                        .filter(|tok| !tok.to_ascii_lowercase().starts_with("region:"))
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                }
+                parts.join(" --> ").to_string()
+            } else {
+                line.to_string()
+            };
+            out.push_str(&cleaned);
+            out.push('\n');
+            continue;
+        }
+        out.push_str(line);
+        out.push('\n');
+    }
+    out.into_bytes()
+}
+
+/// True when the path is one of our downloaded Jellyfin subtitle temp files.
+pub fn is_jellyfin_subtitle_temp(path: &str) -> bool {
+    path.to_ascii_lowercase().contains("ynotv-jellyfin-subs")
+}
+
 pub async fn add_subtitle_file<R: Runtime>(
     app: &AppHandle<R>,
     file_path: String,
     flag: Option<String>,
-) -> Result<(), String> {
+) -> Result<String, String> {
+    let resolved = resolve_external_subtitle(&file_path).await;
     let state = app.state::<MpvCoreState>();
     let mpv = {
         let guard = state.mpv.lock().unwrap();
@@ -723,10 +862,10 @@ pub async fn add_subtitle_file<R: Runtime>(
     };
     if let Some(mpv) = mpv {
         let f = flag.unwrap_or_else(|| "select".to_string());
-        mpv.command("sub-add", &[&file_path, &f])
+        mpv.command("sub-add", &[&resolved, &f])
             .map_err(|e| format!("sub-add error: {:?}", e))?;
     }
-    Ok(())
+    Ok(resolved)
 }
 
 pub async fn remove_subtitle_file<R: Runtime>(
@@ -749,7 +888,13 @@ pub async fn remove_subtitle_file<R: Runtime>(
                     if let Some(mpv) = mpv {
                         return mpv
                             .command("sub-remove", &[&id.to_string()])
-                            .map_err(|e| format!("sub-remove error: {:?}", e));
+                            .map_err(|e| format!("sub-remove error: {:?}", e))
+                            .map(|_| {
+                                // Free the temp file for downloaded Jellyfin subs.
+                                if is_jellyfin_subtitle_temp(&file_path) {
+                                    let _ = std::fs::remove_file(&file_path);
+                                }
+                            });
                     }
                 }
             }
