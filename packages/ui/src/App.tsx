@@ -13,6 +13,7 @@ const REMOTE_LAYOUT_MAP: Record<string, LayoutMode> = {
 };
 let hasStartupAutoSyncTriggered = false;
 import { invoke } from '@tauri-apps/api/core';
+import { jellyfinConfirmPlayback } from './services/jellyfin';
 import i18n, { translateNativeError } from './i18n';
 import type { StremioStream, StremioStreamPickerMode, StremioMeta, StremioVideo, BadgeSource, StreamAutoPlayMode, StreamAutoPlaySourceScope } from './types/stremio';
 import { checkForUpdates, checkForUpdatesSilent } from './services/updater';
@@ -1801,6 +1802,19 @@ function useTmdbPresencePoster(
 
   // Wrap handleStop to restore the source page if stopped from a media context.
   const handleStop = useCallback(async (returnView?: 'movies' | 'series' | 'dvr' | 'stremio' | 'nuvio' | 'jellyfin') => {
+    // Prop wired via onBack/onStop/onClick hands React the click event as the
+    // first argument. Only a known view name may be a destination: a stray
+    // event used to become the activeView (`active-view-[object MouseEvent]`),
+    // which matched no view and left the app on a black screen after stop.
+    const dest =
+      returnView === 'movies' ||
+      returnView === 'series' ||
+      returnView === 'dvr' ||
+      returnView === 'stremio' ||
+      returnView === 'nuvio' ||
+      returnView === 'jellyfin'
+        ? returnView
+        : undefined;
     const isStremio = vodInfo?.source_id === 'stremio' || vodInfo?.source_id === 'trailer';
     const isNuvio = vodInfo?.source_id === 'nuvio';
     const isJellyfin = vodInfo?.source_id === 'jellyfin';
@@ -1882,7 +1896,7 @@ function useTmdbPresencePoster(
     // stream has loaded. If the user presses Stop during that transition (or a
     // native mpv end event races the React update), infer the destination from
     // the active VOD source instead of leaving the app on the black player view.
-    const sourceView = returnView || playbackSourceView || (isJellyfin ? 'jellyfin' : null);
+    const sourceView = dest || playbackSourceView || (isJellyfin ? 'jellyfin' : null);
     if (sourceView) {
       setActiveView(sourceView);
       setPlaybackSourceView(null);
@@ -1944,6 +1958,11 @@ function useTmdbPresencePoster(
     [handlePlayVod, setActiveView],
   );
 
+  // Cancellable "idle -> return to Jellyfin tab" stop (see the
+  // jellyfin:playback-state listener below). Autoplay-next cancels it once the
+  // new stream is confirmed loading, so an idle blip at EOF can't kill it.
+  const jellyfinStopTimerRef = useRef<number | null>(null);
+
   // Play an adjacent Jellyfin episode in place (prev/next nav) through the
   // same VOD pipeline, rebuilding the direct-play URL from the captured
   // server + token. Position carries the server's resume point for the target.
@@ -1960,9 +1979,60 @@ function useTmdbPresencePoster(
     ) => {
       const server = (current.jellyfinServerUrl || '').replace(/\/+$/, '');
       const key = current.jellyfinApiKey || '';
-      if (!server || !key) return;
+      if (!server || !key) return false;
       const url = `${server}/Videos/${encodeURIComponent(target.id)}/stream?Static=true&mediaSourceId=${encodeURIComponent(target.id)}&api_key=${encodeURIComponent(key)}${target.positionTicks ? `&startTimeTicks=${target.positionTicks}` : ''}`;
-      await handlePlayVod({
+      // The adjacent episode is a different stream, so its subtitle/audio
+      // tracks must be fetched from the server (the current episode's track
+      // lists belong to its own stream and were never carried over). Jellyfin
+      // answers PlaybackInfo with `Access-Control-Allow-Origin: *`, so the
+      // frontend can query it directly.
+      let subtitleStreamId: number | null | undefined;
+      let subtitleTracks: import('./types/media').VodPlayInfo['jellyfinSubtitleTracks'] = [];
+      let audioTracks: import('./types/media').VodPlayInfo['jellyfinAudioTracks'] = [];
+      try {
+        const res = await fetch(
+          `${server}/Items/${encodeURIComponent(target.id)}/PlaybackInfo`,
+          { headers: { 'X-Emby-Token': key } },
+        );
+        if (res.ok) {
+          const pi = await res.json();
+          const ms = pi?.MediaSources?.[0];
+          if (ms) {
+            const token = key;
+            subtitleStreamId = ms.DefaultSubtitleStreamIndex != null ? ms.DefaultSubtitleStreamIndex : undefined;
+            for (const st of ms.MediaStreams || []) {
+              if (!st || !st.Type) continue;
+              if (st.Type === 'Subtitle') {
+                const isExt = st.IsExternal === true;
+                let delivery = (st.DeliveryUrl || '').trim();
+                if (delivery && delivery.indexOf('://') === -1) delivery = server + (delivery.charAt(0) === '/' ? '' : '/') + delivery;
+                if (delivery && token && delivery.indexOf('api_key=') === -1) delivery += (delivery.indexOf('?') >= 0 ? '&' : '?') + 'api_key=' + encodeURIComponent(token);
+                subtitleTracks.push({
+                  index: st.Index != null ? st.Index : 0,
+                  title: st.DisplayTitle || st.Title || '',
+                  lang: st.Language || '',
+                  codec: st.Codec || '',
+                  isExternal: isExt,
+                  deliveryUrl: isExt ? delivery : '',
+                  selected: st.Index === subtitleStreamId,
+                  default: st.Index === subtitleStreamId,
+                });
+              } else if (st.Type === 'Audio') {
+                audioTracks.push({
+                  index: st.Index != null ? st.Index : 0,
+                  title: st.DisplayTitle || st.Title || '',
+                  lang: st.Language || '',
+                  codec: st.Codec || '',
+                  isDefault: st.IsDefault === true,
+                });
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[Jellyfin] Failed to fetch PlaybackInfo for adjacent episode:', e);
+      }
+      const ok = await handlePlayVod({
         url,
         title: current.title || 'Jellyfin',
         type: 'series',
@@ -1980,16 +2050,33 @@ function useTmdbPresencePoster(
         jellyfinEpisodeIndexNumber: target.indexNumber ?? undefined,
         jellyfinEpisodeParentIndexNumber: target.parentIndexNumber ?? undefined,
         jellyfinEpisodes: current.jellyfinEpisodes,
-        // NOTE: subtitle/audio track lists are NOT carried over — they belong
-        // to the current episode's stream and would attach wrong tracks here.
+        jellyfinSubtitleStreamId: subtitleStreamId ?? undefined,
+        jellyfinSubtitleTracks: subtitleTracks,
+        jellyfinAudioTracks: audioTracks,
         posterUrl: current.posterUrl,
       });
+      if (ok) {
+        // The next stream is loading — cancel any pending idle-stop so the
+        // EOF blip can't return to the tab mid-episode.
+        if (jellyfinStopTimerRef.current) {
+          window.clearTimeout(jellyfinStopTimerRef.current);
+          jellyfinStopTimerRef.current = null;
+        }
+        // Restart the server-side reporting session for the new item so the
+        // dashboard "now playing" line, resume positions and the final stop
+        // all track THIS episode (Rust closes out the previous session first).
+        jellyfinConfirmPlayback(url).catch(() => {});
+      }
+      return ok;
     },
     [handlePlayVod],
   );
 
   // When a Jellyfin stream ends in mpv (idle), Rust emits playing:false —
   // stop the stream cleanly and let handleStop return to the Jellyfin tab.
+  // The stop is deferred briefly so an EOF-driven autoplay of the next episode
+  // can cancel it (playJellyfinEpisode clears the timer once the new stream
+  // starts); if nothing takes over, the timer fires and we return to the tab.
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     let disposed = false;
@@ -2005,13 +2092,23 @@ function useTmdbPresencePoster(
             // State updates are asynchronous; pass the destination directly so
             // this event cannot call a stale handleStop closure that still sees
             // playbackSourceView as null.
-            void handleStop('jellyfin');
+            if (jellyfinStopTimerRef.current) {
+              window.clearTimeout(jellyfinStopTimerRef.current);
+            }
+            jellyfinStopTimerRef.current = window.setTimeout(() => {
+              jellyfinStopTimerRef.current = null;
+              void handleStop('jellyfin');
+            }, 1500);
           }
         });
       })
       .catch((e) => console.warn('[Jellyfin] Failed to attach playback-state listener:', e));
     return () => {
       disposed = true;
+      if (jellyfinStopTimerRef.current) {
+        window.clearTimeout(jellyfinStopTimerRef.current);
+        jellyfinStopTimerRef.current = null;
+      }
       unlisten?.();
     };
   }, [handleStop, setPlaybackSourceView, vodInfo?.source_id, playbackSourceView]);
@@ -3683,6 +3780,27 @@ function useTmdbPresencePoster(
         );
       }
 
+      // Jellyfin series: the episode list rides in vodInfo (same list that
+      // powers the prev/next buttons) — play the adjacent episode in place
+      // instead of the local-library lookup below. The pending idle-stop
+      // timer (jellyfin:playback-state) is cancelled by playJellyfinEpisode
+      // once the new stream actually starts; if playback fails, the timer
+      // fires and returns to the Jellyfin tab.
+      if (vodAutoPlayNextEpisode && source_id === 'jellyfin' && vodInfo?.jellyfinEpisodes?.length && vodInfo.jellyfinItemId) {
+        const jfIdx = vodInfo.jellyfinEpisodes.findIndex((ep) => ep.id === vodInfo.jellyfinItemId);
+        const jfNext = jfIdx >= 0 ? vodInfo.jellyfinEpisodes[jfIdx + 1] : null;
+        if (jfNext) {
+          console.log('[AutoPlay] Jellyfin: playing next episode', jfNext.name || `S${jfNext.parentIndexNumber}E${jfNext.indexNumber}`);
+          if (jellyfinStopTimerRef.current) {
+            window.clearTimeout(jellyfinStopTimerRef.current);
+            jellyfinStopTimerRef.current = null;
+          }
+          void playJellyfinEpisode(vodInfo, jfNext);
+          return;
+        }
+        console.log('[AutoPlay] Jellyfin: reached end of captured episode list');
+      }
+
       if (vodAutoPlayNextEpisode && seriesId && seasonNum !== undefined && episodeNum !== undefined && title) {
         console.log('[AutoPlay] VOD Series ended naturally, triggering auto-play next episode');
         
@@ -3755,7 +3873,7 @@ function useTmdbPresencePoster(
         })();
       }
     }
-  }, [playing, vodEndFileSignal, vodInfo, duration, position, vodAutoPlayNextEpisode, handlePlayVod, userPausedRef]);
+  }, [playing, vodEndFileSignal, vodInfo, duration, position, vodAutoPlayNextEpisode, handlePlayVod, playJellyfinEpisode, userPausedRef]);
 
   // ==========================================================================
   // Active playlist queue controls (indicator click + prev/next buttons)
