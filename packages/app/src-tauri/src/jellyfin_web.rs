@@ -218,6 +218,14 @@ struct PlayPayload {
     subtitle_stream_id: Option<i64>,
     subtitle_url: Option<String>,
     subtitle_tracks: Option<Vec<serde_json::Value>>,
+    poster_url: Option<String>,
+    audio_tracks: Option<Vec<serde_json::Value>>,
+    /// Chapter markers from the item DTO (StartPositionTicks + Name), surfaced
+    /// in the ynoTV seek bar during Jellyfin playback.
+    chapters: Option<Vec<serde_json::Value>>,
+    /// Bounded tail of recent bridge diagnostics (piggybacked so the diagnostics
+    /// never race the play signal on the document.title channel).
+    diags: Option<Vec<serde_json::Value>>,
 }
 
 /// Remove an existing Jellyfin embed child webview, if present.
@@ -364,14 +372,18 @@ pub async fn jellyfin_embed_open<R: Runtime>(
         tauri::webview::WebviewBuilder::new(JELLYFIN_LABEL, WebviewUrl::External(parsed_url))
             .initialization_script(INIT_SCRIPT)
             .on_document_title_changed(move |wv, title| {
-                if let Some(raw) = title.strip_prefix(PLAY_PREFIX) {
+                if let Some(raw) = title.strip_prefix("ynotv-jf:diag:") {
+                    if let Ok(payload) = serde_json::from_str::<serde_json::Value>(raw.trim()) {
+                        let _ = wv.app_handle().emit("jellyfin:bridge-diagnostic", payload);
+                    }
+                } else if let Some(raw) = title.strip_prefix(PLAY_PREFIX) {
                     match serde_json::from_str::<PlayPayload>(raw.trim()) {
                         Ok(payload) => {
-                            // Forward the captured stream URL to the frontend,
-                            // which drives it through the app's normal VOD play
-                            // pipeline (fullscreen player view, Now Playing bar,
-                            // mpv error handling). The frontend destroys the
-                            // child WebView once playback actually starts.
+                            // Forward the captured stream URL + metadata to the
+                            // frontend, which drives it through the app's normal
+                            // VOD play pipeline (fullscreen player view, Now
+                            // Playing bar, mpv error handling). The frontend
+                            // destroys the child WebView once playback starts.
                             let app = wv.app_handle().clone();
                             let _ = app.emit(
                                 "jellyfin:play",
@@ -383,8 +395,19 @@ pub async fn jellyfin_embed_open<R: Runtime>(
                                     "subtitleStreamId": payload.subtitle_stream_id,
                                     "subtitleUrl": payload.subtitle_url,
                                     "subtitleTracks": payload.subtitle_tracks,
+                                    "posterUrl": payload.poster_url,
+                                    "audioTracks": payload.audio_tracks,
+                                    "chapters": payload.chapters,
                                 }),
                             );
+                            // Ride-along diagnostics: forward each buffered item
+                            // so the main DevTools keeps its [Jellyfin bridge]
+                            // log without diagnostics ever writing to the title.
+                            if let Some(diags) = payload.diags {
+                                for item in diags {
+                                    let _ = app.emit("jellyfin:bridge-diagnostic", item);
+                                }
+                            }
                             log::info!("[Jellyfin] Play request forwarded to frontend");
                         }
                         Err(e) => {
@@ -574,6 +597,54 @@ const INIT_SCRIPT: &str = r##"
 
     var SIGNAL = "ynotv-jf:play:";
     var lastSignalKey = null;
+    var diagSeq = 0;
+    var diagBuf = [];          // bounded; flushed inside the next play payload
+    var DIAG_BUF_MAX = 400;
+    var playbackInfo = null;   // latest PlaybackInfo response body
+
+    // Diagnostics NEVER touch document.title — that is the *signal* channel,
+    // and WebView2 coalesces rapid title changes, so any competing title write
+    // (diag fires on every media event / 300ms poll / matching fetch) can
+    // clobber the play payload before Rust's on_document_title_changed fires.
+    // diag() logs to the page console and keeps a bounded in-page buffer that
+    // is piggybacked onto the next play payload, so the native/frontend side
+    // still sees the diagnostics that matter (the ones leading to a handoff).
+    function diag(kind, data) {
+        try {
+            console.log('[ynoTV Jellyfin bridge]', kind, data || '');
+            diagBuf.push({ kind: kind, at: Date.now(), data: data || null });
+            if (diagBuf.length > DIAG_BUF_MAX) diagBuf.splice(0, diagBuf.length - DIAG_BUF_MAX);
+        } catch (e) {}
+    }
+
+    // Compact tail of recent diagnostics for the play payload (bounded so the
+    // title signal stays small; oversized entries are dropped until it fits).
+    function diagTail() {
+        var out = [];
+        var budget = 2500;
+        for (var i = Math.max(0, diagBuf.length - 14); i < diagBuf.length; i++) {
+            var item = diagBuf[i];
+            var copy = { kind: item.kind, at: item.at };
+            var raw = item.data;
+            if (raw !== null && raw !== undefined) {
+                var s;
+                try { s = typeof raw === 'string' ? raw : JSON.stringify(raw); } catch (e) { s = String(raw); }
+                if (s && s.length > 300) s = s.slice(0, 300);
+                if (s) copy.data = s;
+            }
+            var len = JSON.stringify(copy).length;
+            if (len > budget) continue;
+            budget -= len;
+            out.push(copy);
+        }
+        return out;
+    }
+
+    try {
+        console.log('[ynoTV Jellyfin bridge] injected');
+        window.dispatchEvent(new CustomEvent('ynotv-jellyfin-bridge-ready'));
+        diag('injected');
+    } catch (e) {}
     var lastSignalAt = 0;
     var warned = false;
 
@@ -594,7 +665,25 @@ const INIT_SCRIPT: &str = r##"
     }
 
     function signal(payload) {
-        try { document.title = SIGNAL + JSON.stringify(payload); } catch (e) {}
+        try {
+            console.log('[ynoTV Jellyfin bridge] candidate stream', payload);
+            document.title = SIGNAL + JSON.stringify(payload);
+        } catch (e) {}
+    }
+
+    function describeMedia(elem, event) {
+        try {
+            return {
+                event: event,
+                tag: elem.tagName,
+                src: elem.src || '',
+                currentSrc: elem.currentSrc || '',
+                attrSrc: elem.getAttribute('src') || '',
+                readyState: elem.readyState,
+                networkState: elem.networkState,
+                currentTime: elem.currentTime
+            };
+        } catch (e) { return { event: event }; }
     }
 
     function pickApiClient() {
@@ -619,6 +708,7 @@ const INIT_SCRIPT: &str = r##"
     function subtitleStreamInfo(elem) {
         try {
             var api = pickApiClient();
+            diag('subtitle-metadata-scan', { hasApi: !!api, trackCount: elem && elem.textTracks ? elem.textTracks.length : 0 });
             var itemId = null;
             var mediaSourceId = null;
             var selected = null;
@@ -634,7 +724,7 @@ const INIT_SCRIPT: &str = r##"
             }
             if (!selected && tracks.length) selected = tracks[0];
             var subtitleUrl = selected && selected.src ? selected.src : null;
-            var m = (elem && (elem.currentSrc || elem.src || '')).match(/\\/Videos\\/([^/]+)/i);
+            var m = (elem && (elem.currentSrc || elem.src || '')).match(/\/Videos\/([^/]+)/i);
             if (m) itemId = m[1];
             var sourceMatch = (elem && (elem.currentSrc || elem.src || '')).match(/[?&]mediaSourceId=([^&]+)/i);
             if (sourceMatch) mediaSourceId = decodeURIComponent(sourceMatch[1]);
@@ -646,18 +736,87 @@ const INIT_SCRIPT: &str = r##"
                 var node = nodes[j];
                 var kind = (node.kind || '').toLowerCase();
                 if (kind && kind !== 'subtitles' && kind !== 'captions') continue;
+                var delivery = node.src || '';
+                if (delivery && delivery.indexOf('api_key=') === -1) {
+                    var token = accessToken();
+                    if (token) delivery += (delivery.indexOf('?') >= 0 ? '&' : '?') + 'api_key=' + encodeURIComponent(token);
+                }
                 subtitleTracks.push({
                     index: j,
                     title: node.label || '',
                     lang: node.srclang || '',
                     isExternal: true,
-                    deliveryUrl: node.src || '',
+                    deliveryUrl: delivery,
                     selected: node.default === true,
                     default: node.default === true
                 });
             }
             return { itemId: itemId, mediaSourceId: mediaSourceId, subtitleUrl: subtitleUrl, subtitleStreamId: null, subtitleTracks: subtitleTracks };
         } catch (e) { return {}; }
+    }
+
+    // Metadata derived from the captured PlaybackInfo response — the same data
+    // Jellyfin's web player uses, and what jellyfin-desktop feeds into its mpv
+    // player: poster URL (derived from the item), audio stream list, and the
+    // authoritative subtitle track list (absolute delivery URLs + api_key).
+    function playbackInfoMeta(elem) {
+        var meta = { posterUrl: null, audioTracks: [], subtitleTracks: [], subtitleStreamId: null };
+        try {
+            var src = null;
+            if (playbackInfo && playbackInfo.MediaSources && playbackInfo.MediaSources.length) {
+                src = playbackInfo.MediaSources[0];
+            }
+            var itemId = null;
+            var m = (elem && (elem.currentSrc || elem.src || '')).match(/\/Videos\/([^/]+)/i);
+            if (m) itemId = m[1];
+            if (itemId) {
+                var token = accessToken();
+                var base = serverOrigin();
+                meta.posterUrl = base + '/Items/' + itemId + '/Images/Primary?maxWidth=400&quality=90' + (token ? '&api_key=' + encodeURIComponent(token) : '');
+            }
+            if (src && Array.isArray(src.MediaStreams)) {
+                for (var i = 0; i < src.MediaStreams.length; i++) {
+                    var st = src.MediaStreams[i];
+                    if (!st || !st.Type) continue;
+                    if (st.Type === 'Audio') {
+                        meta.audioTracks.push({
+                            index: st.Index != null ? st.Index : i,
+                            title: st.DisplayTitle || st.Title || '',
+                            lang: st.Language || '',
+                            codec: st.Codec || '',
+                            isDefault: st.IsDefault === true
+                        });
+                    } else if (st.Type === 'Subtitle') {
+                        var isExt = st.IsExternal === true;
+                        var delivery = (st.DeliveryUrl || '').trim();
+                        if (delivery && delivery.indexOf('://') === -1) delivery = serverOrigin() + (delivery.charAt(0) === '/' ? '' : '/') + delivery;
+                        if (delivery && delivery.indexOf('api_key=') === -1) {
+                            var t2 = accessToken();
+                            if (t2) delivery += (delivery.indexOf('?') >= 0 ? '&' : '?') + 'api_key=' + encodeURIComponent(t2);
+                        }
+                        meta.subtitleTracks.push({
+                            index: st.Index != null ? st.Index : i,
+                            title: st.DisplayTitle || st.Title || '',
+                            lang: st.Language || '',
+                            codec: st.Codec || '',
+                            isExternal: isExt,
+                            deliveryUrl: isExt ? delivery : '',
+                            selected: st.IsDefault === true,
+                            default: st.IsDefault === true
+                        });
+                    }
+                }
+                if (src.DefaultSubtitleStreamIndex != null) {
+                    meta.subtitleStreamId = src.DefaultSubtitleStreamIndex;
+                    // IsDefault flags can be missing on remuxes; the server's
+                    // DefaultSubtitleStreamIndex is the authoritative pick.
+                    for (var k = 0; k < meta.subtitleTracks.length; k++) {
+                        meta.subtitleTracks[k].selected = meta.subtitleTracks[k].default = (meta.subtitleTracks[k].index === meta.subtitleStreamId);
+                    }
+                }
+            }
+        } catch (e) {}
+        return meta;
     }
 
     function accessToken() {
@@ -676,6 +835,67 @@ const INIT_SCRIPT: &str = r##"
             }
         } catch (e) {}
         return "";
+    }
+
+    // Chapter markers live on the item DTO (the web client requests
+    // Fields=Chapters when it loads playable items), not on the PlaybackInfo
+    // response — so remember chapters-bearing item responses and expose a
+    // bounded fallback fetch, guaranteeing the handoff payload carries
+    // chapter markers for the seek bar even on a cold handoff.
+    var chaptersByItem = {};
+    function rememberItemChapters(body) {
+        try {
+            if (!body || typeof body !== "object") return;
+            if (Array.isArray(body.Chapters) && body.Id) chaptersByItem[body.Id] = body.Chapters;
+            if (Array.isArray(body.Items)) {
+                for (var i = 0; i < body.Items.length; i++) rememberItemChapters(body.Items[i]);
+            }
+        } catch (e) {}
+    }
+    function chaptersFor(itemId) {
+        try {
+            var list = chaptersByItem[itemId];
+            return Array.isArray(list) && list.length ? list : null;
+        } catch (e) { return null; }
+    }
+    function currentUserId() {
+        try {
+            var api = pickApiClient();
+            if (api && typeof api.getCurrentUserId === "function") {
+                var u = api.getCurrentUserId();
+                if (u) return u;
+            }
+        } catch (e) {}
+        try {
+            var raw = localStorage.getItem("jellyfin_credentials");
+            if (raw) {
+                var list = JSON.parse(raw);
+                if (Array.isArray(list) && list[0] && list[0].UserId) return list[0].UserId;
+            }
+        } catch (e) {}
+        return "";
+    }
+    // Authoritative fallback: fetch the item DTO with Fields=Chapters directly
+    // (bounded), so chapter markers arrive even when the web client never
+    // prefetched them for the played item.
+    function fetchChapters(itemId, cb, timeoutMs) {
+        try {
+            var uid = currentUserId();
+            if (!itemId || !uid) { cb(null); return; }
+            var url = serverOrigin() + "/Users/" + encodeURIComponent(uid) + "/Items/" + encodeURIComponent(itemId) + "?Fields=Chapters";
+            var token = accessToken();
+            if (token) url += "&api_key=" + encodeURIComponent(token);
+            var settled = false;
+            var done = function (ch) { if (!settled) { settled = true; if (typeof cb === "function") cb(ch); } };
+            var timer = setTimeout(function () { done(null); }, timeoutMs || 700);
+            fetch(url).then(function (r) {
+                if (!r.ok) { clearTimeout(timer); done(null); return; }
+                return r.json();
+            }).then(function (b) {
+                clearTimeout(timer);
+                done(Array.isArray(b && b.Chapters) ? b.Chapters : null);
+            }).catch(function () { clearTimeout(timer); done(null); });
+        } catch (e) { cb(null); }
     }
 
     function isJellyfinStreamUrl(rawUrl) {
@@ -749,6 +969,7 @@ const INIT_SCRIPT: &str = r##"
 
     function captureMedia(elem, fromPlay) {
         if (!elem) return false;
+        diag('media-observed', describeMedia(elem, fromPlay ? 'play' : 'scan'));
         var src;
         try { src = elem.currentSrc || elem.src || ""; } catch (e) { src = ""; }
 
@@ -788,26 +1009,80 @@ const INIT_SCRIPT: &str = r##"
         lastSignalKey = key;
         lastSignalAt = now;
         elem.__ynotvSignaled = true;
-        signal({
-            url: built.url,
-            position_ticks: built.position_ticks,
-            title: itemTitle(),
-            item_id: subtitle.itemId,
-            media_source_id: subtitle.mediaSourceId,
-            subtitle_stream_id: subtitle.subtitleStreamId,
-            subtitle_url: subtitle.subtitleUrl,
-            subtitle_tracks: subtitle.subtitleTracks
-        });
+
+        // Merge PlaybackInfo-derived metadata (poster, audio/subtitle streams,
+        // default subtitle index) over the <track>-element fallback scrape, and
+        // ride the last diagnostics along so native console gets them without
+        // ever touching the title channel. Chapter markers come from the item
+        // DTO: prefer the in-page cache (the client prefetched Fields=Chapters
+        // when it loaded the item), falling back to a bounded authoritative
+        // fetch so the seek bar shows chapters even on a cold handoff. The
+        // element is already blanked and play() returns a pending promise, so
+        // Jellyfin's own player waits while we finish gathering metadata.
+        var meta = playbackInfoMeta(elem);
+        function finish(chapters) {
+            // The element may have moved on to another stream while the
+            // chapters fetch was in flight (e.g. next episode) — never signal
+            // a stale handoff for an abandoned element. IMPORTANT: blankMedia()
+            // wipes src/currentSrc, so the live element can never be compared
+            // against the captured URL; use the handled URL we recorded on the
+            // element instead.
+            var cur = elem.__ynotvLastSrc || "";
+            if (cur !== src || !elem.isConnected) return;
+            var diags = diagTail();
+            signal({
+                url: built.url,
+                position_ticks: built.position_ticks,
+                title: itemTitle(),
+                item_id: subtitle.itemId,
+                media_source_id: subtitle.mediaSourceId,
+                subtitle_stream_id: meta.subtitleStreamId != null ? meta.subtitleStreamId : subtitle.subtitleStreamId,
+                subtitle_url: subtitle.subtitleUrl,
+                subtitle_tracks: meta.subtitleTracks.length ? meta.subtitleTracks : subtitle.subtitleTracks,
+                poster_url: meta.posterUrl,
+                audio_tracks: meta.audioTracks,
+                chapters: Array.isArray(chapters) ? chapters : [],
+                diags: diags
+            });
+        }
+        var cached = chaptersFor(subtitle.itemId);
+        if (cached) {
+            finish(cached);
+        } else {
+            fetchChapters(subtitle.itemId, finish);
+        }
         return true;
     }
 
     function scanMedia(root) {
         var list;
         try { list = root.querySelectorAll ? root.querySelectorAll("video,audio") : []; } catch (e) { return; }
-        for (var i = 0; i < list.length; i++) captureMedia(list[i], false);
+        for (var i = 0; i < list.length; i++) { watchMediaElement(list[i]); captureMedia(list[i], false); }
+    }
+
+    function watchMediaElement(elem) {
+        if (!elem || elem.__ynotvObserved) return;
+        elem.__ynotvObserved = true;
+        var report = function (event) { diag('media-state', describeMedia(elem, event)); };
+        ['loadstart', 'loadedmetadata', 'durationchange', 'canplay', 'playing', 'pause', 'emptied', 'error'].forEach(function (name) {
+            try { elem.addEventListener(name, function () { report(name); }, { passive: true }); } catch (e) {}
+        });
+        try {
+            var desc = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'src');
+            if (desc && desc.set && !desc.set.__ynotvPatched) {
+                var originalSet = desc.set;
+                var wrappedSet = function (value) {
+                    diag('src-setter', { value: String(value || '') });
+                    return originalSet.call(this, value);
+                };
+                wrappedSet.__ynotvPatched = true;
+                Object.defineProperty(HTMLMediaElement.prototype, 'src', { configurable: desc.configurable, enumerable: desc.enumerable, get: desc.get, set: wrappedSet });
+            }
+        } catch (e) {}
     }
 
     function installDomWatcher() {
+        diag('dom-watcher-installed');
         scanMedia(document);
         var mo = null;
         try {
@@ -816,14 +1091,14 @@ const INIT_SCRIPT: &str = r##"
                     var m = muts[i];
                     if (m.type === "attributes") {
                         var t = m.target;
-                        if (t && (t.tagName === "VIDEO" || t.tagName === "AUDIO")) captureMedia(t, false);
+                        if (t && (t.tagName === "VIDEO" || t.tagName === "AUDIO")) { watchMediaElement(t); captureMedia(t, false); }
                         continue;
                     }
                     var nodes = m.addedNodes || [];
                     for (var j = 0; j < nodes.length; j++) {
                         var n = nodes[j];
                         if (!n || n.nodeType !== 1) continue;
-                        if (n.tagName === "VIDEO" || n.tagName === "AUDIO") captureMedia(n, false);
+                        if (n.tagName === "VIDEO" || n.tagName === "AUDIO") { watchMediaElement(n); captureMedia(n, false); }
                         scanMedia(n);
                     }
                 }
@@ -849,6 +1124,7 @@ const INIT_SCRIPT: &str = r##"
             var orig = HTMLMediaElement.prototype.play;
             if (!orig || orig.__ynotvPatched) return;
             var wrapper = function () {
+                diag('play-intercept', describeMedia(this, 'play-called'));
                 if (captureMedia(this, true)) {
                     this.__ynotvHandled = true;
                     return new Promise(function () {});
@@ -858,6 +1134,75 @@ const INIT_SCRIPT: &str = r##"
             wrapper.__ynotvPatched = true;
             HTMLMediaElement.prototype.play = wrapper;
         } catch (e) {}
+    })();
+
+    // Observe network calls used by Jellyfin to obtain PlaybackInfo/MediaStreams.
+    // This is diagnostics-only for now; the response remains untouched.
+    (function patchNetwork() {
+        // The latest PlaybackInfo response is stored (not just logged) so the
+        // handoff payload can carry the authoritative stream metadata.
+        function rememberPlaybackInfo(body) {
+            try {
+                if (!body || !body.MediaSources) return;
+                playbackInfo = body;
+                diag('playback-info-response', { sources: body.MediaSources.length, session: String(body.PlaySessionId || '').slice(0, 12) });
+            } catch (e) {}
+        }
+        try {
+            var originalFetch = window.fetch;
+            if (originalFetch && !originalFetch.__ynotvPatched) {
+                var wrappedFetch = function () {
+                    var request = arguments[0];
+                    var url = typeof request === 'string' ? request : (request && request.url) || '';
+                    if (/PlaybackInfo|Sessions\/Playing|Videos\/[^/]+\/stream/i.test(url)) diag('fetch', { url: url });
+                    return originalFetch.apply(this, arguments).then(function (response) {
+                        if (/PlaybackInfo/i.test(url)) {
+                            try { response.clone().json().then(rememberPlaybackInfo).catch(function () {}); } catch (e) {}
+                        } else if (/\/Items\/[^?/]+(?:\?|$)|[?&]Ids=/i.test(url)) {
+                            // Item DTO responses can carry the Chapters array
+                            // (Fields=Chapters is requested for playable items)
+                            // — remember them for the handoff payload.
+                            try { response.clone().json().then(rememberItemChapters).catch(function () {}); } catch (e) {}
+                        }
+                        return response;
+                    });
+                };
+                wrappedFetch.__ynotvPatched = true;
+                window.fetch = wrappedFetch;
+            }
+        } catch (e) { diag('fetch-patch-error', String(e)); }
+        try {
+            var originalOpen = XMLHttpRequest.prototype.open;
+            if (originalOpen && !originalOpen.__ynotvPatched) {
+                var wrappedOpen = function (method, url) {
+                    var u = String(url || '');
+                    if (/PlaybackInfo|Sessions\/Playing|Videos\/[^/]+\/stream/i.test(u)) diag('xhr-open', { method: method, url: u });
+                    var result = originalOpen.apply(this, arguments);
+                    if (/PlaybackInfo/i.test(u)) {
+                        try {
+                            var self = this;
+                            this.addEventListener('loadend', function () {
+                                try {
+                                    if (self.responseText) rememberPlaybackInfo(JSON.parse(self.responseText));
+                                } catch (e) {}
+                            });
+                        } catch (e) {}
+                    } else if (/\/Items\/[^?/]+(?:\?|$)|[?&]Ids=/i.test(u)) {
+                        try {
+                            var self2 = this;
+                            this.addEventListener('loadend', function () {
+                                try {
+                                    if (self2.responseText) rememberItemChapters(JSON.parse(self2.responseText));
+                                } catch (e) {}
+                            });
+                        } catch (e) {}
+                    }
+                    return result;
+                };
+                wrappedOpen.__ynotvPatched = true;
+                XMLHttpRequest.prototype.open = wrappedOpen;
+            }
+        } catch (e) { diag('xhr-patch-error', String(e)); }
     })();
 
     window.__ynotvJfReenable = function () {

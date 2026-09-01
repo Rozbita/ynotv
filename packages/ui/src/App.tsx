@@ -1912,6 +1912,9 @@ function useTmdbPresencePoster(
             jellyfinMediaSourceId: payload.mediaSourceId,
             jellyfinSubtitleStreamId: payload.subtitleStreamId,
             jellyfinSubtitleTracks: payload.subtitleTracks,
+            posterUrl: payload.posterUrl,
+            jellyfinAudioTracks: payload.audioTracks,
+            jellyfinChapters: payload.chapters,
           },
           () => {
             setPlaybackSourceView('jellyfin');

@@ -2405,7 +2405,21 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
 
     if (Bridge.getIsCasting?.()) {
       Bridge.setCastMetadata(info.title, info.type || 'VOD');
-    }      const result = await tryLoadWithFallbacks(resolved.url, false, resolved.userAgent);
+    }
+
+    // Jellyfin: apply the default subtitle stream (from PlaybackInfo) to the
+    // direct-play URL so embedded subtitle tracks arrive pre-selected.
+    let jellyfinPlayUrl = resolved.url;
+    if (info.source_id === 'jellyfin' && info.jellyfinSubtitleStreamId != null) {
+      try {
+        const u = new URL(jellyfinPlayUrl);
+        u.searchParams.set('SubtitleStreamIndex', String(info.jellyfinSubtitleStreamId));
+        jellyfinPlayUrl = u.toString();
+      } catch {
+        // Keep the original stream URL if it cannot be augmented.
+      }
+    }
+    const result = await tryLoadWithFallbacks(jellyfinPlayUrl, false, resolved.userAgent);
       if (!result.success) {
       setIgnoreHttpErrors(false);
       setError(translateNativeError(result.error) || i18n.t('player:failedToLoadStream'));

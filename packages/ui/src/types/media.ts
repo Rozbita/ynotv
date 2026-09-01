@@ -81,4 +81,18 @@ export interface VodPlayInfo {
     selected?: boolean;
     default?: boolean;
   }>;
+  // Audio stream list from the Jellyfin PlaybackInfo response (jellyfin-desktop style).
+  jellyfinAudioTracks?: Array<{
+    index: number;
+    title?: string;
+    lang?: string;
+    codec?: string;
+    isDefault?: boolean;
+  }>;
+  // Chapter markers from the Jellyfin item DTO (Fields=Chapters), rendered as
+  // ticks on the seek bar. startPositionTicks are 100ns units (div by 1e7 = secs).
+  jellyfinChapters?: Array<{
+    startPositionTicks?: number;
+    name?: string;
+  }>;
 }

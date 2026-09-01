@@ -695,6 +695,18 @@ export function NowPlayingBar({
   const vodProgress = duration > 0 ? (position / duration) * 100 : 0;
   const vodRemaining = duration - position;
 
+  // Jellyfin chapter markers (item DTO Chapters, carried through VodPlayInfo)
+  // positioned as ticks on the VOD seek bar. startPositionTicks are 100ns units.
+  const chapterMarkers =
+    isVod && duration > 0 && vodInfo?.jellyfinChapters?.length
+      ? vodInfo.jellyfinChapters
+          .map((c) => {
+            const secs = (c.startPositionTicks ?? 0) / 1e7;
+            return { name: c.name, secs, pct: (secs / duration) * 100 };
+          })
+          .filter((c) => c.pct > 0.3 && c.pct < 99.7)
+      : [];
+
   return (
     <div
       className={`now-playing-bar ${isClean ? 'clean-design' : ''} ${visible ? 'visible' : 'hidden'}`}
@@ -741,6 +753,14 @@ export function NowPlayingBar({
                     className="npb-clean-scrubber-handle"
                     style={{ left: `${isVod || isCatchup ? vodProgress : (timeshiftState ? Math.max(0, Math.min(100, ((timeshiftState.timePos - timeshiftState.cacheStart) / timeshiftState.cachedDuration) * 100)) : progress)}%` }}
                   />
+                  {chapterMarkers.map((c, i) => (
+                    <div
+                      key={`ch${i}`}
+                      className="npb-chapter-marker"
+                      style={{ left: `${c.pct}%` }}
+                      title={`${c.name || 'Chapter'} · ${formatTime(c.secs)}`}
+                    />
+                  ))}
                   {isHovering && !isDragging && (
                     <div
                       className="npb-time-tooltip"
@@ -1224,6 +1244,14 @@ export function NowPlayingBar({
                       className={`npb-scrubber-handle ${isDragging ? 'dragging' : ''}`}
                       style={{ left: `${vodProgress}%` }}
                     />
+                    {chapterMarkers.map((c, i) => (
+                      <div
+                        key={`ch${i}`}
+                        className="npb-chapter-marker"
+                        style={{ left: `${c.pct}%` }}
+                        title={`${c.name || 'Chapter'} · ${formatTime(c.secs)}`}
+                      />
+                    ))}
                     {isHovering && !isDragging && (
                       <div
                         className="npb-time-tooltip"

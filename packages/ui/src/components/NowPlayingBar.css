@@ -888,6 +888,19 @@
   pointer-events: none;
 }
 
+/* Jellyfin chapter markers (item DTO Chapters) on the VOD seek bar */
+.npb-chapter-marker {
+  position: absolute;
+  top: -2px;
+  width: 2px;
+  height: calc(100% + 4px);
+  background: var(--npb-chapter-marker-bg, rgba(255, 255, 255, 0.6));
+  border-radius: 1px;
+  box-shadow: var(--npb-chapter-marker-shadow, 0 0 3px rgba(0, 0, 0, 0.45));
+  pointer-events: none;
+  z-index: 1;
+}
+
 /* Mode toggle buttons (TimeShift ↔ EPG Catchup) */
 .npb-scrub-mode-btn {
   padding: 3px 10px;

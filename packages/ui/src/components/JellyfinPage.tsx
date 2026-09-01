@@ -49,6 +49,22 @@ export interface JellyfinPlayPayload {
     selected?: boolean;
     default?: boolean;
   }>;
+  // Derived from the Jellyfin PlaybackInfo response (jellyfin-desktop-style
+  // metadata handoff): poster for the Now Playing bar + audio stream list.
+  posterUrl?: string;
+  audioTracks?: Array<{
+    index: number;
+    title?: string;
+    lang?: string;
+    codec?: string;
+    isDefault?: boolean;
+  }>;
+  // Chapter markers from the item DTO (Fields=Chapters), rendered as ticks on
+  // the ynoTV seek bar. Ticks are 100ns units (StartPositionTicks / 1e7 = secs).
+  chapters?: Array<{
+    startPositionTicks?: number;
+    name?: string;
+  }>;
 }
 
 interface JellyfinPageProps {
@@ -213,10 +229,14 @@ export function JellyfinPage({ visible, onPlay }: JellyfinPageProps) {
   // re-arm Jellyfin's own web player so the page stays usable.
   useEffect(() => {
     let unlisten: (() => void) | undefined;
+    let unlistenDiag: (() => void) | undefined;
     let disposed = false;
     import('@tauri-apps/api/event')
       .then(async ({ listen }) => {
         if (disposed) return;
+        unlistenDiag = await listen('jellyfin:bridge-diagnostic', (e: any) => {
+          console.info('[Jellyfin bridge]', e.payload);
+        });
         unlisten = await listen('jellyfin:play', async (e: any) => {
           const payload = (e.payload || {}) as JellyfinPlayPayload;
           if (!payload.url) return;
@@ -251,6 +271,7 @@ export function JellyfinPage({ visible, onPlay }: JellyfinPageProps) {
     return () => {
       disposed = true;
       unlisten?.();
+      unlistenDiag?.();
     };
   }, []);
 
