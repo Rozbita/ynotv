@@ -1995,22 +1995,28 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
 
       if (embeddedSubTracks.length > 0) {
         // Calculate 1-based relative index among non-external subtitle streams (matching jellyfin-desktop)
+        let foundInMeta = false;
         let relIndex = 1;
         for (const st of metaTracks) {
           if (st.isExternal) continue;
-          if (st.index === targetSubId) break;
+          if (st.index === targetSubId) {
+            foundInMeta = true;
+            break;
+          }
           relIndex++;
         }
 
-        // Match by 1-based relative index among embedded tracks
-        const matchByRel = embeddedSubTracks[relIndex - 1] || embeddedSubTracks.find((t: any) => t.id === relIndex);
-        if (matchByRel?.id != null) {
-          logInfo(`[Jellyfin] Selected embedded subtitle track by relative index: track ${matchByRel.id} (relIndex ${relIndex}, stream ${targetSubId})`);
-          await Bridge.setSubtitleTrack(matchByRel.id).catch(() => {});
-          return true;
+        // Match by 1-based relative index among embedded tracks if found in PlaybackInfo stream list
+        if (foundInMeta && embeddedSubTracks[relIndex - 1]) {
+          const matchByRel = embeddedSubTracks[relIndex - 1];
+          if (matchByRel?.id != null) {
+            logInfo(`[Jellyfin] Selected embedded subtitle track by relative index: track ${matchByRel.id} (relIndex ${relIndex}, stream ${targetSubId})`);
+            await Bridge.setSubtitleTrack(matchByRel.id).catch(() => {});
+            return true;
+          }
         }
 
-        // Fallback: match by language or title
+        // Fallback 1: match by language or title from metadata
         if (pickedMeta) {
           const wantLang = (pickedMeta.lang || '').toLowerCase();
           const wantTitle = (pickedMeta.title || '').toLowerCase();
@@ -2022,6 +2028,16 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
           if (match?.id != null) {
             logInfo(`[Jellyfin] Selected embedded subtitle track by metadata match: track ${match.id} (${wantLang || wantTitle})`);
             await Bridge.setSubtitleTrack(match.id).catch(() => {});
+            return true;
+          }
+        }
+
+        // Fallback 2: if targetSubId is a 1-based relative index within range
+        if (targetSubId > 0 && targetSubId <= embeddedSubTracks.length) {
+          const directMatch = embeddedSubTracks[targetSubId - 1];
+          if (directMatch?.id != null) {
+            logInfo(`[Jellyfin] Selected embedded subtitle track by direct index fallback: track ${directMatch.id} (relIndex ${targetSubId})`);
+            await Bridge.setSubtitleTrack(directMatch.id).catch(() => {});
             return true;
           }
         }

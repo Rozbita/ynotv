@@ -1890,7 +1890,9 @@ function useTmdbPresencePoster(
     }
 
     if (isJellyfin) {
-      void jellyfinEmbedNotifyPlaybackEnded().catch(() => {});
+      const pos = positionRef.current;
+      const ticks = pos > 0 ? Math.round(pos * 10000000) : undefined;
+      await jellyfinEmbedNotifyPlaybackEnded(ticks).catch(() => {});
     }
 
     await handleStopRaw();

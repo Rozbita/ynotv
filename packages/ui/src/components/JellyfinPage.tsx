@@ -201,7 +201,6 @@ export function JellyfinPage({ visible, onPlay }: JellyfinPageProps) {
             await jellyfinEmbedResize(bounds).catch(() => {});
           }
           await jellyfinEmbedSetVisible(true).catch(() => {});
-          await jellyfinEmbedNotifyPlaybackEnded().catch(() => {});
         } else {
           const delays = [120, 400, 1000];
           const openAttempt = (attempt: number) => {
