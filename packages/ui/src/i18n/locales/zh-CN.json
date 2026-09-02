@@ -372,6 +372,12 @@
     "programsCount_many": "{{count}} 个节目",
     "programsCount_two": "{{count}} 个节目",
     "programsCount_zero": "{{count}} 个节目",
+    "daysCount_one": "{{count}} 天",
+    "daysCount_other": "{{count}} 天",
+    "daysCount_few": "{{count}} 天",
+    "daysCount_many": "{{count}} 天",
+    "daysCount_two": "{{count}} 天",
+    "daysCount_zero": "{{count}} 天",
     "resultsCount_few": "{{count}} 个结果",
     "resultsCount_many": "{{count}} 个结果",
     "resultsCount_two": "{{count}} 个结果",
@@ -2566,6 +2572,7 @@
   "time": {
     "today": "今天",
     "tomorrow": "明天",
+    "yesterday": "昨天",
     "neverSynced": "从未同步",
     "justNow": "刚刚",
     "minuteAgo_one": "{{count}} 分钟前",
@@ -3635,7 +3642,10 @@
     "noChannelsStartingWith": "没有以 {{letter}} 开头的频道",
     "adultChannel": "成人频道",
     "addToFavorites": "添加到收藏",
-    "removeFromFavorites": "从收藏中移除"
+    "removeFromFavorites": "从收藏中移除",
+    "viewAllPrograms": "查看所有节目",
+    "viewAllCatchup": "回看",
+    "viewAllTip": "右键单击任意节目可进行录制、回看或加入观看列表。"
   },
   "nuvio": {
     "addons": "附加组件",

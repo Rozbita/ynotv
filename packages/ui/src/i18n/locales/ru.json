@@ -374,6 +374,12 @@
     "resultsCount_many": "{{count}} результатов",
     "programsCount_two": "{{count}} программы",
     "programsCount_zero": "{{count}} программы",
+    "daysCount_one": "{{count}} день",
+    "daysCount_other": "{{count}} дней",
+    "daysCount_few": "{{count}} дня",
+    "daysCount_many": "{{count}} дней",
+    "daysCount_two": "{{count}} дня",
+    "daysCount_zero": "{{count}} дня",
     "resultsCount_two": "{{count}} результата",
     "resultsCount_zero": "{{count}} результата",
     "syncPerformanceNote": "Во время синхронизации производительность может быть ниже."
@@ -2566,6 +2572,7 @@
   "time": {
     "today": "Сегодня",
     "tomorrow": "Завтра",
+    "yesterday": "Вчера",
     "neverSynced": "Никогда не синхронизировано",
     "justNow": "Только что",
     "minuteAgo_one": "{{count}} минуту назад",
@@ -3635,7 +3642,10 @@
     "noChannelsStartingWith": "Каналов, начинающихся с {{letter}}, нет",
     "adultChannel": "Канал для взрослых",
     "addToFavorites": "Добавить в избранное",
-    "removeFromFavorites": "Удалить из избранного"
+    "removeFromFavorites": "Удалить из избранного",
+    "viewAllPrograms": "Показать все программы",
+    "viewAllCatchup": "Догоняющий просмотр",
+    "viewAllTip": "Щёлкните правой кнопкой по любой программе, чтобы увидеть варианты записи, догоняющего просмотра или списка просмотра."
   },
   "nuvio": {
     "addons": "Аддоны",

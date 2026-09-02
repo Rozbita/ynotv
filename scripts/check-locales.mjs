@@ -213,6 +213,9 @@ const UNTRANSLATED_ALLOWLIST = new Set([
   'fr:settings.livetv.logos.defaultBgAuto', 'hr:settings.livetv.logos.defaultBgAuto',
   'it:settings.livetv.logos.defaultBgAuto', 'nl:settings.livetv.logos.defaultBgAuto',
   'pl:settings.livetv.logos.defaultBgAuto', 'sq:settings.livetv.logos.defaultBgAuto',
+  // per-locale exceptions: de/el/pl keep the English loanword "Catch-up"
+  // (their player.catchup / settings.playback.tabs.catchup are identical too)
+  'de:live.viewAllCatchup', 'el:live.viewAllCatchup', 'pl:live.viewAllCatchup',
   // per-locale exceptions: "Normal"/"Compact" size labels are universal loanwords
   'de:settings.controllers.remoteCustomizer.buttonSizeNormal',
   'de:settings.controllers.remoteCustomizer.centerSizeNormal',

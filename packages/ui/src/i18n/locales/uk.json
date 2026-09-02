@@ -374,6 +374,12 @@
     "resultsCount_many": "{{count}} результатів",
     "programsCount_two": "{{count}} програми",
     "programsCount_zero": "{{count}} програми",
+    "daysCount_one": "{{count}} день",
+    "daysCount_other": "{{count}} днів",
+    "daysCount_few": "{{count}} дня",
+    "daysCount_many": "{{count}} днів",
+    "daysCount_two": "{{count}} дня",
+    "daysCount_zero": "{{count}} дня",
     "resultsCount_two": "{{count}} результату",
     "resultsCount_zero": "{{count}} результату",
     "syncPerformanceNote": "Під час синхронізації продуктивність може бути повільнішою."
@@ -2566,6 +2572,7 @@
   "time": {
     "today": "Сьогодні",
     "tomorrow": "Завтра",
+    "yesterday": "Вчора",
     "neverSynced": "Ніколи не синхронізовано",
     "justNow": "Тільки що",
     "minuteAgo_one": "{{count}} хвилину назад",
@@ -3635,7 +3642,10 @@
     "noChannelsStartingWith": "Каналів, починаються з {{letter}}, ні",
     "adultChannel": "Канал для взросліх",
     "addToFavorites": "Додати в обране",
-    "removeFromFavorites": "Видалити з обраного"
+    "removeFromFavorites": "Видалити з обраного",
+    "viewAllPrograms": "Показати всі програми",
+    "viewAllCatchup": "Наздогін перегляд",
+    "viewAllTip": "Клацніть правою кнопкою на будь-якій програмі для параметрів запису, наздогін-перегляду або списку перегляду."
   },
   "nuvio": {
     "addons": "Аддони",

@@ -372,6 +372,12 @@
     "programsCount_many": "{{count}} programmi",
     "programsCount_two": "{{count}} programmi",
     "programsCount_zero": "{{count}} programmi",
+    "daysCount_one": "{{count}} giorno",
+    "daysCount_other": "{{count}} giorni",
+    "daysCount_few": "{{count}} giorni",
+    "daysCount_many": "{{count}} giorni",
+    "daysCount_two": "{{count}} giorni",
+    "daysCount_zero": "{{count}} giorni",
     "resultsCount_few": "{{count}} risultati",
     "resultsCount_many": "{{count}} risultati",
     "resultsCount_two": "{{count}} risultati",
@@ -2566,6 +2572,7 @@
   "time": {
     "today": "Oggi",
     "tomorrow": "Domani",
+    "yesterday": "Ieri",
     "neverSynced": "Mai sincronizzato",
     "justNow": "Adesso",
     "minuteAgo_one": "{{count}} minuto fa",
@@ -3635,7 +3642,10 @@
     "noChannelsStartingWith": "Nessun canale che inizia con {{letter}}",
     "adultChannel": "Canale adulto",
     "addToFavorites": "Aggiungi ai preferiti",
-    "removeFromFavorites": "Rimuovi dai preferiti"
+    "removeFromFavorites": "Rimuovi dai preferiti",
+    "viewAllPrograms": "Visualizza tutti i programmi",
+    "viewAllCatchup": "Recupero",
+    "viewAllTip": "Fai clic con il tasto destro su un programma per le opzioni di registrazione, recupero o lista di visione."
   },
   "nuvio": {
     "addons": "Addon",

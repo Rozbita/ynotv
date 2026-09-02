@@ -373,6 +373,12 @@
     "programsCount_many": "{{count}} programa",
     "programsCount_two": "{{count}} programa",
     "programsCount_zero": "{{count}} programa",
+    "daysCount_one": "{{count}} dan",
+    "daysCount_other": "{{count}} dana",
+    "daysCount_few": "{{count}} dana",
+    "daysCount_many": "{{count}} dana",
+    "daysCount_two": "{{count}} dana",
+    "daysCount_zero": "{{count}} dana",
     "resultsCount_many": "{{count}} rezultata",
     "resultsCount_two": "{{count}} rezultata",
     "resultsCount_zero": "{{count}} rezultata",
@@ -2566,6 +2572,7 @@
   "time": {
     "today": "Danas",
     "tomorrow": "Sutra",
+    "yesterday": "Juče",
     "neverSynced": "Nikada sinhronizovano",
     "justNow": "Upravo sada",
     "minuteAgo_one": "pre {{count}} minut",
@@ -3635,7 +3642,10 @@
     "noChannelsStartingWith": "Nema kanala koji počinju sa {{letter}}",
     "adultChannel": "Kanali za odrasle",
     "addToFavorites": "Dodaj u omiljene",
-    "removeFromFavorites": "Ukloni iz omiljenih"
+    "removeFromFavorites": "Ukloni iz omiljenih",
+    "viewAllPrograms": "Prikaži sve programe",
+    "viewAllCatchup": "Nadoknada",
+    "viewAllTip": "Kliknite desnim tasterom na bilo koji program za opcije snimanja, nadoknade ili liste za gledanje."
   },
   "nuvio": {
     "addons": "Dodaci",

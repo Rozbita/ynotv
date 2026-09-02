@@ -372,6 +372,12 @@
     "programsCount_many": "{{count}} برنامه",
     "programsCount_two": "{{count}} برنامه",
     "programsCount_zero": "{{count}} برنامه",
+    "daysCount_one": "{{count}} روز",
+    "daysCount_other": "{{count}} روز",
+    "daysCount_few": "{{count}} روز",
+    "daysCount_many": "{{count}} روز",
+    "daysCount_two": "{{count}} روز",
+    "daysCount_zero": "{{count}} روز",
     "resultsCount_few": "{{count}} نتیجه",
     "resultsCount_many": "{{count}} نتیجه",
     "resultsCount_two": "{{count}} نتیجه",
@@ -2566,6 +2572,7 @@
   "time": {
     "today": "امروز",
     "tomorrow": "فردا",
+    "yesterday": "دیروز",
     "neverSynced": "هرگز همگام نشده",
     "justNow": "هم‌اکنون",
     "minuteAgo_one": "{{count}} دقیقه پیش",
@@ -3635,7 +3642,10 @@
     "noChannelsStartingWith": "کانالی که با {{letter}} شروع شود یافت نشد",
     "adultChannel": "کانال بزرگسالان",
     "addToFavorites": "افزودن به موردعلاقه‌ها",
-    "removeFromFavorites": "حذف از موردعلاقه‌ها"
+    "removeFromFavorites": "حذف از موردعلاقه‌ها",
+    "viewAllPrograms": "مشاهده همه برنامه‌ها",
+    "viewAllCatchup": "درحال‌پیگیری",
+    "viewAllTip": "برای گزینه‌های ضبط، پیگیری یا فهرست تماشا روی هر برنامه کلیک راست کنید."
   },
   "nuvio": {
     "addons": "افزونه‌ها",

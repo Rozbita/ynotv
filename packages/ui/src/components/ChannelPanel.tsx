@@ -16,6 +16,7 @@ import { ChannelManager } from './settings/ChannelManager';
 import { FavoriteManager } from './settings/FavoriteManager';
 import { CustomGroupManager } from './CustomGroupManager';
 import { FailoverGroupListModal } from './FailoverGroupListModal';
+import { ViewAllProgramsModal } from './ViewAllProgramsModal';
 import { PlaylistListModal } from './PlaylistListModal';
 
 import { useChannelSortOrder, useEpgView, useEpgVisibleHours, useEpgClockFormat, useEpgShowDate, useUIStore, useEpgThreeColumn } from '../stores/uiStore';
@@ -27,6 +28,7 @@ import { db } from '../db';
 import { matchesSearch } from '../utils/searchNormalization';
 import { decompressEpgDescription } from '../utils/compression';
 import { formatTime, formatDate } from '../utils/dateTime';
+import { pickCurrentProgram, EPG_WINDOW_BACK_MS, EPG_WINDOW_FWD_MS } from '../utils/epgTime';
 import { useTranslation } from 'react-i18next';
 import i18n from '../i18n';
 
@@ -2078,6 +2080,9 @@ export function ChannelPanel({
   // "Catch-up Programs" toggle for the 3-column schedule list — catchup
   // channels can look further back than the default 1-hour window.
   const [altScheduleShowOlder, setAltScheduleShowOlder] = useState(false);
+  // "View All Programs" modal for the 3-column toolbar — shows every program
+  // the DB has for the selected channel across per-day tabs.
+  const [viewAllProgramsOpen, setViewAllProgramsOpen] = useState(false);
   // Full catch-up history for the selected channel, fetched on demand while
   // the toggle is active so the schedule shows ALL past programs instead of
   // only the ones inside the loaded EPG window.
@@ -2085,8 +2090,15 @@ export function ChannelPanel({
   // How many past programs to load for a channel's full catch-up history and
   // how many total rows the schedule can render. The list is virtualized, so
   // hundreds/thousands of rows only mount a visible window and stay smooth.
-  const CATCHUP_HISTORY_LIMIT = 1000;
   const ALT_SCHEDULE_MAX_ROWS = 1000;
+  // Catch-up history window: 90 days back covers any realistic archive
+  // retention; the +14h forward margin prevents offset-formatted timestamps
+  // (utils/epgTime.ts) from failing the `end < now` string comparison. The JS
+  // side filters to genuinely ended rows and sorts by parsed time.
+  const CATCHUP_WINDOW_BACK_MS = 90 * 24 * 60 * 60 * 1000;
+  const CATCHUP_WINDOW_FWD_MS = 14 * 60 * 60 * 1000;
+  // SQL safety cap — far above what a single channel holds within the window.
+  const CATCHUP_SQL_LIMIT = 4000;
 
   useEffect(() => {
     if (!altScheduleShowOlder || !selectedChannel) {
@@ -2097,13 +2109,18 @@ export function ChannelPanel({
     (async () => {
       try {
         const dbInstance = await (db as any).dbPromise;
+        const nowMs = currentTime.getTime();
         const rows = await dbInstance.select(
           `SELECT * FROM programs_effective
            WHERE stream_id = ?
-             AND end <= ?
-           ORDER BY start DESC
-           LIMIT ${CATCHUP_HISTORY_LIMIT}`,
-          [selectedChannel.stream_id, currentTime.toISOString()]
+             AND end < ?
+             AND end > ?
+           LIMIT ${CATCHUP_SQL_LIMIT}`,
+          [
+            selectedChannel.stream_id,
+            new Date(nowMs + CATCHUP_WINDOW_FWD_MS).toISOString(),
+            new Date(nowMs - CATCHUP_WINDOW_BACK_MS).toISOString(),
+          ]
         ) as StoredProgram[];
         if (cancelled) return;
         setAltScheduleHistory(rows.map((p) => ({
@@ -2124,10 +2141,61 @@ export function ChannelPanel({
     const d = new Date(date);
     const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
     const diffDays = Math.round((startOfDay(currentTime) - startOfDay(d)) / 86400000);
-    if (diffDays === 0) return i18n.t('common:today', { defaultValue: 'Today' });
-    if (diffDays === 1) return i18n.t('common:yesterday', { defaultValue: 'Yesterday' });
+    if (diffDays === 0) return i18n.t('time:today', { defaultValue: 'Today' });
+    if (diffDays === 1) return i18n.t('time:yesterday', { defaultValue: 'Yesterday' });
     return formatDate(d, { month: 'short', day: 'numeric' });
   }, [currentTime]);
+
+  // The currently-airing program fetched straight from the DB when it falls
+  // outside the lazy-loaded EPG window (e.g. a long movie/event that started
+  // before loadStart). The schedule memo uses it as the anchor row so the
+  // running show is always at the top no matter when it started.
+  const [altScheduleRunning, setAltScheduleRunning] = useState<StoredProgram | null>(null);
+  useEffect(() => {
+    if (!selectedChannel) {
+      setAltScheduleRunning(null);
+      return;
+    }
+    const channelPrograms = programs.get(selectedChannel.stream_id) || [];
+    const nowMs = Date.now();
+    const hasRunning = channelPrograms.some((p) => {
+      const s = p.start instanceof Date ? p.start.getTime() : new Date(p.start).getTime();
+      const e = p.end instanceof Date ? p.end.getTime() : new Date(p.end).getTime();
+      return s <= nowMs && e > nowMs;
+    });
+    // The loaded window already covers the running program — no extra query.
+    if (hasRunning) {
+      setAltScheduleRunning(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const dbInstance = await (db as any).dbPromise;
+        // Stored EPG timestamps mix "Z" and offset formats, so string
+        // comparisons against an ISO "now" are unreliable (see utils/epgTime.ts).
+        // Follow the app-wide pattern: fetch a generous window and pick the
+        // running program in JS with pickCurrentProgram.
+        const fromIso = new Date(nowMs - EPG_WINDOW_BACK_MS).toISOString();
+        const toIso = new Date(nowMs + EPG_WINDOW_FWD_MS).toISOString();
+        const rows = await dbInstance.select(
+          `SELECT * FROM programs_effective
+           WHERE stream_id = ? AND start < ? AND end > ?`,
+          [selectedChannel.stream_id, toIso, fromIso]
+        ) as StoredProgram[];
+        if (cancelled) return;
+        const p = pickCurrentProgram(rows, nowMs);
+        setAltScheduleRunning(
+          p ? { ...p, description: decompressEpgDescription(p.description) ?? p.description } : null
+        );
+      } catch (err) {
+        // Best-effort: if the direct fetch fails the list just starts at the
+        // first upcoming program, same as before.
+        if (!cancelled) setAltScheduleRunning(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedChannel?.stream_id, programs]);
 
   // Alternate view: the schedule for the selected channel (current + upcoming
   // programs within the EPG window), used by the 3-column info pane.
@@ -2147,28 +2215,54 @@ export function ChannelPanel({
     let past: ReturnType<typeof toEntry>[];
     if (altScheduleShowOlder && altScheduleHistory) {
       // Catch-up mode: ALL past programs from the DB, not just the loaded window.
+      // The SQL fetch used a forward margin to survive mixed timestamp formats;
+      // drop anything that hasn't actually ended yet.
       past = altScheduleHistory
         .map(toEntry)
-        .filter((x) => Number.isFinite(x.startMs) && Number.isFinite(x.endMs));
+        .filter(
+          (x) =>
+            Number.isFinite(x.startMs) &&
+            Number.isFinite(x.endMs) &&
+            x.endMs <= now
+        );
     } else {
-      // Default: just the last hour of finished programs, so the list keeps
-      // "what just aired" context without pushing the current show down.
-      const LOOKBACK_MS = 60 * 60 * 1000;
-      past = entries.filter((x) => x.endMs <= now && x.endMs > now - LOOKBACK_MS);
+      // Default view: no previously-aired programs — the list starts at the
+      // running show and only shows it plus everything coming up.
+      past = [];
     }
 
     // Anchor the schedule on the currently airing program: the running show is
-    // always the first row (current → upcoming chronologically → past, most
-    // recent first), so the list starts at the live program instead of at
-    // whatever program happened to end within the lookback hour.
-    const current = entries.find((x) => x.startMs <= now && x.endMs > now) ?? null;
-    const upcoming = entries.filter((x) => x.startMs > now);
+    // the first row and upcoming programs follow chronologically. In Catch-up
+    // Programs mode the past programs are included directly beneath the current
+    // one (most recent first) — keeping them next to the current program also
+    // keeps the per-day group headers in `altScheduleDisplay` monotonic.
+    // Prefer the running program from the loaded window; fall back to the one
+    // fetched directly from the DB when it isn't inside the lazy-loaded window
+    // (e.g. a long movie that started before loadStart). Only honored while it
+    // is still airing — once it ends it drops out and the list resumes with the
+    // upcoming programs.
+    const current =
+      entries.find((x) => x.startMs <= now && x.endMs > now) ??
+      (altScheduleRunning
+        ? (() => {
+            const direct = toEntry(altScheduleRunning);
+            return direct.endMs > now ? direct : null;
+          })()
+        : null);
+    const upcoming = entries
+      .filter((x) => x.startMs > now)
+      .sort((a, b) => a.startMs - b.startMs);
+    const pastSorted = past.sort((a, b) => b.startMs - a.startMs);
+    // Reserve room so a huge catch-up history can never starve the upcoming
+    // programs — past rows are capped to whatever space remains after the
+    // current show and all upcoming programs.
+    const roomForPast = Math.max(0, ALT_SCHEDULE_MAX_ROWS - 1 - upcoming.length);
     return [
       ...(current ? [current] : []),
-      ...upcoming.sort((a, b) => a.startMs - b.startMs),
-      ...past.sort((a, b) => b.startMs - a.startMs),
+      ...pastSorted.slice(0, roomForPast),
+      ...upcoming,
     ].slice(0, ALT_SCHEDULE_MAX_ROWS);
-  }, [selectedChannel, programs, currentTime, altScheduleShowOlder, altScheduleHistory]);
+  }, [selectedChannel, programs, currentTime, altScheduleShowOlder, altScheduleHistory, altScheduleRunning]);
 
   type AltScheduleRowEntry = {
     program: StoredProgram;
@@ -3125,6 +3219,27 @@ export function ChannelPanel({
           end, which moved out of the strip header. */}
       <div className="guide-alt-toolbar">
         {renderGuideManageButtons()}
+        {/* View All Programs: opens the per-day modal showing every program the
+            DB has for this channel (past for catch-up, future for recording). */}
+        {selectedChannel && (
+          <button
+            className="guide-alt-schedule-toggle"
+            onClick={() => setViewAllProgramsOpen(true)}
+            title={i18n.t('live:viewAllPrograms', { defaultValue: 'View All Programs' })}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0 }}>
+              <line x1="8" y1="6" x2="21" y2="6" />
+              <line x1="8" y1="12" x2="21" y2="12" />
+              <line x1="8" y1="18" x2="21" y2="18" />
+              <line x1="3" y1="6" x2="3.01" y2="6" />
+              <line x1="3" y1="12" x2="3.01" y2="12" />
+              <line x1="3" y1="18" x2="3.01" y2="18" />
+            </svg>
+            <span className="btn-label">
+              {i18n.t('live:viewAllPrograms', { defaultValue: 'View All Programs' })}
+            </span>
+          </button>
+        )}
         {/* Catchup: expand the schedule history beyond the default lookback
             for channels with tv_archive (moved into the toolbar row). */}
         {selectedChannel && (Boolean(selectedChannel.tv_archive) || selectedChannel.tv_archive === 1) && (
@@ -4136,6 +4251,14 @@ export function ChannelPanel({
         currentOffset={currentEpgOffset}
         onClose={() => setShowEpgShiftModal(false)}
         onChange={handleEpgShiftChange}
+      />
+
+      {/* View All Programs Modal (3-column toolbar) */}
+      <ViewAllProgramsModal
+        isOpen={viewAllProgramsOpen}
+        channel={selectedChannel}
+        onClose={() => setViewAllProgramsOpen(false)}
+        onPlayCatchup={onPlayCatchup}
       />
 
       {/* Failover Group List Modal */}

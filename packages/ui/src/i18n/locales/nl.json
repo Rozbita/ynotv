@@ -372,6 +372,12 @@
     "programsCount_many": "{{count}} programma's",
     "programsCount_two": "{{count}} programma's",
     "programsCount_zero": "{{count}} programma's",
+    "daysCount_one": "{{count}} dag",
+    "daysCount_other": "{{count}} dagen",
+    "daysCount_few": "{{count}} dagen",
+    "daysCount_many": "{{count}} dagen",
+    "daysCount_two": "{{count}} dagen",
+    "daysCount_zero": "{{count}} dagen",
     "resultsCount_few": "{{count}} resultaten",
     "resultsCount_many": "{{count}} resultaten",
     "resultsCount_two": "{{count}} resultaten",
@@ -2566,6 +2572,7 @@
   "time": {
     "today": "Vandaag",
     "tomorrow": "Morgen",
+    "yesterday": "Gisteren",
     "neverSynced": "Nooit gesynchroniseerd",
     "justNow": "Zojuist",
     "minuteAgo_one": "{{count}} minuut geleden",
@@ -3635,7 +3642,10 @@
     "noChannelsStartingWith": "Geen kanalen die beginnen met {{letter}}",
     "adultChannel": "Volwassenenkanaal",
     "addToFavorites": "Aan favorieten toevoegen",
-    "removeFromFavorites": "Uit favorieten verwijderen"
+    "removeFromFavorites": "Uit favorieten verwijderen",
+    "viewAllPrograms": "Alle programma's weergeven",
+    "viewAllCatchup": "Inhaal",
+    "viewAllTip": "Rechtsklik op een programma voor opname-, inhaal- of kijklijstopties."
   },
   "nuvio": {
     "addons": "Addons",

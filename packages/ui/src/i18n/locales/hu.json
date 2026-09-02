@@ -372,6 +372,12 @@
     "programsCount_many": "{{count}} program",
     "programsCount_two": "{{count}} program",
     "programsCount_zero": "{{count}} program",
+    "daysCount_one": "{{count}} nap",
+    "daysCount_other": "{{count}} nap",
+    "daysCount_few": "{{count}} nap",
+    "daysCount_many": "{{count}} nap",
+    "daysCount_two": "{{count}} nap",
+    "daysCount_zero": "{{count}} nap",
     "resultsCount_few": "{{count}} találat",
     "resultsCount_many": "{{count}} találat",
     "resultsCount_two": "{{count}} találat",
@@ -2566,6 +2572,7 @@
   "time": {
     "today": "Ma",
     "tomorrow": "Holnap",
+    "yesterday": "Tegnap",
     "neverSynced": "Soha nem szinkronizálva",
     "justNow": "Épp most",
     "minuteAgo_one": "{{count}} perce",
@@ -3635,7 +3642,10 @@
     "noChannelsStartingWith": "Nincs {{letter}} betűvel kezdődő csatorna",
     "adultChannel": "Felnőtt csatorna",
     "addToFavorites": "Hozzáadás a kedvencekhez",
-    "removeFromFavorites": "Eltávolítás a kedvencekből"
+    "removeFromFavorites": "Eltávolítás a kedvencekből",
+    "viewAllPrograms": "Összes műsor megtekintése",
+    "viewAllCatchup": "Utólagos lejátszás",
+    "viewAllTip": "Kattintson jobb gombbal bármelyik műsorra a felvétel, az utólagos lejátszás vagy a figyelőlista beállításaihoz."
   },
   "nuvio": {
     "addons": "Kiegészítők",

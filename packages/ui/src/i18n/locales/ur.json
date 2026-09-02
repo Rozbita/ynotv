@@ -372,6 +372,12 @@
     "programsCount_many": "{{count}} پروگرام",
     "programsCount_two": "{{count}} پروگرام",
     "programsCount_zero": "{{count}} پروگرام",
+    "daysCount_one": "{{count}} دن",
+    "daysCount_other": "{{count}} دن",
+    "daysCount_few": "{{count}} دن",
+    "daysCount_many": "{{count}} دن",
+    "daysCount_two": "{{count}} دن",
+    "daysCount_zero": "{{count}} دن",
     "resultsCount_few": "{{count}} نتائج",
     "resultsCount_many": "{{count}} نتائج",
     "resultsCount_two": "{{count}} نتائج",
@@ -2566,6 +2572,7 @@
   "time": {
     "today": "آج",
     "tomorrow": "آنے والا کل",
+    "yesterday": "کل",
     "neverSynced": "کبھی سنک نہیں ہوا",
     "justNow": "ابھی ابھی",
     "minuteAgo_one": "{{count}} منٹ پہلے",
@@ -3635,7 +3642,10 @@
     "noChannelsStartingWith": "{{letter}} سے شروع ہونے والا کوئی چینل نہیں",
     "adultChannel": "بالغ چینل",
     "addToFavorites": "پسندیدہ میں شامل کریں",
-    "removeFromFavorites": "پسندیدہ سے ہٹائیں"
+    "removeFromFavorites": "پسندیدہ سے ہٹائیں",
+    "viewAllPrograms": "تمام پروگرام دیکھیں",
+    "viewAllCatchup": "کیچ اپ",
+    "viewAllTip": "ریکارڈنگ، کیچ اپ یا دیکھنے کی فہرست کے اختیارات کے لیے کسی بھی پروگرام پر دائیں کلک کریں۔"
   },
   "nuvio": {
     "addons": "ایڈونز",

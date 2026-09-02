@@ -372,6 +372,12 @@
     "programsCount_many": "{{count}} programe",
     "programsCount_two": "{{count}} programe",
     "programsCount_zero": "{{count}} programe",
+    "daysCount_one": "{{count}} ditë",
+    "daysCount_other": "{{count}} ditë",
+    "daysCount_few": "{{count}} ditë",
+    "daysCount_many": "{{count}} ditë",
+    "daysCount_two": "{{count}} ditë",
+    "daysCount_zero": "{{count}} ditë",
     "resultsCount_few": "{{count}} rezultate",
     "resultsCount_many": "{{count}} rezultate",
     "resultsCount_two": "{{count}} rezultate",
@@ -2566,6 +2572,7 @@
   "time": {
     "today": "Sot",
     "tomorrow": "Nesër",
+    "yesterday": "Dje",
     "neverSynced": "Kurrë i sinkronizuar",
     "justNow": "Pak më parë",
     "minuteAgo_one": "{{count}} minutë më parë",
@@ -3635,7 +3642,10 @@
     "noChannelsStartingWith": "Asnjë kanal që fillon me {{letter}}",
     "adultChannel": "Kanal për të rritur",
     "addToFavorites": "Shto te të preferuarat",
-    "removeFromFavorites": "Hiq nga të preferuarat"
+    "removeFromFavorites": "Hiq nga të preferuarat",
+    "viewAllPrograms": "Shiko të gjitha programet",
+    "viewAllCatchup": "Shikim me vonesë",
+    "viewAllTip": "Kliko me të djathtën mbi çdo program për opsionet e regjistrimit, shikimit me vonesë ose listës së shikimit."
   },
   "nuvio": {
     "addons": "Shtesat",

@@ -435,6 +435,12 @@
     "programsCount_many": "{{count}} chương trình",
     "programsCount_two": "{{count}} chương trình",
     "programsCount_zero": "{{count}} chương trình",
+    "daysCount_one": "{{count}} ngày",
+    "daysCount_other": "{{count}} ngày",
+    "daysCount_few": "{{count}} ngày",
+    "daysCount_many": "{{count}} ngày",
+    "daysCount_two": "{{count}} ngày",
+    "daysCount_zero": "{{count}} ngày",
     "resultsCount_few": "{{count}} kết quả",
     "resultsCount_many": "{{count}} kết quả",
     "resultsCount_two": "{{count}} kết quả",
@@ -710,7 +716,10 @@
     "noChannelsStartingWith": "Không có kênh nào bắt đầu bằng {{letter}}",
     "adultChannel": "Kênh người lớn",
     "addToFavorites": "Thêm vào yêu thích",
-    "removeFromFavorites": "Xóa khỏi yêu thích"
+    "removeFromFavorites": "Xóa khỏi yêu thích",
+    "viewAllPrograms": "Xem tất cả chương trình",
+    "viewAllCatchup": "Xem lại",
+    "viewAllTip": "Nhấp chuột phải vào bất kỳ chương trình nào để xem các tùy chọn ghi hình, xem lại hoặc danh sách xem."
   },
   "nuvio": {
     "addons": "Tiện Ích Bổ Sung",
@@ -1423,6 +1432,7 @@
   "time": {
     "today": "Hôm nay",
     "tomorrow": "Ngày mai",
+    "yesterday": "Hôm Qua",
     "neverSynced": "Chưa đồng bộ",
     "justNow": "Vừa xong",
     "minuteAgo_one": "{{count}} phút trước",

@@ -372,6 +372,12 @@
     "programsCount_few": "{{count}} برامج",
     "programsCount_many": "{{count}} برنامج",
     "programsCount_zero": "{{count}} برامج",
+    "daysCount_one": "{{count}} يوم",
+    "daysCount_other": "{{count}} يوم",
+    "daysCount_few": "{{count}} أيام",
+    "daysCount_many": "{{count}} يوما",
+    "daysCount_two": "{{count}} أيام",
+    "daysCount_zero": "{{count}} أيام",
     "resultsCount_two": "{{count}} النتائج",
     "resultsCount_few": "{{count}} نتائج",
     "resultsCount_many": "{{count}} نتيجة",
@@ -2566,6 +2572,7 @@
   "time": {
     "today": "اليوم",
     "tomorrow": "غدًا",
+    "yesterday": "أمس",
     "neverSynced": "لم تتم مزامنته أبدًا",
     "justNow": "الآن فقط",
     "minuteAgo_one": "قبل {{count}} دقيقة",
@@ -3635,7 +3642,10 @@
     "noChannelsStartingWith": "لا توجد قنوات تبدأ بـ {{letter}}",
     "adultChannel": "قناة للبالغين",
     "addToFavorites": "إضافة إلى المفضلة",
-    "removeFromFavorites": "إزالة من المفضلة"
+    "removeFromFavorites": "إزالة من المفضلة",
+    "viewAllPrograms": "عرض كل البرامج",
+    "viewAllCatchup": "البث المتأخر",
+    "viewAllTip": "انقر بزر الماوس الأيمن على أي برنامج لخيارات التسجيل أو البث المتأخر أو قائمة المشاهدة."
   },
   "nuvio": {
     "addons": "الإضافات",

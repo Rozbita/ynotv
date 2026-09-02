@@ -372,6 +372,12 @@
     "programsCount_many": "{{count}} προγράμματα",
     "programsCount_two": "{{count}} προγράμματα",
     "programsCount_zero": "{{count}} προγράμματα",
+    "daysCount_one": "{{count}} ημέρα",
+    "daysCount_other": "{{count}} ημέρες",
+    "daysCount_few": "{{count}} ημέρες",
+    "daysCount_many": "{{count}} ημέρες",
+    "daysCount_two": "{{count}} ημέρες",
+    "daysCount_zero": "{{count}} ημέρες",
     "resultsCount_few": "{{count}} αποτελέσματα",
     "resultsCount_many": "{{count}} αποτελέσματα",
     "resultsCount_two": "{{count}} αποτελέσματα",
@@ -2566,6 +2572,7 @@
   "time": {
     "today": "Σήμερα",
     "tomorrow": "Αύριο",
+    "yesterday": "Χθες",
     "neverSynced": "Δεν συγχρονίστηκε ποτέ",
     "justNow": "Μόλις τώρα",
     "minuteAgo_one": "{{count}} λεπτό πριν",
@@ -3635,7 +3642,10 @@
     "noChannelsStartingWith": "Κανένα κανάλι δεν ξεκινά με {{letter}}",
     "adultChannel": "Κανάλι ενηλίκων",
     "addToFavorites": "Προσθήκη στα αγαπημένα",
-    "removeFromFavorites": "Αφαίρεση από αγαπημένα"
+    "removeFromFavorites": "Αφαίρεση από αγαπημένα",
+    "viewAllPrograms": "Προβολή όλων των προγραμμάτων",
+    "viewAllCatchup": "Catch-up",
+    "viewAllTip": "Κάντε δεξί κλικ σε οποιοδήποτε πρόγραμμα για επιλογές εγγραφής, Catch-up ή λίστας παρακολούθησης."
   },
   "nuvio": {
     "addons": "Πρόσθετα",

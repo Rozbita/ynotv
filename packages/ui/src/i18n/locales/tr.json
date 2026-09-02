@@ -372,6 +372,12 @@
     "programsCount_many": "{{count}} program",
     "programsCount_two": "{{count}} program",
     "programsCount_zero": "{{count}} program",
+    "daysCount_one": "{{count}} gün",
+    "daysCount_other": "{{count}} gün",
+    "daysCount_few": "{{count}} gün",
+    "daysCount_many": "{{count}} gün",
+    "daysCount_two": "{{count}} gün",
+    "daysCount_zero": "{{count}} gün",
     "resultsCount_few": "{{count}} sonuç",
     "resultsCount_many": "{{count}} sonuç",
     "resultsCount_two": "{{count}} sonuç",
@@ -2566,6 +2572,7 @@
   "time": {
     "today": "Bugün",
     "tomorrow": "Yarın",
+    "yesterday": "Dün",
     "neverSynced": "Hiç senkronize edilmedi",
     "justNow": "Az önce",
     "minuteAgo_one": "{{count}} dakika önce",
@@ -3635,7 +3642,10 @@
     "noChannelsStartingWith": "{{letter}} ile başlayan kanal yok",
     "adultChannel": "Yetişkin kanalı",
     "addToFavorites": "Sık kullanılanlara ekle",
-    "removeFromFavorites": "Sık kullanılanlardan kaldır"
+    "removeFromFavorites": "Sık kullanılanlardan kaldır",
+    "viewAllPrograms": "Tüm Programları Görüntüle",
+    "viewAllCatchup": "Tekrar İzleme",
+    "viewAllTip": "Kayıt, tekrar izleme veya izleme listesi seçenekleri için herhangi bir programa sağ tıklayın."
   },
   "nuvio": {
     "addons": "Eklentiler",
