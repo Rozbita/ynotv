@@ -64,7 +64,8 @@ const BOOLEAN_KEYS = new Set([
   'autoBackupEnabled', 'streamingCatalogsEnabled', 'streamingNuvioCatalogsEnabled',
   'rpdbBackdropsEnabled', 'traktEnabled', 'traktScrobbleEnabled', 'traktSyncEnabled',
   'traktCatalogsBeforeAddon', 'traktNuvioCatalogsBeforeAddon', 'simklEnabled',
-  'simklScrobbleEnabled', 'tvCalendarAutoSync', 'showAllChannels', 'showFavorites',
+  'simklScrobbleEnabled', 'jellyfinEnabled',
+  'tvCalendarAutoSync', 'showAllChannels', 'showFavorites',
   'showWatchlist', 'showRecentlyViewed', 'alwaysSortFavoritesAlphabetically', 'collapseSourceCategoriesOnStartup',
   'showVodAll', 'showVodFavorites', 'showVodPlaylists', 'showVodLocal', 'showVodRecent',
   'useEventBasedReconnect', 'stallDetectionEnabled', 'showLoadingScreen',
@@ -414,6 +415,10 @@ async function hydrateSettingsStore(): Promise<void> {
         simklEnabled: data.simklEnabled ?? false,
         simklAccessToken: typeof data.simklAccessToken === 'string' ? data.simklAccessToken : null,
         simklScrobbleEnabled: data.simklScrobbleEnabled ?? false,
+        // Jellyfin is opt-in: hidden on fresh installs. Installs that already
+        // configured a server (URL saved from the tab or the settings panel)
+        // keep the tab visible until the user explicitly turns it off.
+        jellyfinEnabled: data.jellyfinEnabled ?? Boolean(data.jellyfinServerUrl || data.jellyfinUsername),
         tvCalendarAutoSync: data.tvCalendarAutoSync ?? true,
         showAllChannels: data.showAllChannels ?? true,
         showFavorites: data.showFavorites ?? true,

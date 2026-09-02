@@ -1,4 +1,7 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../i18n';
+import { useSettingsStore } from '../../stores/settingsStore';
 import './PlaybackTab.css';
 
 /**
@@ -11,6 +14,9 @@ import './PlaybackTab.css';
  * the tab itself and validated there.
  */
 export function JellyfinTab() {
+  useTranslation();
+  const jellyfinEnabled = useSettingsStore((s) => s.jellyfinEnabled);
+  const setJellyfinEnabled = useSettingsStore((s) => s.setJellyfinEnabled);
   const [serverUrl, setServerUrl] = useState('');
   const [saved, setSaved] = useState(false);
 
@@ -76,13 +82,43 @@ export function JellyfinTab() {
           )}
         </div>
 
-        <p className="section-description">
-          The Jellyfin web UI runs inside ynoTV as the &quot;Jellyfin&quot; tab in the titlebar.
-          Enter your server URL here so it is remembered, then open the tab to browse your
-          libraries and log in (add a username and password when the server requires them).
-        </p>
+        <div className="timeshift-toggle-row" style={{ marginBottom: '8px', marginTop: '4px' }}>
+          <div className="timeshift-toggle-info">
+            <span className="timeshift-toggle-label">{i18n.t('settings:jellyfin.enabled')}</span>
+            <span className="timeshift-toggle-sub">{i18n.t('settings:jellyfin.enabledHint')}</span>
+          </div>
+          <label className="toggle-switch">
+            <input
+              type="checkbox"
+              checked={jellyfinEnabled}
+              onChange={(e) => setJellyfinEnabled(e.target.checked)}
+            />
+            <span className="toggle-slider"></span>
+          </label>
+        </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxWidth: '520px' }}>
+        {!jellyfinEnabled && (
+          <p className="section-description" style={{ color: 'var(--text-muted)' }}>
+            {i18n.t('settings:jellyfin.disabledHint')}
+          </p>
+        )}
+        {jellyfinEnabled && (
+          <p className="section-description">
+            {i18n.t('settings:jellyfin.description')}
+          </p>
+        )}
+
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+            maxWidth: '520px',
+            opacity: jellyfinEnabled ? 1 : 0.45,
+            pointerEvents: jellyfinEnabled ? 'auto' : 'none',
+            filter: jellyfinEnabled ? 'none' : 'grayscale(0.6)',
+          }}
+        >
           <div>
             <label
               style={{
@@ -92,27 +128,34 @@ export function JellyfinTab() {
                 marginBottom: '4px',
               }}
             >
-              Server URL
+              {i18n.t('settings:jellyfin.serverUrlLabel')}
             </label>
             <input
               type="text"
               placeholder="http://192.168.1.10:8096"
               value={serverUrl}
               onChange={(e) => setServerUrl(e.target.value)}
+              disabled={!jellyfinEnabled}
               style={inputStyle}
             />
           </div>
 
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-            <button className="sync-btn" onClick={handleSave} style={{ padding: '8px 20px', fontSize: '0.9rem' }}>
-              Save
+            <button
+              className="sync-btn"
+              onClick={handleSave}
+              disabled={!jellyfinEnabled}
+              style={{ padding: '8px 20px', fontSize: '0.9rem' }}
+            >
+              {i18n.t('common:save')}
             </button>
             <button
               className="sync-btn"
               onClick={handleOpenTab}
+              disabled={!jellyfinEnabled}
               style={{ padding: '8px 20px', fontSize: '0.9rem', background: 'var(--surface-color)' }}
             >
-              Open Jellyfin tab
+              {i18n.t('settings:jellyfin.openBtn')}
             </button>
           </div>
         </div>

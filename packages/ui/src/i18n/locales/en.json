@@ -1298,6 +1298,9 @@
     "jellyfin": {
       "title": "Jellyfin",
       "configured": "Configured",
+      "enabled": "Enable Jellyfin",
+      "enabledHint": "Show the Jellyfin tab in the titlebar navigation so you can browse your server and play through ynoTV's mpv player. Disabled by default on new installs.",
+      "disabledHint": "The Jellyfin tab is hidden while Jellyfin is disabled. Flip the switch above to show it and configure your server.",
       "description": "Browse your Jellyfin server inside an embedded window and play everything through ynoTV's own mpv player. Login happens inside the window, so web-only skins and plugins keep working.",
       "serverUrlLabel": "Jellyfin Server URL",
       "urlRequired": "Please enter your Jellyfin server URL.",

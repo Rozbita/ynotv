@@ -365,6 +365,10 @@ export interface SettingsState {
   simklScrobbleEnabled: boolean;
   setSimklSettings: (partial: Partial<SimklSettings>) => void;
 
+  // Jellyfin integration (titlebar tab hidden until explicitly enabled)
+  jellyfinEnabled: boolean;
+  setJellyfinEnabled: (enabled: boolean) => void;
+
   // TV calendar auto-sync
   tvCalendarAutoSync: boolean;
   setTvCalendarAutoSync: (enabled: boolean) => void;
@@ -1718,6 +1722,13 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (partial.simklScrobbleEnabled !== undefined) patch.simklScrobbleEnabled = partial.simklScrobbleEnabled;
     set(patch);
     persistSettings(patch);
+  },
+
+  // Jellyfin integration
+  jellyfinEnabled: false,
+  setJellyfinEnabled: (enabled) => {
+    set({ jellyfinEnabled: enabled });
+    persistSettings({ jellyfinEnabled: enabled });
   },
 
   // TV calendar auto-sync

@@ -235,6 +235,35 @@ describe('settings store hydration', () => {
     expect(s.allowLanSources).toBe(false);
   });
 
+  it('defaults Jellyfin to disabled on fresh installs', async () => {
+    // Empty storage — a brand-new install has never configured Jellyfin.
+    await ensureSettingsHydration();
+    await vi.waitFor(() => expect(useSettingsStore.getState().layoutSettingsLoaded).toBe(true));
+
+    expect(useSettingsStore.getState().jellyfinEnabled).toBe(false);
+  });
+
+  it('keeps Jellyfin enabled for existing installs that configured a server (migration)', async () => {
+    // Pre-existing install that already saved a server URL from the tab/panel:
+    // the tab must stay visible until the user explicitly turns it off.
+    storageBackend.jellyfinServerUrl = 'http://192.168.1.10:8096';
+    await ensureSettingsHydration();
+    await vi.waitFor(() => expect(useSettingsStore.getState().layoutSettingsLoaded).toBe(true));
+
+    expect(useSettingsStore.getState().jellyfinEnabled).toBe(true);
+  });
+
+  it('lets an explicit user choice override the Jellyfin migration heuristic', async () => {
+    // A user who explicitly disabled Jellyfin keeps it off even though a
+    // server URL exists from earlier use.
+    storageBackend.jellyfinServerUrl = 'http://192.168.1.10:8096';
+    storageBackend.jellyfinEnabled = false;
+    await ensureSettingsHydration();
+    await vi.waitFor(() => expect(useSettingsStore.getState().layoutSettingsLoaded).toBe(true));
+
+    expect(useSettingsStore.getState().jellyfinEnabled).toBe(false);
+  });
+
   it('is idempotent: calling ensureSettingsHydration twice performs one load', async () => {
     storageBackend.theme = 'dark';
     await ensureSettingsHydration();

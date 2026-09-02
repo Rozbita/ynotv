@@ -127,6 +127,7 @@ const UNTRANSLATED_ALLOWLIST = new Set([
   'settings.controllers.mapping.groups.dpad', 'settings.controllers.mapping.groups.menu',
   // brand / product names
   'nav.items.nuvio', 'nav.items.stremio', 'nav.items.jellyfin', 'settings.tabs.nuvio', 'settings.tabs.strem',
+  'settings.tabs.jellyfin', 'settings.jellyfin.title',
   'settings.tabs.scrobbling', 'settings.tabs.simkl', 'settings.tabs.discord',
   'settings.startup.views.stremio', 'settings.startup.views.nuvio', 'settings.startup.views.guide',
   'settings.scrobbling.title', 'settings.simkl.title', 'settings.nuvio.title',

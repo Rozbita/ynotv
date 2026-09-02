@@ -350,6 +350,7 @@ function App() {
   const setPopoutAlwaysOnTop = useSettingsStore((s) => s.setPopoutAlwaysOnTop);
   const settingsNavHiddenTabs = useSettingsStore((s) => s.navHiddenTabs);
   const settingsEpgHiddenButtons = useSettingsStore((s) => s.epgHiddenButtons);
+  const jellyfinEnabled = useSettingsStore((s) => s.jellyfinEnabled);
   const startupView = useSettingsStore((s) => s.startupView);
   const castEnabled = useSettingsStore((s) => s.castEnabled);
   const setCastEnabled = useSettingsStore((s) => s.setCastEnabled);
@@ -1813,7 +1814,7 @@ function useTmdbPresencePoster(
       returnView === 'dvr' ||
       returnView === 'stremio' ||
       returnView === 'nuvio' ||
-      returnView === 'jellyfin'
+      (returnView === 'jellyfin' && jellyfinEnabled)
         ? returnView
         : undefined;
     const isStremio = vodInfo?.source_id === 'stremio' || vodInfo?.source_id === 'trailer';
@@ -1903,7 +1904,10 @@ function useTmdbPresencePoster(
     // stream has loaded. If the user presses Stop during that transition (or a
     // native mpv end event races the React update), infer the destination from
     // the active VOD source instead of leaving the app on the black player view.
-    const sourceView = dest || playbackSourceView || (isJellyfin ? 'jellyfin' : null);
+    // When the Jellyfin integration is disabled, never surface the hidden tab —
+    // stop falls through to the generic close (activeView stays 'none').
+    const jfDest = jellyfinEnabled && (isJellyfin || playbackSourceView === 'jellyfin') ? 'jellyfin' : null;
+    const sourceView = dest || jfDest || (playbackSourceView === 'jellyfin' ? null : playbackSourceView) || null;
     if (sourceView) {
       setActiveView(sourceView);
       setPlaybackSourceView(null);
@@ -1911,8 +1915,12 @@ function useTmdbPresencePoster(
       setActiveView('stremio');
     } else if (isNuvio) {
       setActiveView('nuvio');
+    } else if (playbackSourceView === 'jellyfin') {
+      // Jellyfin is disabled — drop the stale return marker so later stops
+      // of other media don't see a lingering jellyfin destination.
+      setPlaybackSourceView(null);
     }
-  }, [vodInfo, handleStopRaw, setActiveView, playbackSourceView]);
+  }, [vodInfo, handleStopRaw, setActiveView, playbackSourceView, jellyfinEnabled]);
 
   // Jellyfin handoff: play the captured direct-stream URL through the app's
   // normal VOD pipeline (same as any movie) so the frontend's own player takes
@@ -2007,12 +2015,11 @@ function useTmdbPresencePoster(
           const ms = pi?.MediaSources?.[0];
           if (ms) {
             const token = key;
-            // The user's remembered subtitle for this item wins over the
-            // server's DefaultSubtitleStreamIndex (which only reflects the
-            // account default, not what they actually watched with).
+            const prevSubId = current.jellyfinSubtitleStreamId;
+            const prevActiveTrack = current.jellyfinSubtitleTracks?.find((t) => t.index === prevSubId);
             const remembered = current.jellyfinSubtitlePrefs?.[target.id];
-            const defaultIdx = ms.DefaultSubtitleStreamIndex != null ? ms.DefaultSubtitleStreamIndex : undefined;
-            subtitleStreamId = typeof remembered === 'number' && remembered != null ? remembered : defaultIdx;
+
+            const parsedSubtitleTracks: import('./types/media').VodPlayInfo['jellyfinSubtitleTracks'] = [];
             for (const st of ms.MediaStreams || []) {
               if (!st || !st.Type) continue;
               if (st.Type === 'Subtitle') {
@@ -2020,15 +2027,15 @@ function useTmdbPresencePoster(
                 let delivery = (st.DeliveryUrl || '').trim();
                 if (delivery && delivery.indexOf('://') === -1) delivery = server + (delivery.charAt(0) === '/' ? '' : '/') + delivery;
                 if (delivery && token && delivery.indexOf('api_key=') === -1) delivery += (delivery.indexOf('?') >= 0 ? '&' : '?') + 'api_key=' + encodeURIComponent(token);
-                subtitleTracks.push({
+                parsedSubtitleTracks.push({
                   index: st.Index != null ? st.Index : 0,
                   title: st.DisplayTitle || st.Title || '',
                   lang: st.Language || '',
                   codec: st.Codec || '',
                   isExternal: isExt,
                   deliveryUrl: isExt ? delivery : '',
-                  selected: st.Index === subtitleStreamId,
-                  default: st.Index === subtitleStreamId,
+                  selected: false,
+                  default: false,
                 });
               } else if (st.Type === 'Audio') {
                 audioTracks.push({
@@ -2039,6 +2046,52 @@ function useTmdbPresencePoster(
                   isDefault: st.IsDefault === true,
                 });
               }
+            }
+
+            if (typeof remembered === 'number' && remembered != null) {
+              subtitleStreamId = remembered;
+            } else if (prevSubId === -1) {
+              // User explicitly turned subtitles off on the previous episode
+              subtitleStreamId = -1;
+            } else if (prevActiveTrack) {
+              const targetLang = (prevActiveTrack.lang || '').toLowerCase().trim();
+              const targetTitle = (prevActiveTrack.title || '').toLowerCase().trim();
+              const cleanTargetTitle = targetTitle.replace(/\[.*?\]|\(.*?\)/g, '').trim();
+
+              let matchedTrack = parsedSubtitleTracks.find((st) => {
+                const l = (st.lang || '').toLowerCase().trim();
+                const t = (st.title || '').toLowerCase().trim();
+                return targetLang && targetTitle && l === targetLang && t === targetTitle;
+              });
+
+              if (!matchedTrack && cleanTargetTitle) {
+                matchedTrack = parsedSubtitleTracks.find((st) => {
+                  const t = (st.title || '').toLowerCase().trim().replace(/\[.*?\]|\(.*?\)/g, '').trim();
+                  return t && (t === cleanTargetTitle || t.includes(cleanTargetTitle) || cleanTargetTitle.includes(t));
+                });
+              }
+
+              if (!matchedTrack && targetLang) {
+                matchedTrack = parsedSubtitleTracks.find((st) => {
+                  const l = (st.lang || '').toLowerCase().trim();
+                  return l && (l === targetLang || l.startsWith(targetLang) || targetLang.startsWith(l));
+                });
+              }
+
+              if (matchedTrack) {
+                subtitleStreamId = matchedTrack.index;
+              } else {
+                subtitleStreamId = ms.DefaultSubtitleStreamIndex != null ? ms.DefaultSubtitleStreamIndex : undefined;
+              }
+            } else {
+              subtitleStreamId = ms.DefaultSubtitleStreamIndex != null ? ms.DefaultSubtitleStreamIndex : undefined;
+            }
+
+            for (const st of parsedSubtitleTracks) {
+              const isMatch = st.index === subtitleStreamId;
+              st.selected = isMatch;
+              st.default = isMatch;
+              subtitleTracks.push(st);
             }
           }
         }
@@ -4808,6 +4861,10 @@ function useTmdbPresencePoster(
           break;
 
         case 'jellyfin':
+          // The Jellyfin tab is opt-in; while disabled the shortcut should not
+          // surface the hidden view. Reads the store directly because this
+          // listener predates the component's subscriptions.
+          if (!useSettingsStore.getState().jellyfinEnabled) break;
           setCats(false);
           setView(curView === 'jellyfin' ? 'none' : 'jellyfin');
           setTimeout(() => focusViewOnOpen(), 120);
@@ -5641,7 +5698,7 @@ function useTmdbPresencePoster(
                 </button>
               )}
 
-              {!navHiddenTabs.includes('jellyfin') && (
+              {jellyfinEnabled && !navHiddenTabs.includes('jellyfin') && (
                 <button
                   className={`segmented-btn ${activeView === 'jellyfin' ? 'active' : ''}`}
                   onClick={() => {
@@ -6921,7 +6978,9 @@ function useTmdbPresencePoster(
         />
       </TransitionView>
 
-      {/* Jellyfin Page (embedded web wrapper) */}
+      {/* Jellyfin Page (embedded web wrapper) — mounted only while the
+          integration is enabled; disabling it closes the child WebView. */}
+      {jellyfinEnabled && (
       <TransitionView visible={activeView === 'jellyfin'} keepMounted>
         <JellyfinPage
           visible={
@@ -6942,6 +7001,7 @@ function useTmdbPresencePoster(
           onPlay={handleJellyfinPlay}
         />
       </TransitionView>
+      )}
 
       {/* Stremio Page */}
       <TransitionView visible={activeView === 'stremio'}>

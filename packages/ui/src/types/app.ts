@@ -198,6 +198,9 @@ export interface AppSettings {
     globalEpgLinks?: GlobalEpgLink[];
     // Navigation tab visibility — tabs hidden from titlebar
     navHiddenTabs?: string[];
+    // Jellyfin integration — the titlebar Jellyfin tab is hidden until this is
+    // explicitly enabled (new installs default to disabled)
+    jellyfinEnabled?: boolean;
     // EPG button visibility — buttons hidden from LiveTV EPG header
     epgHiddenButtons?: string[];
     // Trakt integration settings

@@ -827,9 +827,13 @@ const INIT_SCRIPT: &str = r##"
 
     // Remember the subtitle the user actually watched with per Jellyfin item
     // (stream index keyed by item id, persisted in this webview's own
-    // localStorage) so a later play/restart of the same item starts with the
-    // same subtitle even when Jellyfin's server default didn't pick it.
+    // Subtitle stream preferences are persisted across reloads and pages
+    // (keyed in localStorage) so a later play/restart of the same item or series
+    // starts with the same subtitle language/track.
     var SUBPREF_KEY = 'ynotv_jf_subprefs';
+    var SUBPREF_DETAIL_KEY = 'ynotv_jf_subprefs_detail';
+    var LAST_SUBPREF_KEY = 'ynotv_jf_last_subpref';
+
     function readSubPref(itemId) {
         try {
             if (!itemId) return null;
@@ -840,6 +844,7 @@ const INIT_SCRIPT: &str = r##"
             return typeof v === 'number' ? v : null;
         } catch (e) { return null; }
     }
+
     function readAllSubPrefs() {
         try {
             var raw = localStorage.getItem(SUBPREF_KEY);
@@ -848,6 +853,7 @@ const INIT_SCRIPT: &str = r##"
             return map && typeof map === 'object' ? map : {};
         } catch (e) { return {}; }
     }
+
     function rememberSubPref(itemId, streamIndex) {
         try {
             if (!itemId || streamIndex == null) return;
@@ -857,6 +863,85 @@ const INIT_SCRIPT: &str = r##"
             map[itemId] = streamIndex;
             try { localStorage.setItem(SUBPREF_KEY, JSON.stringify(map)); } catch (e) {}
         } catch (e) {}
+    }
+
+    function cleanSubLabel(label) {
+        if (!label || typeof label !== 'string') return '';
+        return label
+            .replace(/\[.*?\]|\(.*?\)/g, '')
+            .replace(/\b(default|forced|subrip|vtt|ass|pgs|embedded|external)\b/gi, '')
+            .replace(/[-_–—]/g, ' ')
+            .trim()
+            .toLowerCase();
+    }
+
+    function makePrefKey(itemId, pref) {
+        if (!pref) return '';
+        return (itemId || '') + '_' + (pref.isOff ? 'off' : (pref.cleanLabel || pref.label || pref.streamIndex || ''));
+    }
+
+    function rememberSubPrefDetailed(itemId, seriesId, streamIndex, label) {
+        try {
+            if (itemId && streamIndex != null) rememberSubPref(itemId, streamIndex);
+            var isOff = (streamIndex === -1);
+            var clean = isOff ? 'off' : cleanSubLabel(label);
+            var detail = {
+                streamIndex: streamIndex,
+                isOff: isOff,
+                label: label || '',
+                cleanLabel: clean,
+                exactItemId: itemId || '',
+                seriesId: seriesId || '',
+                savedAt: Date.now()
+            };
+            var map = {};
+            var raw = localStorage.getItem(SUBPREF_DETAIL_KEY);
+            if (raw) { try { var p = JSON.parse(raw); if (p && typeof p === 'object') map = p; } catch (e) {} }
+            if (itemId) map[itemId] = detail;
+            if (seriesId) map['series_' + seriesId] = detail;
+            try { localStorage.setItem(SUBPREF_DETAIL_KEY, JSON.stringify(map)); } catch (e) {}
+            try { localStorage.setItem(LAST_SUBPREF_KEY, JSON.stringify(detail)); } catch (e) {}
+        } catch (e) {}
+    }
+
+    function getRememberedSubPref(itemId, seriesId) {
+        try {
+            var raw = localStorage.getItem(SUBPREF_DETAIL_KEY);
+            var map = raw ? JSON.parse(raw) : null;
+            if (map) {
+                if (itemId && map[itemId]) return map[itemId];
+                if (seriesId && map['series_' + seriesId]) return map['series_' + seriesId];
+            }
+            var lastRaw = localStorage.getItem(LAST_SUBPREF_KEY);
+            if (lastRaw) {
+                var last = JSON.parse(lastRaw);
+                if (last && typeof last === 'object') return last;
+            }
+            if (itemId) {
+                var simple = readSubPref(itemId);
+                if (simple !== null) return { streamIndex: simple, isOff: simple === -1, label: '', cleanLabel: '', exactItemId: itemId };
+            }
+        } catch (e) {}
+        return null;
+    }
+
+    // Resolve an item's series id via a bounded fetch. The item details page
+    // carries no data-seriesid, and itemById may not be populated yet on a
+    // cold deep link, so the dropdown change handler uses this to attach the
+    // remembered subtitle track to the series (next-episode carry-over).
+    function fetchSeriesId(itemId, cb) {
+        try {
+            var uid = currentUserId();
+            if (!itemId || !uid) { if (cb) cb(null); return; }
+            var origin = serverOrigin();
+            var url = origin + "/Users/" + encodeURIComponent(uid) + "/Items/" + encodeURIComponent(itemId);
+            var tok = accessToken();
+            if (tok) url += "?api_key=" + encodeURIComponent(tok);
+            fetch(url).then(function (r) { if (!r.ok) return null; return r.json(); }).then(function (b) {
+                if (b && b.Id) { rememberItemDto(b); if (cb) cb(b.SeriesId || null); }
+                else if (cb) cb(null);
+            }).catch(function () { if (cb) cb(null); });
+        } catch (e) { if (cb) cb(null); }
     }
 
     // Active subtitle choices made by the user in the Jellyfin web UI (dropdowns / selects)
@@ -909,16 +994,115 @@ const INIT_SCRIPT: &str = r##"
                 mediaSourceId: mediaSourceId,
                 at: Date.now()
             };
-            if (itemId && subIdx !== null && subIdx !== undefined) {
-                activeSubChoiceByItem[itemId] = subIdx;
-                rememberSubPref(itemId, subIdx);
-            }
+            // NOTE: this request is NOT persisted as a remembered preference.
+            // jellyfin-web re-populates the subtitle dropdown with the server
+            // default on every load, so a PlaybackInfo request reflects the web
+            // default as often as a real user pick. Persisting here clobbered the
+            // user's remembered track with the default on the next play. The
+            // dropdown `change` listener (a genuine user interaction) is the
+            // only writer of remembered preferences, and this request is only
+            // used as a transient hint for the current play.
             diag('playback-info-request', lastPlaybackInfoReq);
         } catch (e) {}
     }
 
+    function restoreSubSelect(sel) {
+        try {
+            if (!sel || !sel.options) return;
+            // jellyfin-web (re)builds the <option> list with innerHTML on every
+            // media load, so track the option count: when it changes the select
+            // was repopulated with the server defaults and the applied marker
+            // must be cleared so the remembered track is re-applied.
+            var optCount = sel.options.length;
+            if (sel.__ynotvOptionCount !== optCount) {
+                sel.__ynotvOptionCount = optCount;
+                sel.__ynotvAppliedKey = null;
+            }
+            if (optCount === 0) {
+                // Options arrive async after the select node is inserted — wait
+                // for a later pass instead of marking the select as applied.
+                sel.__ynotvRestorePending = true;
+                return;
+            }
+            sel.__ynotvRestorePending = false;
+            // Never overwrite a dropdown the user has manually clicked / touched on this page
+            if (sel.__ynotvUserInteracted) return;
+
+            var page = sel.closest ? sel.closest('[data-role="page"], .page') : null;
+            var itemId = resolveContextItemId(sel);
+            var item = itemId ? (itemById[itemId] || null) : null;
+            var seriesId = (item && item.seriesId) || (page && (page.getAttribute('data-seriesid') || (page.dataset && page.dataset.seriesid))) || null;
+
+            var pref = getRememberedSubPref(itemId, seriesId);
+            if (!pref) return;
+
+            var prefKey = makePrefKey(itemId, pref);
+            if (sel.__ynotvAppliedKey === prefKey) return;
+
+            var matchIdx = -1;
+            if (pref.isOff) {
+                for (var i = 0; i < sel.options.length; i++) {
+                    var v = parseInt(sel.options[i].value, 10);
+                    if (v === -1 || /off|none|desactivad|desligad|aus/i.test(sel.options[i].textContent || '')) {
+                        matchIdx = i;
+                        break;
+                    }
+                }
+            } else {
+                // 1. Exact index match if same item
+                if (pref.streamIndex != null && pref.streamIndex >= 0 && itemId && pref.exactItemId === itemId) {
+                    for (var j = 0; j < sel.options.length; j++) {
+                        if (parseInt(sel.options[j].value, 10) === pref.streamIndex) {
+                            matchIdx = j;
+                            break;
+                        }
+                    }
+                }
+                // 2. Clean label / title match
+                if (matchIdx === -1 && (pref.cleanLabel || pref.label)) {
+                    var targetClean = (pref.cleanLabel || '').toLowerCase().trim();
+                    var targetFull = (pref.label || '').toLowerCase().trim();
+                    for (var k = 0; k < sel.options.length; k++) {
+                        var optRaw = sel.options[k].textContent || '';
+                        var optClean = cleanSubLabel(optRaw);
+                        var optFull = optRaw.toLowerCase().trim();
+                        if (targetClean && optClean && (optClean === targetClean || optClean.indexOf(targetClean) >= 0 || targetClean.indexOf(optClean) >= 0)) {
+                            matchIdx = k;
+                            break;
+                        } else if (targetFull && (optFull === targetFull || optFull.indexOf(targetFull) >= 0 || targetFull.indexOf(optFull) >= 0)) {
+                            matchIdx = k;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (matchIdx >= 0) {
+                sel.__ynotvAppliedKey = prefKey;
+                if (sel.selectedIndex !== matchIdx) {
+                    sel.__ynotvProgrammatic = true;
+                    sel.selectedIndex = matchIdx;
+                    var chosenVal = parseInt(sel.options[matchIdx].value, 10);
+                    if (itemId && !isNaN(chosenVal)) {
+                        activeSubChoiceByItem[itemId] = chosenVal;
+                    }
+                    sel.__ynotvProgrammatic = false;
+                }
+            }
+        } catch (e) {}
+    }
+
+    function checkAndRestoreAllSubSelects() {
+        try {
+            var selects = document.querySelectorAll('select.selectSubtitles, select#selectSubtitles, select[data-track="subtitle"], .selectSubtitles select');
+            for (var i = 0; i < selects.length; i++) {
+                restoreSubSelect(selects[i]);
+            }
+        } catch (e) {}
+    }
+
     try {
-        document.addEventListener('change', function (e) {
+        var markUserTouch = function (e) {
             try {
                 var target = e.target;
                 if (!target || target.tagName !== 'SELECT') return;
@@ -928,24 +1112,117 @@ const INIT_SCRIPT: &str = r##"
                             target.name === 'selectSubtitles' ||
                             (target.closest && target.closest('.selectSubtitles'));
                 if (isSub) {
+                    target.__ynotvUserInteracted = true;
+                }
+            } catch (err) {}
+        };
+
+        document.addEventListener('pointerdown', markUserTouch, true);
+        document.addEventListener('mousedown', markUserTouch, true);
+        document.addEventListener('keydown', markUserTouch, true);
+
+        document.addEventListener('change', function (e) {
+            try {
+                var target = e.target;
+                if (!target || target.tagName !== 'SELECT' || target.__ynotvProgrammatic) return;
+                var isSub = (target.className && /\bselectSubtitles\b/i.test(target.className)) ||
+                            target.id === 'selectSubtitles' ||
+                            target.getAttribute('data-track') === 'subtitle' ||
+                            target.name === 'selectSubtitles' ||
+                            (target.closest && target.closest('.selectSubtitles'));
+                if (isSub) {
+                    target.__ynotvUserInteracted = true;
                     var val = parseInt(target.value, 10);
                     if (!isNaN(val)) {
-                        var page = target.closest ? target.closest('[data-role="page"]') : null;
-                        var itemId = (page && (page.getAttribute('data-itemid') || (page.dataset && page.dataset.itemid))) || null;
-                        if (!itemId) {
-                            var hm = (location.hash || '').match(/[?&]id=([^&]+)/i);
-                            if (hm) itemId = decodeURIComponent(hm[1]);
-                        }
+                        var selectedOpt = target.options[target.selectedIndex];
+                        var optText = selectedOpt ? (selectedOpt.textContent || '') : '';
+                        var page = target.closest ? target.closest('[data-role="page"], .page') : null;
+                        var itemId = resolveContextItemId(target);
+                        var item = itemId ? (itemById[itemId] || null) : null;
+                        var seriesId = (item && item.seriesId) || (page && (page.getAttribute('data-seriesid') || (page.dataset && page.dataset.seriesid))) || null;
                         if (itemId) {
                             activeSubChoiceByItem[itemId] = val;
-                            rememberSubPref(itemId, val);
+                            rememberSubPrefDetailed(itemId, seriesId, val, optText);
+                            if (!seriesId) {
+                                // Details page has no data-seriesid and itemById
+                                // may be cold; resolve the series so the next
+                                // episode of the same show inherits this track.
+                                fetchSeriesId(itemId, function (sid) {
+                                    if (!sid || sid === seriesId) return;
+                                    var cur = getRememberedSubPref(itemId, null);
+                                    if (cur && cur.streamIndex === val && (cur.isOff === (val === -1))) {
+                                        rememberSubPrefDetailed(itemId, sid, val, optText);
+                                    }
+                                });
+                            }
+                        } else {
+                            rememberSubPrefDetailed(null, seriesId, val, optText);
                         }
-                        diag('in-page-sub-select-change', { itemId: itemId, val: val });
+                        var pref = getRememberedSubPref(itemId, seriesId);
+                        target.__ynotvAppliedKey = makePrefKey(itemId, pref);
+                        diag('in-page-sub-select-change', { itemId: itemId, seriesId: seriesId, val: val, text: optText });
                     }
                 }
             } catch (err) {}
         }, true);
+
+        var subObserver = new MutationObserver(function (mutations) {
+            for (var m = 0; m < mutations.length; m++) {
+                var mut = mutations[m];
+                if (mut.addedNodes && mut.addedNodes.length) {
+                    for (var n = 0; n < mut.addedNodes.length; n++) {
+                        var node = mut.addedNodes[n];
+                        if (node.nodeType === 1) {
+                            if (node.tagName === 'SELECT' || (node.querySelector && node.querySelector('select.selectSubtitles, select#selectSubtitles, select[data-track="subtitle"]'))) {
+                                checkAndRestoreAllSubSelects();
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        subObserver.observe(document.documentElement, { childList: true, subtree: true });
+        window.addEventListener('hashchange', function () {
+            setTimeout(checkAndRestoreAllSubSelects, 150);
+            setTimeout(checkAndRestoreAllSubSelects, 500);
+        });
+        document.addEventListener('viewshow', function () {
+            setTimeout(checkAndRestoreAllSubSelects, 100);
+            setTimeout(checkAndRestoreAllSubSelects, 400);
+        });
+        // jellyfin-web inserts the subtitle <select> node first and fills in its
+        // <option>s a moment later (innerHTML), so a single run at insertion time
+        // can never restore. Re-check periodically while a subtitle select is in
+        // the DOM; restoreSubSelect self-retires (option-count change + pending
+        // flag) and stops as soon as it applies or the user touches the select.
+        setInterval(function () { checkAndRestoreAllSubSelects(); }, 400);
     } catch (e) {}
+
+    // Resolve the Jellyfin item id a subtitle select belongs to. The dropdowns
+    // live on pages that carry no data-itemid attribute, so fall back through
+    // the URL hash, the currently-playing stream URL, and the last known
+    // PlaybackInfo request — in that order.
+    function resolveContextItemId(target) {
+        try {
+            var page = target && target.closest ? target.closest('[data-role="page"], .page') : null;
+            if (page) {
+                var pid = page.getAttribute('data-itemid') || (page.dataset && page.dataset.itemid) ||
+                          page.getAttribute('data-id') || (page.dataset && page.dataset.id);
+                if (pid) return pid;
+            }
+            var hm = (location.hash || '').match(/[?&]id=([^&]+)/i);
+            if (hm && hm[1]) { try { return decodeURIComponent(hm[1]); } catch (e) { return hm[1]; } }
+            var vids = document.querySelectorAll ? document.querySelectorAll('video,audio') : [];
+            for (var i = 0; i < vids.length; i++) {
+                var s = (vids[i].currentSrc || vids[i].getAttribute('src') || '') || '';
+                var m = s.match(/\/Videos\/([^/]+)/i);
+                if (m && m[1]) return m[1];
+            }
+            if (lastPlaybackInfoReq && lastPlaybackInfoReq.itemId) return lastPlaybackInfoReq.itemId;
+        } catch (e) {}
+        return null;
+    }
 
     function getInPageSubtitleSelection(itemId) {
         try {
@@ -955,10 +1232,8 @@ const INIT_SCRIPT: &str = r##"
             var selects = document.querySelectorAll('select.selectSubtitles, select#selectSubtitles, select[data-track="subtitle"], .selectSubtitles select');
             for (var i = 0; i < selects.length; i++) {
                 var sel = selects[i];
-                if (sel.offsetParent !== null || (sel.getBoundingClientRect && sel.getBoundingClientRect().width > 0)) {
-                    var val = parseInt(sel.value, 10);
-                    if (!isNaN(val)) return val;
-                }
+                var val = parseInt(sel.value, 10);
+                if (!isNaN(val)) return val;
             }
         } catch (e) {}
         return null;
@@ -1107,8 +1382,59 @@ const INIT_SCRIPT: &str = r##"
                 // Determine the authoritative target subtitle stream index
                 var targetSubIdx = null;
 
-                // 1. PlaybackInfo request (if recent < 15s and matches itemId)
-                if (lastPlaybackInfoReq && (Date.now() - lastPlaybackInfoReq.at < 15000)) {
+                // 1. Explicit in-memory choice recorded by a user `change` event
+                //    on a subtitle dropdown during THIS page session. Highest
+                //    priority — it is always a genuine user pick.
+                if (itemId && activeSubChoiceByItem[itemId] !== undefined && activeSubChoiceByItem[itemId] !== null) {
+                    targetSubIdx = activeSubChoiceByItem[itemId];
+                }
+
+                // 2. Remembered preference for this exact item, then series, then
+                //    the most recent pick. This survives the reload between plays
+                //    (the web player itself forgets the pick and reverts its
+                //    dropdowns to the server default on the next load), so it
+                //    must outrank the live-dropdown scan below — on a fresh page
+                //    that scan only sees the web default, not the user's track.
+                if (targetSubIdx === null) {
+                    var itMeta = itemId ? (itemById[itemId] || null) : null;
+                    var sId = itMeta && itMeta.seriesId ? itMeta.seriesId : null;
+                    var rem = getRememberedSubPref(itemId, sId);
+                    if (rem) {
+                        if (rem.isOff) {
+                            targetSubIdx = -1;
+                        } else if (rem.streamIndex != null && rem.streamIndex >= 0 && itemId && rem.exactItemId === itemId) {
+                            targetSubIdx = rem.streamIndex;
+                        } else if (rem.cleanLabel || rem.label) {
+                            var tTargetClean = (rem.cleanLabel || '').toLowerCase().trim();
+                            var tTargetFull = (rem.label || '').toLowerCase().trim();
+                            for (var stI = 0; stI < meta.subtitleTracks.length; stI++) {
+                                var track = meta.subtitleTracks[stI];
+                                var trackTitle = (track.title || '').toLowerCase().trim();
+                                var trackClean = trackTitle.replace(/\[.*?\]|\(.*?\)/g, '').trim();
+                                var trackLang = (track.lang || '').toLowerCase().trim();
+                                if ((tTargetClean && (trackClean === tTargetClean || trackClean.indexOf(tTargetClean) >= 0 || tTargetClean.indexOf(trackClean) >= 0)) ||
+                                    (tTargetFull && (trackTitle === tTargetFull || trackTitle.indexOf(tTargetFull) >= 0 || tTargetFull.indexOf(trackTitle) >= 0)) ||
+                                    (trackLang && tTargetClean && (trackLang === tTargetClean || tTargetClean.indexOf(trackLang) >= 0))) {
+                                    targetSubIdx = track.index;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 3. Live dropdown value — fallback for plays where nothing was
+                //    recorded or remembered (e.g. the first-ever play of an item
+                //    with a default-aware web player).
+                if (targetSubIdx === null) {
+                    var inPageChoice = getInPageSubtitleSelection(itemId);
+                    if (inPageChoice !== null && inPageChoice !== undefined) {
+                        targetSubIdx = inPageChoice;
+                    }
+                }
+
+                // 4. PlaybackInfo request (if recent < 15s and matches itemId)
+                if (targetSubIdx === null && lastPlaybackInfoReq && (Date.now() - lastPlaybackInfoReq.at < 15000)) {
                     var reqItem = lastPlaybackInfoReq.itemId;
                     if (reqItem ? (!itemId || reqItem === itemId) : (!itemId || Date.now() - lastPlaybackInfoReq.at < 5000)) {
                         if (lastPlaybackInfoReq.subtitleStreamIndex !== null && lastPlaybackInfoReq.subtitleStreamIndex !== undefined) {
@@ -1117,15 +1443,7 @@ const INIT_SCRIPT: &str = r##"
                     }
                 }
 
-                // 2. In-page active select dropdown
-                if (targetSubIdx === null && itemId) {
-                    var inPageChoice = getInPageSubtitleSelection(itemId);
-                    if (inPageChoice !== null && inPageChoice !== undefined) {
-                        targetSubIdx = inPageChoice;
-                    }
-                }
-
-                // 3. Query param on stream URL (SubtitleStreamIndex)
+                // 5. Query param on stream URL (SubtitleStreamIndex)
                 if (targetSubIdx === null) {
                     var smTxt = String(capturedSrc || '');
                     var sm = smTxt.match(/[?&]SubtitleStreamIndex=(-?\d+)/i);
@@ -1135,7 +1453,7 @@ const INIT_SCRIPT: &str = r##"
                     }
                 }
 
-                // 4. Active textTrack on element
+                // 6. Active textTrack on element
                 if (targetSubIdx === null && elem && elem.textTracks) {
                     for (var tt = 0; tt < elem.textTracks.length; tt++) {
                         if (elem.textTracks[tt].mode === 'showing') {
@@ -1151,13 +1469,7 @@ const INIT_SCRIPT: &str = r##"
                     }
                 }
 
-                // 5. Remembered user preference for this item
-                if (targetSubIdx === null && itemId) {
-                    var pref = readSubPref(itemId);
-                    if (pref !== null && pref !== undefined) targetSubIdx = pref;
-                }
-
-                // 6. Server's DefaultSubtitleStreamIndex from PlaybackInfo response
+                // 7. Server's DefaultSubtitleStreamIndex from PlaybackInfo response
                 if (targetSubIdx === null && src.DefaultSubtitleStreamIndex != null) {
                     targetSubIdx = src.DefaultSubtitleStreamIndex;
                 }
@@ -1165,6 +1477,7 @@ const INIT_SCRIPT: &str = r##"
                 // Apply the resolved subtitle index
                 if (targetSubIdx !== null && targetSubIdx !== undefined) {
                     meta.subtitleStreamId = targetSubIdx;
+                    var matchedLabel = '';
                     if (targetSubIdx === -1) {
                         // Explicitly None / off
                         for (var k = 0; k < meta.subtitleTracks.length; k++) {
@@ -1176,72 +1489,23 @@ const INIT_SCRIPT: &str = r##"
                             var isMatch = (meta.subtitleTracks[kk].index === targetSubIdx);
                             meta.subtitleTracks[kk].selected = isMatch;
                             meta.subtitleTracks[kk].default = isMatch;
-                            if (isMatch && meta.subtitleTracks[kk].isExternal && meta.subtitleTracks[kk].deliveryUrl) {
-                                meta.subtitleUrl = meta.subtitleTracks[kk].deliveryUrl;
+                            if (isMatch) {
+                                matchedLabel = meta.subtitleTracks[kk].title || '';
+                                if (meta.subtitleTracks[kk].isExternal && meta.subtitleTracks[kk].deliveryUrl) {
+                                    meta.subtitleUrl = meta.subtitleTracks[kk].deliveryUrl;
+                                }
                             }
                         }
                     }
-                    if (itemId) rememberSubPref(itemId, targetSubIdx);
+                    if (itemId) {
+                        var itm = itemById[itemId] || null;
+                        var sId2 = itm && itm.seriesId ? itm.seriesId : null;
+                        rememberSubPrefDetailed(itemId, sId2, targetSubIdx, matchedLabel);
+                    }
                 }
             }
         } catch (e) {}
         return meta;
-    }
-
-    // The user may have picked a different subtitle inside Jellyfin's own
-    // player before the handoff (OSD subtitle menu). Promote whichever text
-    // track the web player is actually showing right now.
-    function applyInPageSubtitleSelection(meta, elem, itemId) {
-        try {
-            if (!meta || !elem || !meta.subtitleTracks || !meta.subtitleTracks.length) return meta;
-            var tracks = elem.textTracks ? elem.textTracks : [];
-            var active = null;
-            for (var i = 0; i < tracks.length; i++) {
-                if (tracks[i].mode === 'showing') { active = tracks[i]; break; }
-            }
-            if (!active) return meta;
-
-            function normUrl(u) {
-                try { return (new URL(u)).pathname.replace(/\/+$/, '').toLowerCase(); } catch (e) { return (u || '').split('?')[0].replace(/\/+$/, '').toLowerCase(); }
-            }
-            var activePath = active.src ? normUrl(active.src) : null;
-            var activeLang = (active.language || '').toLowerCase();
-            var activeLabel = (active.label || '').toLowerCase();
-
-            var matchIdx = null;
-            for (var j = 0; j < meta.subtitleTracks.length; j++) {
-                var t = meta.subtitleTracks[j];
-                // External: same delivery URL (query strings/order may differ).
-                if (activePath && t.isExternal && t.deliveryUrl && normUrl(t.deliveryUrl) === activePath) {
-                    matchIdx = j;
-                    break;
-                }
-                // Embedded: language or display title overlap.
-                var tLang = (t.lang || '').toLowerCase();
-                var tTitle = (t.title || '').toLowerCase();
-                if (activeLang && tLang && (activeLang === tLang || activeLang.indexOf(tLang) === 0 || tLang.indexOf(activeLang) === 0)) {
-                    matchIdx = j;
-                    break;
-                }
-                if (activeLabel && tTitle && (activeLabel === tTitle || activeLabel.indexOf(tTitle) === 0 || tTitle.indexOf(activeLabel) === 0)) {
-                    matchIdx = j;
-                    break;
-                }
-            }
-            if (matchIdx == null) return meta;
-
-            for (var k = 0; k < meta.subtitleTracks.length; k++) {
-                meta.subtitleTracks[k].selected = false;
-                meta.subtitleTracks[k].default = false;
-            }
-            var picked = meta.subtitleTracks[matchIdx];
-            picked.selected = true;
-            picked.default = true;
-            meta.subtitleStreamId = picked.index != null ? picked.index : matchIdx;
-            if (picked.isExternal && picked.deliveryUrl) meta.subtitleUrl = picked.deliveryUrl;
-            if (itemId) rememberSubPref(itemId, meta.subtitleStreamId);
-            return meta;
-        } catch (e) { return meta; }
     }
 
     function accessToken() {
@@ -1498,21 +1762,6 @@ const INIT_SCRIPT: &str = r##"
         // handoff payload's title, series, poster and chapter context.
         var subtitle = subtitleStreamInfo(elem, src);
         var meta = playbackInfoMeta(elem, src);
-        // The web player's own subtitle picker may have changed the active
-        // track — promote that over the server default before blanking. When
-        // nothing in the current page says which track is wanted (no URL param,
-        // no active <track>), fall back to the remembered per-item pick from a
-        // previous play of this item.
-        applyInPageSubtitleSelection(meta, elem, subtitle.itemId);
-        if (meta.subtitleStreamId == null) {
-            var pref = readSubPref(subtitle.itemId);
-            if (pref != null) {
-                meta.subtitleStreamId = pref;
-                for (var p = 0; p < meta.subtitleTracks.length; p++) {
-                    meta.subtitleTracks[p].selected = meta.subtitleTracks[p].default = (meta.subtitleTracks[p].index === pref);
-                }
-            }
-        }
 
         blankMedia(elem);
 

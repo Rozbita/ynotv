@@ -183,6 +183,7 @@ const SETTINGS_SEARCH_INDEX: SettingsSearchResult[] = [
 
   // --- Jellyfin ---
   { id: 'jellyfin-tab', label: 'Jellyfin', description: 'Embedded Jellyfin server web UI with mpv playback.', tabId: 'jellyfin', tabLabel: 'Jellyfin', section: 'Jellyfin' },
+  { id: 'jellyfin-enabled', label: 'Enable Jellyfin', description: 'Show the Jellyfin tab in the titlebar navigation to browse your server. Disabled by default on new installs.', tabId: 'jellyfin', tabLabel: 'Jellyfin', section: 'Jellyfin' },
   { id: 'jellyfin-server-url', label: 'Jellyfin Server URL', description: 'Address of your Jellyfin server, e.g. http://192.168.1.10:8096.', tabId: 'jellyfin', tabLabel: 'Jellyfin', section: 'Jellyfin' },
   { id: 'jellyfin-open', label: 'Open Jellyfin', description: 'Open the embedded Jellyfin window to browse and play through ynoTV.', tabId: 'jellyfin', tabLabel: 'Jellyfin', section: 'Jellyfin' },
 
