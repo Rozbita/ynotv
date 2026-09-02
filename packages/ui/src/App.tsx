@@ -1731,7 +1731,7 @@ function useTmdbPresencePoster(
     }
   }, [handleMouseMove, pipMode, showPipControls, popoutIsOpen]);
 
-  const { showConfirm, ModalComponent } = useModal();
+  const { showConfirm, ModalComponent, isOpen: isConfirmModalOpen } = useModal();
   const nuvioHasUnsavedHomeLayout = useUIStore((s) => s.nuvioHasUnsavedHomeLayout);
   const nuvioTabSaveFn = useUIStore((s) => s.nuvioTabSaveFn);
 
@@ -6923,7 +6923,24 @@ function useTmdbPresencePoster(
 
       {/* Jellyfin Page (embedded web wrapper) */}
       <TransitionView visible={activeView === 'jellyfin'} keepMounted>
-        <JellyfinPage visible={activeView === 'jellyfin'} onPlay={handleJellyfinPlay} />
+        <JellyfinPage
+          visible={
+            activeView === 'jellyfin' &&
+            !showSettingsPopup &&
+            !layoutPickerOpen &&
+            !updateModalOpen &&
+            !whatsNewModalOpen &&
+            !showShortcutsOverlay &&
+            !showChannelProbeModal &&
+            !showSubtitleModal &&
+            !showAudioModal &&
+            !showPlaybackDetailsModal &&
+            !liveGamesModalOpen &&
+            !sourcePickerParams &&
+            !isConfirmModalOpen
+          }
+          onPlay={handleJellyfinPlay}
+        />
       </TransitionView>
 
       {/* Stremio Page */}
