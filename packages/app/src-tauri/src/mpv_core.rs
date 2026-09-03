@@ -853,6 +853,8 @@ pub async fn add_subtitle_file<R: Runtime>(
     app: &AppHandle<R>,
     file_path: String,
     flag: Option<String>,
+    title: Option<String>,
+    lang: Option<String>,
 ) -> Result<String, String> {
     let resolved = resolve_external_subtitle(&file_path).await;
     let state = app.state::<MpvCoreState>();
@@ -862,8 +864,55 @@ pub async fn add_subtitle_file<R: Runtime>(
     };
     if let Some(mpv) = mpv {
         let f = flag.unwrap_or_else(|| "select".to_string());
-        mpv.command("sub-add", &[&resolved, &f])
-            .map_err(|e| format!("sub-add error: {:?}", e))?;
+        // Use mpv_command with null-terminated argv so arguments containing spaces
+        // (e.g. titles like "Undefined - SUBRIP - External" or paths with spaces)
+        // are not split by whitespace into extra arguments (which caused
+        // MPV_ERROR_INVALID_PARAMETER (-4) in mpv_command_string).
+        let cmd_c = std::ffi::CString::new("sub-add").map_err(|e| e.to_string())?;
+        let resolved_c = std::ffi::CString::new(resolved.clone()).map_err(|e| e.to_string())?;
+        let flag_c = std::ffi::CString::new(f).map_err(|e| e.to_string())?;
+
+        let mut c_args: Vec<*const std::os::raw::c_char> = vec![
+            cmd_c.as_ptr(),
+            resolved_c.as_ptr(),
+            flag_c.as_ptr(),
+        ];
+
+        let title_c = title.and_then(|t| {
+            let s = t.trim();
+            if s.is_empty() { None } else { std::ffi::CString::new(s).ok() }
+        });
+        let lang_c = lang.and_then(|l| {
+            let s = l.trim();
+            if s.is_empty() { None } else { std::ffi::CString::new(s).ok() }
+        });
+
+        if let Some(ref tc) = title_c {
+            c_args.push(tc.as_ptr());
+            if let Some(ref lc) = lang_c {
+                c_args.push(lc.as_ptr());
+            }
+        }
+        c_args.push(std::ptr::null());
+
+        let mut err = unsafe {
+            libmpv2_sys::mpv_command(mpv.ctx.as_ptr(), c_args.as_mut_ptr() as *mut *const std::os::raw::c_char)
+        };
+        if err < 0 && title_c.is_some() {
+            // Fallback: if mpv disliked the title/lang metadata, retry with just path and flag
+            let mut fallback_args: Vec<*const std::os::raw::c_char> = vec![
+                cmd_c.as_ptr(),
+                resolved_c.as_ptr(),
+                flag_c.as_ptr(),
+                std::ptr::null(),
+            ];
+            err = unsafe {
+                libmpv2_sys::mpv_command(mpv.ctx.as_ptr(), fallback_args.as_mut_ptr() as *mut *const std::os::raw::c_char)
+            };
+        }
+        if err < 0 {
+            return Err(format!("sub-add error: {}", err));
+        }
     }
     Ok(resolved)
 }

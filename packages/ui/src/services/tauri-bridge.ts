@@ -669,8 +669,8 @@ export const Bridge = {
      * format from a URL ending in `?api_key=...`), so the resolved path that
      * mpv actually loaded is returned — use it to match track-list entries.
      */
-    async addSubtitleFile(filePath: string, flag?: string): Promise<string> {
-        return invoke<string>('mpv_add_subtitle', { filePath, flag });
+    async addSubtitleFile(filePath: string, flag?: string, title?: string, lang?: string): Promise<string> {
+        return invoke<string>('mpv_add_subtitle', { filePath, flag, title, lang });
     },
 
     async getMpvLog(tail?: number): Promise<{ log: string; path: string }> {

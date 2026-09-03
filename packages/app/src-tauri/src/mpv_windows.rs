@@ -958,7 +958,13 @@ pub async fn set_subtitle_track<R: Runtime>(app: &AppHandle<R>, id: i64) -> Resu
     send_command_internal(&state, "set_property", vec![json!("sid"), value]).await.map(|_| ())
 }
 
-pub async fn add_subtitle_file<R: Runtime>(app: &AppHandle<R>, file_path: String, flag: Option<String>) -> Result<String, String> {
+pub async fn add_subtitle_file<R: Runtime>(
+    app: &AppHandle<R>,
+    file_path: String,
+    flag: Option<String>,
+    title: Option<String>,
+    lang: Option<String>,
+) -> Result<String, String> {
     // Jellyfin subtitle URLs end in `?api_key=...`, which mpv's runtime sub-add
     // can't identify (unknown format). Download them to a local temp file first.
     let resolved = crate::mpv_core::resolve_external_subtitle(&file_path).await;
@@ -967,9 +973,28 @@ pub async fn add_subtitle_file<R: Runtime>(app: &AppHandle<R>, file_path: String
         Some(s) if !s.is_empty() => s,
         _ => "select".to_string(),
     };
-    send_command_internal(&state, "sub-add", vec![json!(resolved.clone()), json!(f)])
-        .await
-        .map(|_| resolved)
+    let mut cmd_args = vec![json!(resolved.clone()), json!(f)];
+    if let Some(ref t) = title {
+        let s = t.trim();
+        if !s.is_empty() {
+            cmd_args.push(json!(s));
+            if let Some(ref l) = lang {
+                let ls = l.trim();
+                if !ls.is_empty() {
+                    cmd_args.push(json!(ls));
+                }
+            }
+        }
+    }
+    let has_meta = title.is_some();
+    let res = send_command_internal(&state, "sub-add", cmd_args).await;
+    if res.is_err() && has_meta {
+        send_command_internal(&state, "sub-add", vec![json!(resolved.clone()), json!(f)])
+            .await
+            .map(|_| resolved)
+    } else {
+        res.map(|_| resolved)
+    }
 }
 
 pub async fn remove_subtitle_file<R: Runtime>(app: &AppHandle<R>, file_path: String) -> Result<(), String> {

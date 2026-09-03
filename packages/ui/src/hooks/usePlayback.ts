@@ -748,6 +748,7 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
   const lastAudioTracksCountRef = useRef(0);
   const autoSelectTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const autoSelectAttemptsRef = useRef(0);
+  const jellyfinResolvedSubsRef = useRef<Map<string, string>>(new Map());
   // Monotonic sequence for handlePlayChannel: guards against the async
   // failover-primary lookup resolving out of order during rapid channel zaps.
   const playChannelSeqRef = useRef(0);
@@ -1978,19 +1979,35 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
       const metaTracks = vod.jellyfinSubtitleTracks || [];
       const pickedMeta = metaTracks.find((t) => t.index === targetSubId) || metaTracks.find((t) => t.selected || t.default);
 
+      const normSubPath = (p?: string) => (p || '').replace(/\\/g, '/').toLowerCase().trim();
+
       // 1. If the target is an external subtitle track
       if (pickedMeta?.isExternal && pickedMeta.deliveryUrl) {
-        const resolvedPath = resolvedExternalUrls?.get(pickedMeta.deliveryUrl) || pickedMeta.deliveryUrl;
+        const resolvedPath = resolvedExternalUrls?.get(pickedMeta.deliveryUrl) ||
+                             jellyfinResolvedSubsRef.current.get(pickedMeta.deliveryUrl) ||
+                             pickedMeta.deliveryUrl;
+        const normResolved = normSubPath(resolvedPath);
+        const normDelivery = normSubPath(pickedMeta.deliveryUrl);
+        const normTitle = (pickedMeta.title || '').trim().toLowerCase();
+
         const trackList = (await Bridge.getTrackList().catch(() => [])) as any[];
         const subTracks = trackList.filter((t: any) => t.type === 'sub');
-        const match = subTracks.find(
-          (t: any) => t.external && (t['external-filename'] === resolvedPath || t['external-filename'] === pickedMeta.deliveryUrl),
-        );
+        const extTracks = subTracks.filter((t: any) => t.external);
+
+        const match = extTracks.find((t: any) => {
+          const extFile = normSubPath(t['external-filename']);
+          if (normResolved && extFile && extFile === normResolved) return true;
+          if (normDelivery && extFile && extFile === normDelivery) return true;
+          if (normTitle && t.title && t.title.trim().toLowerCase() === normTitle) return true;
+          return false;
+        }) || (extTracks.length === 1 ? extTracks[0] : null);
+
         if (match?.id != null) {
           logInfo(`[Jellyfin] Selected external subtitle track ${match.id} (${pickedMeta.title || pickedMeta.lang || 'external'})`);
           await Bridge.setSubtitleTrack(match.id).catch(() => {});
           return true;
         }
+        return false;
       }
 
       // 2. If the target is an embedded subtitle track
@@ -2136,7 +2153,9 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
       const done = await applyJellyfinSubtitleSelection(currentVod);
       if (done || currentVod.jellyfinSubtitleStreamId === -1 || currentVod.jellyfinSubtitleStreamId == null) {
         hasAutoSelectedSubRef.current = true;
-        subAutoSelectEverCompletedRef.current = true;
+        if (autoSelectAttemptsRef.current >= 4) {
+          subAutoSelectEverCompletedRef.current = true;
+        }
       }
       return;
     }
@@ -2350,12 +2369,25 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
         if (subTracks.length !== lastSubTracksCountRef.current) {
           logInfo(`[Playback] Subtitle track count changed from ${lastSubTracksCountRef.current} to ${subTracks.length}. Resetting auto-select state.`);
           lastSubTracksCountRef.current = subTracks.length;
-          // Only retry auto-selection while we're still waiting for the initial
-          // track set. Once selection has completed once, count changes come from
-          // the user adding/removing subtitles and must not fight their choice.
-          if (!subAutoSelectEverCompletedRef.current) {
+          // During the initial settling window (first 15 attempts / ~7.5s),
+          // ANY track count change MUST reset auto-select so the final track set
+          // is evaluated with the correct track IDs.
+          if (!subAutoSelectEverCompletedRef.current || autoSelectAttemptsRef.current < 15) {
             hasAutoSelectedSubRef.current = false;
           }
+        }
+
+        // For Jellyfin: if a subtitle was requested (not None) but MPV currently has no subtitle selected
+        // (e.g. MKV demuxer reset sid to no / 0 upon loading), retry selection during initial settling window
+        if (
+          vodInfoRef.current?.source_id === 'jellyfin' &&
+          vodInfoRef.current.jellyfinSubtitleStreamId !== -1 &&
+          vodInfoRef.current.jellyfinSubtitleStreamId != null &&
+          subTracks.length > 0 &&
+          !subTracks.some((t: any) => t.selected) &&
+          autoSelectAttemptsRef.current < 15
+        ) {
+          hasAutoSelectedSubRef.current = false;
         }
 
         if (audioTracks.length !== lastAudioTracksCountRef.current) {
@@ -2749,7 +2781,9 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
         direct_url: workingUrl,
         source_id: 'vod',
       });
-      setVodInfo({ ...info, url: workingUrl });
+      const fullVodInfo = { ...info, url: workingUrl };
+      setVodInfo(fullVodInfo);
+      vodInfoRef.current = fullVodInfo;
       setPlaying(true);
       applySubtitleSettings();
 
@@ -2767,24 +2801,38 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
 
       // Add all Jellyfin external subtitle tracks to MPV. The existing track
       // selector reads MPV's track-list, so these become first-class tracks.
-      // Jellyfin's selected/default state is applied after all files load.
+      // Jellyfin's selected/default state is applied by the auto-select polling loop
+      // once both the main container and external subtitle files are demuxed.
       if (info.source_id === 'jellyfin') {
+        jellyfinResolvedSubsRef.current.clear();
         const resolvedByUrl = new Map<string, string>();
         if (info.jellyfinSubtitleTracks?.length) {
           for (const track of info.jellyfinSubtitleTracks) {
             if (!track.isExternal || !track.deliveryUrl) continue;
             try {
-              const resolved = await Bridge.addSubtitleFile(track.deliveryUrl, 'cached');
-              resolvedByUrl.set(track.deliveryUrl, resolved || track.deliveryUrl);
+              const isTarget = track.index === info.jellyfinSubtitleStreamId;
+              const resolved = await Bridge.addSubtitleFile(
+                track.deliveryUrl,
+                isTarget ? 'select' : 'cached',
+                track.title,
+                track.lang,
+              );
+              if (resolved) {
+                resolvedByUrl.set(track.deliveryUrl, resolved);
+                jellyfinResolvedSubsRef.current.set(track.deliveryUrl, resolved);
+              }
             } catch (error) {
               logWarn('[Jellyfin] Failed to load external subtitle:', track.deliveryUrl, error);
             }
           }
         }
-        const applied = await applyJellyfinSubtitleSelection(info, resolvedByUrl);
-        if (applied || info.jellyfinSubtitleStreamId === -1 || info.jellyfinSubtitleStreamId == null) {
+        if (info.jellyfinSubtitleStreamId === -1) {
+          await Bridge.setSubtitleTrack(0).catch(() => {});
           hasAutoSelectedSubRef.current = true;
           subAutoSelectEverCompletedRef.current = true;
+        } else {
+          // Attempt early selection if tracks are already demuxed
+          await applyJellyfinSubtitleSelection(fullVodInfo, resolvedByUrl).catch(() => false);
         }
       }
       

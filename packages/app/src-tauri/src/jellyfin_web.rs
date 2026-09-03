@@ -1284,17 +1284,22 @@ const INIT_SCRIPT: &str = r##"
             if (page) {
                 var pid = page.getAttribute('data-itemid') || (page.dataset && page.dataset.itemid) ||
                           page.getAttribute('data-id') || (page.dataset && page.dataset.id);
-                if (pid) return pid;
+                if (pid) return String(pid).replace(/-/g, '').toLowerCase();
             }
             var hm = (location.hash || '').match(/[?&]id=([^&]+)/i);
-            if (hm && hm[1]) { try { return decodeURIComponent(hm[1]); } catch (e) { return hm[1]; } }
+            if (hm && hm[1]) {
+                try { return decodeURIComponent(hm[1]).replace(/-/g, '').toLowerCase(); }
+                catch (e) { return String(hm[1]).replace(/-/g, '').toLowerCase(); }
+            }
             var vids = document.querySelectorAll ? document.querySelectorAll('video,audio') : [];
             for (var i = 0; i < vids.length; i++) {
                 var s = (vids[i].currentSrc || vids[i].getAttribute('src') || '') || '';
                 var mid = extractMediaItemId(s);
-                if (mid) return mid;
+                if (mid) return String(mid).replace(/-/g, '').toLowerCase();
             }
-            if (lastPlaybackInfoReq && lastPlaybackInfoReq.itemId) return lastPlaybackInfoReq.itemId;
+            if (lastPlaybackInfoReq && lastPlaybackInfoReq.itemId) {
+                return String(lastPlaybackInfoReq.itemId).replace(/-/g, '').toLowerCase();
+            }
         } catch (e) {}
         return null;
     }
@@ -1503,12 +1508,19 @@ const INIT_SCRIPT: &str = r##"
                     targetSubIdx = activeSubChoiceByItem[itemId];
                 }
 
-                // 2. Remembered preference for this exact item, then series, then
-                //    the most recent pick. This survives the reload between plays
-                //    (the web player itself forgets the pick and reverts its
-                //    dropdowns to the server default on the next load), so it
-                //    must outrank the live-dropdown scan below — on a fresh page
-                //    that scan only sees the web default, not the user's track.
+                // 2. In-page live dropdown value right on the screen. If the user
+                //    is looking at a page where a subtitle is visibly selected,
+                //    that takes precedence over old remembered preferences from
+                //    unrelated media.
+                if (targetSubIdx === null) {
+                    var inPageChoice = getInPageSubtitleSelection(itemId);
+                    if (inPageChoice !== null && inPageChoice !== undefined) {
+                        targetSubIdx = inPageChoice;
+                    }
+                }
+
+                // 3. Remembered preference for this exact item, then series, then
+                //    the most recent pick.
                 if (targetSubIdx === null) {
                     var itMeta = itemId ? (itemById[itemId] || null) : null;
                     var sId = itMeta && itMeta.seriesId ? itMeta.seriesId : null;
@@ -1534,16 +1546,6 @@ const INIT_SCRIPT: &str = r##"
                                 }
                             }
                         }
-                    }
-                }
-
-                // 3. Live dropdown value — fallback for plays where nothing was
-                //    recorded or remembered (e.g. the first-ever play of an item
-                //    with a default-aware web player).
-                if (targetSubIdx === null) {
-                    var inPageChoice = getInPageSubtitleSelection(itemId);
-                    if (inPageChoice !== null && inPageChoice !== undefined) {
-                        targetSubIdx = inPageChoice;
                     }
                 }
 
@@ -2107,7 +2109,7 @@ const INIT_SCRIPT: &str = r##"
                 media_source_id: subtitle.mediaSourceId,
                 subtitle_stream_id: meta.subtitleStreamId != null ? meta.subtitleStreamId : subtitle.subtitleStreamId,
                 audio_stream_id: meta.audioStreamId,
-                subtitle_url: subtitle.subtitleUrl,
+                subtitle_url: meta.subtitleUrl || subtitle.subtitleUrl,
                 subtitle_tracks: meta.subtitleTracks.length ? meta.subtitleTracks : subtitle.subtitleTracks,
                 poster_url: meta.posterUrl,
                 audio_tracks: meta.audioTracks,

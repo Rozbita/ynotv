@@ -1562,22 +1562,28 @@ async fn mpv_set_subtitle<R: Runtime>(app: AppHandle<R>, id: i64) -> Result<(), 
 }
 
 #[tauri::command]
-async fn mpv_add_subtitle<R: Runtime>(app: AppHandle<R>, file_path: String, flag: Option<String>) -> Result<String, String> {
+async fn mpv_add_subtitle<R: Runtime>(
+    app: AppHandle<R>,
+    file_path: String,
+    flag: Option<String>,
+    title: Option<String>,
+    lang: Option<String>,
+) -> Result<String, String> {
     #[cfg(target_os = "macos")]
     {
-        mpv_core::add_subtitle_file(&app, file_path, flag).await
+        mpv_core::add_subtitle_file(&app, file_path, flag, title, lang).await
     }
     #[cfg(target_os = "windows")]
     {
         if get_player_engine(&app).await == PlayerEngine::LibMpv {
-            mpv_core::add_subtitle_file(&app, file_path, flag).await
+            mpv_core::add_subtitle_file(&app, file_path, flag, title, lang).await
         } else {
-            mpv_windows::add_subtitle_file(&app, file_path, flag).await
+            mpv_windows::add_subtitle_file(&app, file_path, flag, title, lang).await
         }
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
-        mpv_core::add_subtitle_file(&app, file_path, flag).await
+        mpv_core::add_subtitle_file(&app, file_path, flag, title, lang).await
     }
 }
 

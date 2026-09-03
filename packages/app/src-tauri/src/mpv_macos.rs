@@ -408,9 +408,22 @@ pub async fn set_subtitle_track<R: Runtime>(app: &AppHandle<R>, id: i64) -> Resu
     Ok(())
 }
 
-pub async fn add_subtitle_file<R: Runtime>(app: &AppHandle<R>, file_path: String, flag: Option<String>) -> Result<(), String> {
+pub async fn add_subtitle_file<R: Runtime>(
+    app: &AppHandle<R>,
+    file_path: String,
+    flag: Option<String>,
+    title: Option<String>,
+    lang: Option<String>,
+) -> Result<(), String> {
     let f = flag.unwrap_or_else(|| "select".to_string());
-    send_command(app, json!({ "command": ["sub-add", file_path, f] })).await?;
+    let mut cmd = vec![json!("sub-add"), json!(file_path), json!(f)];
+    if let Some(t) = title {
+        cmd.push(json!(t));
+        if let Some(l) = lang {
+            cmd.push(json!(l));
+        }
+    }
+    send_command(app, json!({ "command": cmd })).await?;
     Ok(())
 }
 

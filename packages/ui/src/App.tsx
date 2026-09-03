@@ -6500,6 +6500,7 @@ function useTmdbPresencePoster(
           }
           vodSourceId={vodInfo?.source_id}
           vodMediaId={vodInfo?.mediaId}
+          jellyfinSubtitleTracks={vodInfo?.jellyfinSubtitleTracks}
         />
       ) : (
         <TrackSelectionModal

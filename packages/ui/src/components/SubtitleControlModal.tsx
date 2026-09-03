@@ -30,6 +30,7 @@ import { SubtitleDiagnosticsModal } from './SubtitleDiagnosticsModal';
 import { cleanTitleForSearch } from '../utils/cleanTitle';
 import { db } from '../db';
 import { fetchVodProviderTmdbId } from '../db/sync';
+import type { VodPlayInfo } from '../types/media';
 import './SubtitleControlModal.css';
 
 interface Track {
@@ -44,6 +45,8 @@ interface Track {
   'external-filename'?: string;
 }
 
+export type JellyfinSubTrack = NonNullable<VodPlayInfo['jellyfinSubtitleTracks']>[number];
+
 interface SubtitleControlModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -55,6 +58,7 @@ interface SubtitleControlModalProps {
   imdbId?: string;
   vodSourceId?: string;
   vodMediaId?: string;
+  jellyfinSubtitleTracks?: JellyfinSubTrack[];
 }
 
 type ViewState = 'tracks' | 'movies' | 'subtitles' | 'zip-files';
@@ -121,12 +125,12 @@ const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 const LANG_LABELS: Record<string, string> = {
   en: 'English', es: 'Spanish', fr: 'French', de: 'German', it: 'Italian',
-  pt: 'Portuguese', ru: 'Russian', ar: 'Arabic', hi: 'Hindi', zh: 'Chinese',
-  ja: 'Japanese', ko: 'Korean', nl: 'Dutch', pl: 'Polish', tr: 'Turkish',
-  sv: 'Swedish', da: 'Danish', no: 'Norwegian', fi: 'Finnish', cs: 'Czech',
-  el: 'Greek', he: 'Hebrew', id: 'Indonesian', ms: 'Malay', th: 'Thai',
-  vi: 'Vietnamese', ro: 'Romanian', hu: 'Hungarian', bg: 'Bulgarian',
-  uk: 'Ukrainian', sr: 'Serbian', hr: 'Croatian', sk: 'Slovak', sl: 'Slovenian',
+  pt: 'Portuguese', ru: 'Russian', ja: 'Japanese', ko: 'Korean', zh: 'Chinese',
+  ar: 'Arabic', hi: 'Hindi', tr: 'Turkish', pl: 'Polish', nl: 'Dutch',
+  sv: 'Swedish', da: 'Danish', fi: 'Finnish', no: 'Norwegian', cs: 'Czech',
+  el: 'Greek', he: 'Hebrew', ro: 'Romanian', hu: 'Hungarian', th: 'Thai',
+  vi: 'Vietnamese', id: 'Indonesian', ms: 'Malay', uk: 'Ukrainian', bg: 'Bulgarian',
+  hr: 'Croatian', sr: 'Serbian', sk: 'Slovak', sl: 'Slovenian',
   lt: 'Lithuanian', lv: 'Latvian', et: 'Estonian', ca: 'Catalan', tl: 'Tagalog',
   fa: 'Persian', ur: 'Urdu', bn: 'Bengali', ta: 'Tamil', te: 'Telugu',
   mr: 'Marathi', pa: 'Punjabi', gu: 'Gujarati', kn: 'Kannada', ml: 'Malayalam',
@@ -142,7 +146,7 @@ function normalizeLangCode(code?: string): string {
   return fromSubSourceLang(toSubSourceLang(code));
 }
 
-function getTrackLanguage(track: Track): string {
+function getTrackLanguage(track: Track, jellyfinTracks?: JellyfinSubTrack[]): string {
   if (track.external && track['external-filename']) {
     const parts = track['external-filename'].split(/[/\\]/);
     const base = parts[parts.length - 1];
@@ -156,12 +160,25 @@ function getTrackLanguage(track: Track): string {
       if (subParts.length >= 3) {
         return normalizeLangCode(subParts[2]);
       }
+    } else if (base.startsWith('jf-') || track['external-filename'].toLowerCase().includes('ynotv-jellyfin-subs')) {
+      if (track.lang) return normalizeLangCode(track.lang);
+      if (jellyfinTracks) {
+        const extJelly = jellyfinTracks.filter((t: JellyfinSubTrack) => t.isExternal);
+        if (extJelly.length === 1 && extJelly[0].lang) {
+          return normalizeLangCode(extJelly[0].lang);
+        }
+      }
     }
   }
   return normalizeLangCode(track.lang);
 }
 
-function parseExternalTrack(filePath: string): { label: string; origin: string } {
+function parseExternalTrack(
+  filePath: string,
+  trackTitle?: string,
+  trackLang?: string,
+  jellyfinTracks?: JellyfinSubTrack[]
+): { label: string; origin: string } {
   const parts = filePath.split(/[/\\]/);
   const base = parts[parts.length - 1];
   
@@ -192,6 +209,29 @@ function parseExternalTrack(filePath: string): { label: string; origin: string }
     }
     return { label: 'Downloaded Subtitle', origin: 'OpenSubtitles' };
   }
+
+  // Jellyfin external subtitles (downloaded to ynotv-jellyfin-subs temp folder)
+  if (base.startsWith('jf-') || filePath.toLowerCase().includes('ynotv-jellyfin-subs')) {
+    // 1. If mpv track has a clean title, use it
+    if (trackTitle && !trackTitle.startsWith('jf-') && !trackTitle.endsWith('.vtt') && !trackTitle.endsWith('.srt')) {
+      return { label: trackTitle, origin: 'Jellyfin' };
+    }
+    // 2. Match from Jellyfin metadata passed in props
+    if (jellyfinTracks && jellyfinTracks.length > 0) {
+      const extJelly = jellyfinTracks.filter((t) => t.isExternal);
+      if (extJelly.length === 1 && extJelly[0].title) {
+        return { label: extJelly[0].title, origin: 'Jellyfin' };
+      }
+      if (trackLang) {
+        const langMatch = extJelly.find((t) => t.lang?.toLowerCase() === trackLang.toLowerCase());
+        if (langMatch?.title) return { label: langMatch.title, origin: 'Jellyfin' };
+      }
+      if (extJelly[0]?.title) {
+        return { label: extJelly[0].title, origin: 'Jellyfin' };
+      }
+    }
+    return { label: trackTitle || 'Jellyfin Subtitle', origin: 'Jellyfin' };
+  }
   
   // Fallback for legacy format
   if (base.includes('_')) {
@@ -218,6 +258,7 @@ export function SubtitleControlModal({
   imdbId,
   vodSourceId,
   vodMediaId,
+  jellyfinSubtitleTracks,
 }: SubtitleControlModalProps) {
   const { t } = useTranslation('subtitles');
   const [tracks, setTracks] = useState<Track[]>([]);
@@ -546,7 +587,7 @@ export function SubtitleControlModal({
       const current = filteredTracks.find((t: Track) => t.selected);
       if (current) {
         setSelectedId(current.id);
-        const norm = getTrackLanguage(current);
+        const norm = getTrackLanguage(current, jellyfinSubtitleTracks);
         if (norm) {
           setSearchLang(norm);
         } else {
@@ -1213,7 +1254,7 @@ export function SubtitleControlModal({
 
   // Derive available languages from actual subtitle tracks, normalized to canonical 2-letter codes
   const availableLangs = Array.from(
-    new Set(allSubTracks.map(t => getTrackLanguage(t)).filter(Boolean))
+    new Set(allSubTracks.map(t => getTrackLanguage(t, jellyfinSubtitleTracks)).filter(Boolean))
   ).map(code => ({
     code: code,
     label: LANG_LABELS[code] || code.toUpperCase(),
@@ -1224,11 +1265,11 @@ export function SubtitleControlModal({
 
   // Determine active track language based on selectedId
   const activeTrack = allSubTracks.find(t => t.id === selectedId);
-  const selectedTrackLang = selectedId === 0 ? 'off' : (activeTrack ? getTrackLanguage(activeTrack) : 'off');
+  const selectedTrackLang = selectedId === 0 ? 'off' : (activeTrack ? getTrackLanguage(activeTrack, jellyfinSubtitleTracks) : 'off');
 
   // Filter subtitle tracks for Column 2 based on selected language.
   // When subtitles are "off" list every loaded track. App-downloaded external
-  // tracks (opensubtitles__/subsource__/stremio__) are ALWAYS shown so a
+  // tracks (opensubtitles__/subsource__/stremio__/jf-...) are ALWAYS shown so a
   // downloaded subtitle never disappears from the list just because the active
   // language filter (e.g. the default language) differs from its own language.
   const filteredSubTracks = searchLang === 'off'
@@ -1237,10 +1278,16 @@ export function SubtitleControlModal({
         const extFile = track.external && track['external-filename']
           ? (track['external-filename'].split(/[/\\]/).pop() || '')
           : '';
-        if (extFile.startsWith('opensubtitles__') || extFile.startsWith('subsource__') || extFile.startsWith('stremio__')) {
+        if (
+          extFile.startsWith('opensubtitles__') ||
+          extFile.startsWith('subsource__') ||
+          extFile.startsWith('stremio__') ||
+          extFile.startsWith('jf-') ||
+          track['external-filename']?.toLowerCase().includes('ynotv-jellyfin-subs')
+        ) {
           return true;
         }
-        return getTrackLanguage(track) === normalizeLangCode(searchLang);
+        return getTrackLanguage(track, jellyfinSubtitleTracks) === normalizeLangCode(searchLang);
       });
 
   // Filter subtitles by episode if filter is active
@@ -1363,7 +1410,7 @@ export function SubtitleControlModal({
                 </button>
                 {filteredSubTracks.map((track) => {
                   const info = track.external && track['external-filename']
-                    ? parseExternalTrack(track['external-filename'])
+                    ? parseExternalTrack(track['external-filename'], track.title, track.lang, jellyfinSubtitleTracks)
                     : { label: track.title || t('trackLabel', { id: track.id }), origin: t('embedded') };
                   
                   return (
