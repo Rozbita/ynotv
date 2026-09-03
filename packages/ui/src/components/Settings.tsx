@@ -1218,6 +1218,7 @@ export function Settings({
       setMpvHwdecEnabled(settings.mpvHwdecEnabled ?? true);
       setTimeshiftEnabled(settings.timeshiftEnabled ?? true);
       useSettingsStore.getState().setTimeshiftCacheBytes(settings.timeshiftCacheBytes ?? 268_435_456);
+      setTimeshiftCacheBytes(settings.timeshiftCacheBytes ?? 268_435_456);
       setLiveBufferOffset(settings.liveBufferOffset ?? 0);
       setStreamWatchdogSeconds(settings.streamWatchdogSeconds ?? 10);
       setStreamMaxRetries(settings.streamMaxRetries ?? 20);
@@ -2394,37 +2395,27 @@ export function Settings({
   };
 
 
+  // Widget/sports scale + opacity live in the settings store (single source of
+  // truth). The setters persist (debounced) and the DOM applier writes the CSS
+  // vars — no direct documentElement writes here.
   const handleWidgetScaleChange = (scale: number) => {
     setWidgetScaleState(scale);
-    document.documentElement.style.setProperty('--widget-scale', String(scale));
-    if (window.storage) {
-      window.storage.debouncedUpdateSettings({ widgetScale: scale });
-    }
+    useSettingsStore.getState().setWidgetScale(scale);
   };
 
   const handleWidgetBgOpacityChange = (opacity: number) => {
     setWidgetBgOpacityState(opacity);
-    document.documentElement.style.setProperty('--widget-bg-opacity', String(opacity));
-    document.documentElement.style.setProperty('--cio-bg-opacity', String(opacity));
-    if (window.storage) {
-      window.storage.debouncedUpdateSettings({ widgetBgOpacity: opacity });
-    }
+    useSettingsStore.getState().setWidgetBgOpacity(opacity);
   };
 
   const handleSportsScaleChange = (scale: number) => {
     setSportsScaleState(scale);
-    document.documentElement.style.setProperty('--sports-scale', String(scale));
-    if (window.storage) {
-      window.storage.debouncedUpdateSettings({ sportsScale: scale });
-    }
+    useSettingsStore.getState().setSportsScale(scale);
   };
 
   const handleSportsBgOpacityChange = (opacity: number) => {
     setSportsBgOpacityState(opacity);
-    document.documentElement.style.setProperty('--sports-bg-opacity', String(opacity));
-    if (window.storage) {
-      window.storage.debouncedUpdateSettings({ sportsBgOpacity: opacity });
-    }
+    useSettingsStore.getState().setSportsBgOpacity(opacity);
   };
 
   const handleShortcutsChange = async (newShortcuts: ShortcutsMap) => {

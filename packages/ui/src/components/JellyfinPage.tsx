@@ -61,6 +61,7 @@ export interface JellyfinPlayPayload {
     codec?: string;
     isDefault?: boolean;
   }>;
+  audioStreamId?: number;
   // Chapter markers from the item DTO (Fields=Chapters), rendered as ticks on
   // the ynoTV seek bar. Ticks are 100ns units (StartPositionTicks / 1e7 = secs).
   chapters?: Array<{

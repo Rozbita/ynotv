@@ -1486,10 +1486,15 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
       pendingResumeSeekRef.current = null;
       isInitialSeekPendingRef.current = false;
       let playbackUrl = resolved.url;
-      if (info.source_id === 'jellyfin' && info.jellyfinSubtitleStreamId != null) {
+      if (info.source_id === 'jellyfin') {
         try {
           const u = new URL(playbackUrl);
-          u.searchParams.set('SubtitleStreamIndex', String(info.jellyfinSubtitleStreamId));
+          if (info.jellyfinSubtitleStreamId != null) {
+            u.searchParams.set('SubtitleStreamIndex', String(info.jellyfinSubtitleStreamId));
+          }
+          if (info.jellyfinAudioStreamId != null) {
+            u.searchParams.set('AudioStreamIndex', String(info.jellyfinAudioStreamId));
+          }
           playbackUrl = u.toString();
         } catch {
           // Keep the original stream URL if it cannot be augmented.
@@ -2048,6 +2053,82 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
     [],
   );
 
+  const applyJellyfinAudioSelection = useCallback(
+    async (vod: VodPlayInfo) => {
+      if (vod.source_id !== 'jellyfin') return false;
+      const targetAudioId = vod.jellyfinAudioStreamId;
+      if (targetAudioId == null) return false;
+
+      const metaTracks = vod.jellyfinAudioTracks || [];
+      const pickedMeta = metaTracks.find((t) => t.index === targetAudioId);
+
+      const trackList = (await Bridge.getTrackList().catch(() => [])) as any[];
+      const audioTracks = trackList.filter((t: any) => t.type === 'audio');
+
+      if (audioTracks.length > 0) {
+        // 1. First priority: match by metadata (language and/or title)
+        if (pickedMeta) {
+          const wantLang = normalizeLangCode(pickedMeta.lang);
+          const wantTitle = (pickedMeta.title || '').trim().toLowerCase();
+
+          // Match both language AND title if available
+          if (wantLang && wantTitle) {
+            const bothMatch = audioTracks.find(
+              (t: any) => normalizeLangCode(t.lang) === wantLang && (t.title || '').trim().toLowerCase() === wantTitle,
+            );
+            if (bothMatch?.id != null) {
+              logInfo(`[Jellyfin] Selected audio track by lang+title match: track ${bothMatch.id} (${wantLang}, ${wantTitle})`);
+              await Bridge.setAudioTrack(bothMatch.id).catch(() => {});
+              return true;
+            }
+          }
+
+          // Match by normalized language code
+          if (wantLang) {
+            const langMatch = audioTracks.find((t: any) => normalizeLangCode(t.lang) === wantLang);
+            if (langMatch?.id != null) {
+              logInfo(`[Jellyfin] Selected audio track by language match: track ${langMatch.id} (${wantLang})`);
+              await Bridge.setAudioTrack(langMatch.id).catch(() => {});
+              return true;
+            }
+          }
+
+          // Match by title
+          if (wantTitle) {
+            const titleMatch = audioTracks.find((t: any) => (t.title || '').trim().toLowerCase() === wantTitle);
+            if (titleMatch?.id != null) {
+              logInfo(`[Jellyfin] Selected audio track by title match: track ${titleMatch.id} (${wantTitle})`);
+              await Bridge.setAudioTrack(titleMatch.id).catch(() => {});
+              return true;
+            }
+          }
+        }
+
+        // 2. Second priority: calculate 1-based relative index among audio streams
+        let foundInMeta = false;
+        let relIndex = 1;
+        for (const st of metaTracks) {
+          if (st.index === targetAudioId) {
+            foundInMeta = true;
+            break;
+          }
+          relIndex++;
+        }
+
+        if (foundInMeta && audioTracks[relIndex - 1]) {
+          const matchByRel = audioTracks[relIndex - 1];
+          if (matchByRel?.id != null) {
+            logInfo(`[Jellyfin] Selected audio track by relative index fallback: track ${matchByRel.id} (relIndex ${relIndex}, stream ${targetAudioId})`);
+            await Bridge.setAudioTrack(matchByRel.id).catch(() => {});
+            return true;
+          }
+        }
+      }
+      return false;
+    },
+    [],
+  );
+
   const autoSelectSubtitle = useCallback(async (providedSubTracks?: any[]) => {
     // Jellyfin supplies the authoritative selected/default subtitle.
     if (vodInfoRef.current?.source_id === 'jellyfin') {
@@ -2208,6 +2289,15 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
   }, [subtitleSettings, playing]);
 
   const autoSelectAudio = useCallback(async (providedAudioTracks?: any[]) => {
+    // Jellyfin supplies the authoritative selected audio stream index.
+    if (vodInfoRef.current?.source_id === 'jellyfin' && vodInfoRef.current?.jellyfinAudioStreamId != null) {
+      const done = await applyJellyfinAudioSelection(vodInfoRef.current);
+      if (done) {
+        hasAutoSelectedAudioRef.current = true;
+        return;
+      }
+    }
+
     const ss = useSettingsStore.getState().subtitleSettings;
     const rawDefaultAudioLanguage = ss?.defaultAudioLanguage || 'default';
 
@@ -2506,10 +2596,15 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
     // Jellyfin: apply the default subtitle stream (from PlaybackInfo) to the
     // direct-play URL so embedded subtitle tracks arrive pre-selected.
     let jellyfinPlayUrl = resolved.url;
-    if (info.source_id === 'jellyfin' && info.jellyfinSubtitleStreamId != null) {
+    if (info.source_id === 'jellyfin') {
       try {
         const u = new URL(jellyfinPlayUrl);
-        u.searchParams.set('SubtitleStreamIndex', String(info.jellyfinSubtitleStreamId));
+        if (info.jellyfinSubtitleStreamId != null) {
+          u.searchParams.set('SubtitleStreamIndex', String(info.jellyfinSubtitleStreamId));
+        }
+        if (info.jellyfinAudioStreamId != null) {
+          u.searchParams.set('AudioStreamIndex', String(info.jellyfinAudioStreamId));
+        }
         jellyfinPlayUrl = u.toString();
       } catch {
         // Keep the original stream URL if it cannot be augmented.

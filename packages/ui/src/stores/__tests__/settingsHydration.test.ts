@@ -103,6 +103,78 @@ describe('settings store hydration', () => {
     expect(s.language).toBe('en');
   });
 
+  it('hydrates widget/sports scale + opacity vars from storage (survives restart)', async () => {
+    storageBackend.widgetScale = 1.25;
+    storageBackend.widgetBgOpacity = 0.4;
+    storageBackend.sportsScale = 0.8;
+    storageBackend.sportsBgOpacity = 0.6;
+
+    await ensureSettingsHydration();
+    await vi.waitFor(() => expect(useSettingsStore.getState().layoutSettingsLoaded).toBe(true));
+
+    const s = useSettingsStore.getState();
+    expect(s.widgetScale).toBe(1.25);
+    expect(s.widgetBgOpacity).toBe(0.4);
+    expect(s.sportsScale).toBe(0.8);
+    expect(s.sportsBgOpacity).toBe(0.6);
+  });
+
+  it('rejects corrupted widget-scale shapes instead of hydrating them in', async () => {
+    storageBackend.widgetScale = 'big' as unknown as number;
+    storageBackend.sportsBgOpacity = {} as unknown as number;
+
+    await ensureSettingsHydration();
+    await vi.waitFor(() => expect(useSettingsStore.getState().layoutSettingsLoaded).toBe(true));
+
+    const s = useSettingsStore.getState();
+    expect(s.widgetScale).toBe(1);
+    expect(s.sportsBgOpacity).toBe(0.7);
+  });
+
+  it('hydrates the mirror-only settings from disk (survives restart without localStorage)', async () => {
+    // These settings previously survived restart only via the localStorage
+    // mirror; disk must now be authoritative so a cleared mirror (recovery
+    // screen / debug clear) cannot silently reset them to defaults.
+    storageBackend.mpvQuality = 'quality';
+    storageBackend.defaultCategory = 'sports';
+    storageBackend.epgProgramFontSize = 18;
+    storageBackend.tmdbLanguage = 'de-DE';
+    storageBackend.controllerRepeatDelayMs = 500;
+    storageBackend.controllerRepeatIntervalMs = 180;
+    storageBackend.controllerVisualizerLayout = 'playstation';
+    storageBackend.customGamepadProfiles = { '1234': { A: 'ok' } };
+
+    await ensureSettingsHydration();
+    await vi.waitFor(() => expect(useSettingsStore.getState().layoutSettingsLoaded).toBe(true));
+
+    const s = useSettingsStore.getState();
+    expect(s.mpvQuality).toBe('quality');
+    expect(s.defaultCategory).toBe('sports');
+    expect(s.epgProgramFontSize).toBe(18);
+    expect(s.tmdbLanguage).toBe('de-DE');
+    expect(s.controllerRepeatDelayMs).toBe(500);
+    expect(s.controllerRepeatIntervalMs).toBe(180);
+    expect(s.controllerVisualizerLayout).toBe('playstation');
+    expect(s.customGamepadProfiles).toEqual({ '1234': { A: 'ok' } });
+  });
+
+  it('keeps the localStorage-mirror seed when disk lacks the key', async () => {
+    // Disk has no mpvQuality but the mirror does — the seeded value must
+    // survive the hydration setState rather than being clobbered by a default.
+    seedLocalStorage({ mpvQuality: 'performance' });
+    storageBackend.theme = 'dark';
+    // Re-import so the store's synchronous seed sees the mirror (production
+    // boot order: mirror exists from the previous session before module load).
+    vi.resetModules();
+    ({ useSettingsStore } = await import('../settingsStore'));
+    ({ ensureSettingsHydration } = await import('../settingsStoreHydration'));
+
+    await ensureSettingsHydration();
+    await vi.waitFor(() => expect(useSettingsStore.getState().layoutSettingsLoaded).toBe(true));
+
+    expect(useSettingsStore.getState().mpvQuality).toBe('performance');
+  });
+
   it('hydrates the favorites A-Z sort flag from storage (survives restart)', async () => {
     storageBackend.alwaysSortFavoritesAlphabetically = true;
 

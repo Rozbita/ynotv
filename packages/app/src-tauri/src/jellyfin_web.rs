@@ -114,22 +114,49 @@ fn http_client() -> &'static reqwest::Client {
     })
 }
 
+/// Jellyfin item ids are GUIDs (32 hex chars, optionally dashed). Accept any
+/// hex/dash-only token with a sane minimum length so short/custom ids don't
+/// regress, but reject word-like segments such as a reverse-proxy prefix named
+/// "Videos" (p/r/o/x/y are not hex digits).
+fn is_plausible_jellyfin_item_id(seg: &str) -> bool {
+    !seg.is_empty()
+        && seg.len() >= 8
+        && seg.chars().all(|c| c.is_ascii_hexdigit() || c == '-')
+}
+
 /// Parse a direct-stream URL like
 /// `http://host:8096/Videos/{itemId}/stream.mkv?...&api_key=...&startTimeTicks=...`
 /// into `(server_base, api_key, item_id, media_source_id, start_ticks)`.
 fn parse_play_url(url: &str) -> Option<(String, String, String, Option<String>, u64)> {
     let u = tauri::Url::parse(url).ok()?;
     let host = u.host_str()?;
-    let server_base = match u.port() {
-        Some(p) => format!("{}://{}:{}", u.scheme(), host, p),
-        None => format!("{}://{}", u.scheme(), host),
+    let path = u.path();
+    let segs: Vec<&str> = path.split('/').collect();
+
+    // Locate the "Videos" or "Audio" segment dynamically to support
+    // reverse-proxy subpaths. A deployment prefix could itself contain a
+    // segment literally named "Videos"/"Audio" (e.g.
+    // /media/Videos/proxy/Videos/{id}/stream), so only accept a media segment
+    // whose following token looks like a Jellyfin item id; otherwise keep
+    // scanning for the next media segment.
+    let media_pos = segs.iter().enumerate().find_map(|(i, &s)| {
+        let is_media = s.eq_ignore_ascii_case("Videos") || s.eq_ignore_ascii_case("Audio");
+        let has_id = i + 1 < segs.len() && is_plausible_jellyfin_item_id(segs[i + 1]);
+        if is_media && has_id { Some(i) } else { None }
+    })?;
+    let item_id = segs[media_pos + 1].replace('-', "");
+
+    let prefix = segs[1..media_pos].join("/");
+    let subpath = if prefix.is_empty() {
+        String::new()
+    } else {
+        format!("/{}", prefix)
     };
-    let segs: Vec<&str> = u.path().split('/').collect();
-    // /Videos/{id}/... or /Audio/{id}/...
-    if segs.len() < 3 || (segs[1] != "Videos" && segs[1] != "Audio") {
-        return None;
-    }
-    let item_id = segs[2].to_string();
+
+    let server_base = match u.port() {
+        Some(p) => format!("{}://{}:{}{}", u.scheme(), host, p, subpath),
+        None => format!("{}://{}{}", u.scheme(), host, subpath),
+    };
     let pairs: Vec<(String, String)> = u
         .query_pairs()
         .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -238,6 +265,7 @@ struct PlayPayload {
     item_id: Option<String>,
     media_source_id: Option<String>,
     subtitle_stream_id: Option<i64>,
+    audio_stream_id: Option<i64>,
     subtitle_url: Option<String>,
     subtitle_tracks: Option<Vec<serde_json::Value>>,
     poster_url: Option<String>,
@@ -454,6 +482,7 @@ pub async fn jellyfin_embed_open<R: Runtime>(
                                         "itemId": payload.item_id,
                                         "mediaSourceId": payload.media_source_id,
                                         "subtitleStreamId": payload.subtitle_stream_id,
+                                        "audioStreamId": payload.audio_stream_id,
                                         "subtitleUrl": payload.subtitle_url,
                                         "subtitleTracks": payload.subtitle_tracks,
                                         "posterUrl": payload.poster_url,
@@ -741,6 +770,52 @@ const INIT_SCRIPT: &str = r##"
     var diagBuf = [];          // bounded; flushed inside the next play payload
     var DIAG_BUF_MAX = 400;
     var playbackInfo = null;   // latest PlaybackInfo response body
+    var playbackInfoByItem = {}; // cleanItemId -> PlaybackInfo response body
+    var lastPlaybackInfoAt = 0;
+    var lastHlsStream = null;  // { url: string, itemId: string, at: number } captured from HLS request
+
+    function playbackInfoFor(targetItemId) {
+        try {
+            if (targetItemId) {
+                var clean = String(targetItemId).replace(/-/g, '');
+                if (playbackInfoByItem[clean]) return playbackInfoByItem[clean];
+                // A requested item with no cached PlaybackInfo response must NOT
+                // fall through to the latest global response — that can belong to
+                // a different item and misroute MediaSources/stream selection.
+                return null;
+            }
+        } catch (e) {}
+        return playbackInfo;
+    }
+
+    // Mirrors the Rust parse_play_url: scan the path for a "Videos"/"Audio"
+    // segment whose following token looks like a Jellyfin item id
+    // (hex/dash-only, >= 8 chars), so a reverse-proxy prefix that itself
+    // contains a segment named "Videos"/"Audio" (e.g.
+    // /media/Videos/proxy/Videos/{id}/stream) is skipped in favor of the real
+    // media segment. Returns { type, itemId } (itemId dash-stripped) or null.
+    function findMediaSegment(url) {
+        try {
+            var s = String(url || '').split(/[?#]/)[0];
+            var segs = s.split('/');
+            for (var i = 0; i < segs.length - 1; i++) {
+                var seg = segs[i];
+                if (!seg) continue;
+                var lower = seg.toLowerCase();
+                if (lower !== 'videos' && lower !== 'audio') continue;
+                var idSeg = segs[i + 1] || '';
+                if (idSeg.length >= 8 && /^[0-9a-fA-F-]+$/.test(idSeg)) {
+                    return { type: lower === 'audio' ? 'Audio' : 'Videos', itemId: idSeg.replace(/-/g, '') };
+                }
+            }
+        } catch (e) {}
+        return null;
+    }
+
+    function extractMediaItemId(url) {
+        var m = findMediaSegment(url);
+        return m ? m.itemId : null;
+    }
 
     // Diagnostics NEVER touch document.title — that is the *signal* channel,
     // and WebView2 coalesces rapid title changes, so any competing title write
@@ -933,7 +1008,7 @@ const INIT_SCRIPT: &str = r##"
         try {
             var uid = currentUserId();
             if (!itemId || !uid) { if (cb) cb(null); return; }
-            var origin = serverOrigin();
+            var origin = serverBase();
             var url = origin + "/Users/" + encodeURIComponent(uid) + "/Items/" + encodeURIComponent(itemId);
             var tok = accessToken();
             if (tok) url += "?api_key=" + encodeURIComponent(tok);
@@ -1216,8 +1291,8 @@ const INIT_SCRIPT: &str = r##"
             var vids = document.querySelectorAll ? document.querySelectorAll('video,audio') : [];
             for (var i = 0; i < vids.length; i++) {
                 var s = (vids[i].currentSrc || vids[i].getAttribute('src') || '') || '';
-                var m = s.match(/\/Videos\/([^/]+)/i);
-                if (m && m[1]) return m[1];
+                var mid = extractMediaItemId(s);
+                if (mid) return mid;
             }
             if (lastPlaybackInfoReq && lastPlaybackInfoReq.itemId) return lastPlaybackInfoReq.itemId;
         } catch (e) {}
@@ -1273,6 +1348,26 @@ const INIT_SCRIPT: &str = r##"
         return window.location.origin;
     }
 
+    function serverBase() {
+        try {
+            var api = pickApiClient();
+            if (api && typeof api.serverAddress === "function") {
+                var a = api.serverAddress();
+                if (a) return a.replace(/\/+$/, '');
+            }
+        } catch (e) {}
+        try {
+            var loc = window.location;
+            if (loc && loc.origin) {
+                var p = loc.pathname || '';
+                var m = p.match(/^(.*?)\/(?:web|index\.html)/i);
+                if (m && m[1]) return (loc.origin + m[1]).replace(/\/+$/, '');
+                return loc.origin.replace(/\/+$/, '');
+            }
+        } catch (e) {}
+        return window.location.origin;
+    }
+
     function subtitleStreamInfo(elem, src) {
         try {
             var api = pickApiClient();
@@ -1295,10 +1390,21 @@ const INIT_SCRIPT: &str = r##"
             // `src` is the URL captured before blankMedia() wiped the element,
             // so the item/mediaSource can always be derived from it.
             var raw = src || (elem && (elem.currentSrc || elem.src || '')) || '';
-            var m = raw.match(/\/Videos\/([^/]+)/i);
-            if (m) itemId = m[1];
+            if (raw.indexOf('blob:') === 0 && lastHlsStream) raw = lastHlsStream.url;
+            itemId = extractMediaItemId(raw);
             var sourceMatch = raw.match(/[?&]mediaSourceId=([^&]+)/i);
-            if (sourceMatch) mediaSourceId = decodeURIComponent(sourceMatch[1]);
+            if (!itemId && lastPlaybackInfoReq && lastPlaybackInfoReq.itemId) {
+                itemId = String(lastPlaybackInfoReq.itemId).replace(/-/g, '');
+            }
+            if (!itemId) {
+                var ctxId = resolveContextItemId(elem);
+                if (ctxId) itemId = String(ctxId).replace(/-/g, '');
+            }
+            var pInfo1 = playbackInfoFor(itemId);
+            if (!mediaSourceId && pInfo1 && pInfo1.MediaSources && pInfo1.MediaSources[0]) {
+                mediaSourceId = pInfo1.MediaSources[0].Id || null;
+            }
+            if (!mediaSourceId && itemId) mediaSourceId = itemId;
             var subtitleTracks = [];
             // Jellyfin renders external tracks as <track> elements. Preserve
             // every track so the native MPV selector can expose them later.
@@ -1331,19 +1437,27 @@ const INIT_SCRIPT: &str = r##"
     // player: poster URL (derived from the item), audio stream list, and the
     // authoritative subtitle track list (absolute delivery URLs + api_key).
     function playbackInfoMeta(elem, capturedSrc) {
-        var meta = { posterUrl: null, audioTracks: [], subtitleTracks: [], subtitleStreamId: null };
+        var meta = { posterUrl: null, audioTracks: [], subtitleTracks: [], subtitleStreamId: null, audioStreamId: null };
         try {
-            var src = null;
-            if (playbackInfo && playbackInfo.MediaSources && playbackInfo.MediaSources.length) {
-                src = playbackInfo.MediaSources[0];
-            }
             var itemId = null;
             var raw = capturedSrc || (elem && (elem.currentSrc || elem.src || '')) || '';
-            var m = raw.match(/\/Videos\/([^/]+)/i);
-            if (m) itemId = m[1];
+            if (raw.indexOf('blob:') === 0 && lastHlsStream) raw = lastHlsStream.url;
+            itemId = extractMediaItemId(raw);
+            if (!itemId && lastPlaybackInfoReq && lastPlaybackInfoReq.itemId) {
+                itemId = String(lastPlaybackInfoReq.itemId).replace(/-/g, '');
+            }
+            if (!itemId) {
+                var ctxId2 = resolveContextItemId(elem);
+                if (ctxId2) itemId = String(ctxId2).replace(/-/g, '');
+            }
+            var pInfo2 = playbackInfoFor(itemId);
+            var src = null;
+            if (pInfo2 && pInfo2.MediaSources && pInfo2.MediaSources.length) {
+                src = pInfo2.MediaSources[0];
+            }
             if (itemId) {
                 var token = accessToken();
-                var base = serverOrigin();
+                var base = serverBase();
                 meta.posterUrl = base + '/Items/' + itemId + '/Images/Primary?maxWidth=400&quality=90' + (token ? '&api_key=' + encodeURIComponent(token) : '');
             }
             if (src && Array.isArray(src.MediaStreams)) {
@@ -1361,7 +1475,7 @@ const INIT_SCRIPT: &str = r##"
                     } else if (st.Type === 'Subtitle') {
                         var isExt = st.IsExternal === true;
                         var delivery = (st.DeliveryUrl || '').trim();
-                        if (delivery && delivery.indexOf('://') === -1) delivery = serverOrigin() + (delivery.charAt(0) === '/' ? '' : '/') + delivery;
+                        if (delivery && delivery.indexOf('://') === -1) delivery = serverBase() + (delivery.charAt(0) === '/' ? '' : '/') + delivery;
                         if (delivery && delivery.indexOf('api_key=') === -1) {
                             var t2 = accessToken();
                             if (t2) delivery += (delivery.indexOf('?') >= 0 ? '&' : '?') + 'api_key=' + encodeURIComponent(t2);
@@ -1433,9 +1547,12 @@ const INIT_SCRIPT: &str = r##"
                     }
                 }
 
-                // 4. PlaybackInfo request (if recent < 15s and matches itemId)
+                // 4. PlaybackInfo request (if recent < 15s and matches itemId).
+                //    lastPlaybackInfoReq.itemId is stored unstripped (GUID from
+                //    the request URL/body), so normalize it the same way
+                //    playbackInfoMeta's itemId is derived before comparing.
                 if (targetSubIdx === null && lastPlaybackInfoReq && (Date.now() - lastPlaybackInfoReq.at < 15000)) {
-                    var reqItem = lastPlaybackInfoReq.itemId;
+                    var reqItem = lastPlaybackInfoReq.itemId ? String(lastPlaybackInfoReq.itemId).replace(/-/g, '') : null;
                     if (reqItem ? (!itemId || reqItem === itemId) : (!itemId || Date.now() - lastPlaybackInfoReq.at < 5000)) {
                         if (lastPlaybackInfoReq.subtitleStreamIndex !== null && lastPlaybackInfoReq.subtitleStreamIndex !== undefined) {
                             targetSubIdx = lastPlaybackInfoReq.subtitleStreamIndex;
@@ -1504,6 +1621,31 @@ const INIT_SCRIPT: &str = r##"
                     }
                 }
             }
+            var targetAudioIdx = null;
+            // Same item-scoping as the subtitle selection above: only use the
+            // request-derived audio index when it is fresh and (when both item
+            // ids are known) belongs to the item being played. The request's
+            // itemId is normalized (dash-stripped) like itemId above.
+            if (lastPlaybackInfoReq && (Date.now() - lastPlaybackInfoReq.at < 15000)) {
+                var audioReqItem = lastPlaybackInfoReq.itemId ? String(lastPlaybackInfoReq.itemId).replace(/-/g, '') : null;
+                if (audioReqItem ? (!itemId || audioReqItem === itemId) : (!itemId || Date.now() - lastPlaybackInfoReq.at < 5000)) {
+                    if (lastPlaybackInfoReq.audioStreamIndex !== null && lastPlaybackInfoReq.audioStreamIndex !== undefined) {
+                        targetAudioIdx = lastPlaybackInfoReq.audioStreamIndex;
+                    }
+                }
+            }
+            if (targetAudioIdx === null && src && src.DefaultAudioStreamIndex != null) {
+                targetAudioIdx = src.DefaultAudioStreamIndex;
+            }
+            if (targetAudioIdx === null) {
+                var amTxt = String(capturedSrc || '');
+                var am = amTxt.match(/[?&]AudioStreamIndex=(-?\d+)/i);
+                if (am && am[1] !== '') {
+                    var amIdx = parseInt(am[1], 10);
+                    if (!isNaN(amIdx)) targetAudioIdx = amIdx;
+                }
+            }
+            meta.audioStreamId = targetAudioIdx;
         } catch (e) {}
         return meta;
     }
@@ -1537,17 +1679,24 @@ const INIT_SCRIPT: &str = r##"
     function rememberItemDto(body) {
         try {
             if (!body || typeof body !== "object") return;
-            if (Array.isArray(body.Chapters) && body.Id) chaptersByItem[body.Id] = body.Chapters;
+            var cleanId = body.Id ? String(body.Id).replace(/-/g, '') : null;
+            if (Array.isArray(body.Chapters) && body.Id) {
+                if (cleanId) chaptersByItem[cleanId] = body.Chapters;
+                chaptersByItem[body.Id] = body.Chapters;
+            }
             if (body.Id && (body.Name || body.SeriesId || body.IndexNumber != null || body.ParentIndexNumber != null || (body.UserData && body.UserData.PlaybackPositionTicks))) {
-                itemById[body.Id] = {
+                var cleanSeriesId = body.SeriesId ? String(body.SeriesId).replace(/-/g, '') : null;
+                var info = {
                     name: body.Name || "",
-                    seriesId: body.SeriesId || null,
+                    seriesId: cleanSeriesId || body.SeriesId || null,
                     seriesName: body.SeriesName || null,
                     indexNumber: body.IndexNumber != null ? body.IndexNumber : null,
                     parentIndexNumber: body.ParentIndexNumber != null ? body.ParentIndexNumber : null,
                     positionTicks: (body.UserData && body.UserData.PlaybackPositionTicks) ? body.UserData.PlaybackPositionTicks : 0,
                     type: body.Type || ""
                 };
+                if (cleanId) itemById[cleanId] = info;
+                itemById[body.Id] = info;
             }
             if (Array.isArray(body.Items)) {
                 for (var i = 0; i < body.Items.length; i++) rememberItemDto(body.Items[i]);
@@ -1556,13 +1705,17 @@ const INIT_SCRIPT: &str = r##"
     }
     function chaptersFor(itemId) {
         try {
-            var list = chaptersByItem[itemId];
+            if (!itemId) return null;
+            var clean = String(itemId).replace(/-/g, '');
+            var list = chaptersByItem[clean] || chaptersByItem[itemId];
             return Array.isArray(list) && list.length ? list : null;
         } catch (e) { return null; }
     }
     function episodesFor(seriesId) {
         try {
-            var list = episodesBySeries[seriesId];
+            if (!seriesId) return null;
+            var clean = String(seriesId).replace(/-/g, '');
+            var list = episodesBySeries[clean] || episodesBySeries[seriesId];
             return Array.isArray(list) && list.length ? list : null;
         } catch (e) { return null; }
     }
@@ -1572,14 +1725,20 @@ const INIT_SCRIPT: &str = r##"
     function rememberSeriesEpisodes(body) {
         try {
             if (!body || !Array.isArray(body.Items)) return;
-            var seriesId = body.SeriesId || null;
+            var rawSeriesId = body.SeriesId || null;
+            var cleanSeriesId = rawSeriesId ? String(rawSeriesId).replace(/-/g, '') : null;
             var list = [];
             for (var i = 0; i < body.Items.length && list.length < 150; i++) {
                 var it = body.Items[i];
                 if (!it || !it.Id) continue;
-                if (!seriesId) seriesId = it.SeriesId || null;
+                if (!rawSeriesId) {
+                    rawSeriesId = it.SeriesId || null;
+                    if (rawSeriesId) cleanSeriesId = String(rawSeriesId).replace(/-/g, '');
+                }
+                var cleanItemId = String(it.Id).replace(/-/g, '');
                 list.push({
-                    id: it.Id,
+                    id: cleanItemId,
+                    rawId: it.Id,
                     indexNumber: it.IndexNumber != null ? it.IndexNumber : null,
                     parentIndexNumber: it.ParentIndexNumber != null ? it.ParentIndexNumber : null,
                     name: it.Name || "",
@@ -1587,7 +1746,8 @@ const INIT_SCRIPT: &str = r##"
                 });
                 rememberItemDto(it);
             }
-            if (seriesId && list.length) episodesBySeries[seriesId] = list;
+            if (cleanSeriesId && list.length) episodesBySeries[cleanSeriesId] = list;
+            if (rawSeriesId && list.length) episodesBySeries[rawSeriesId] = list;
         } catch (e) {}
     }
     function currentUserId() {
@@ -1618,7 +1778,7 @@ const INIT_SCRIPT: &str = r##"
         var chapters = chaptersFor(itemId);
         var episodes = item && item.seriesId ? episodesFor(item.seriesId) : null;
         var token = accessToken();
-        var origin = serverOrigin();
+        var origin = serverBase();
         var settled = false;
         var done = function (ch, it, eps) {
             if (!settled) { settled = true; if (typeof cb === "function") cb(ch, it, eps); }
@@ -1659,11 +1819,22 @@ const INIT_SCRIPT: &str = r##"
 
     function isJellyfinStreamUrl(rawUrl) {
         if (!rawUrl || typeof rawUrl !== "string") return false;
-        if (rawUrl.indexOf("blob:") === 0 || rawUrl.indexOf("data:") === 0) return false;
+        if (rawUrl.indexOf("data:") === 0) return false;
+        if (rawUrl.indexOf("blob:") === 0) {
+            try {
+                var blobOrigin = new URL(rawUrl.slice(5)).origin;
+                var svrOrigin = new URL(serverOrigin()).origin;
+                if (blobOrigin !== svrOrigin) return false;
+            } catch (e) { return false; }
+            var hasRecentSession = (playbackInfo && (Date.now() - (lastPlaybackInfoAt || 0) < 30000)) ||
+                                   (lastHlsStream && (Date.now() - lastHlsStream.at < 30000)) ||
+                                   (lastPlaybackInfoReq && (Date.now() - lastPlaybackInfoReq.at < 30000));
+            return Boolean(hasRecentSession);
+        }
         var u;
         try { u = new URL(rawUrl); } catch (e) { return false; }
         if (u.protocol !== "http:" && u.protocol !== "https:") return false;
-        if (u.pathname.indexOf("/Videos/") === -1 && u.pathname.indexOf("/Audio/") === -1) return false;
+        if (!/\/(?:Videos|Audio)\//i.test(u.pathname)) return false;
         try {
             return u.origin === new URL(serverOrigin()).origin;
         } catch (e) { return false; }
@@ -1675,8 +1846,50 @@ const INIT_SCRIPT: &str = r##"
     // startTimeTicks. A URL/hash value wins when the server already supplied
     // one, while currentTime is the fallback for the normal web-client path.
     function buildPlayableUrl(rawUrl, elem) {
-        var u = new URL(rawUrl);
+        // Media element URLs are normally absolute, but callers and test seams
+        // may provide a relative stream URL directly. Normalize it before any
+        // URL parsing so reverse-proxy bases and bare paths are preserved.
+        if (rawUrl && typeof rawUrl === 'string' && rawUrl.indexOf('blob:') !== 0 && rawUrl.indexOf('://') === -1) {
+            rawUrl = resolveCapturedHlsUrl(rawUrl);
+        }
         var startTicks = 0;
+        var urlItemId = null;
+        if (rawUrl && typeof rawUrl === 'string') {
+            urlItemId = extractMediaItemId(rawUrl);
+        }
+
+        var candidateItemId = urlItemId || (lastPlaybackInfoReq && lastPlaybackInfoReq.itemId ? String(lastPlaybackInfoReq.itemId).replace(/-/g, '') : null);
+        if (!candidateItemId) {
+            var ctx = resolveContextItemId(elem);
+            if (ctx) candidateItemId = String(ctx).replace(/-/g, '');
+        }
+
+        // If the media element's src is a blob (e.g. hls.js / MediaSource), recover
+        // the true Jellyfin stream URL from the captured HLS request or PlaybackInfo.
+        if (rawUrl && rawUrl.indexOf("blob:") === 0) {
+            if (lastHlsStream && (!candidateItemId || !lastHlsStream.itemId || lastHlsStream.itemId === candidateItemId) && (Date.now() - lastHlsStream.at < 30000)) {
+                rawUrl = lastHlsStream.url;
+                urlItemId = extractMediaItemId(rawUrl);
+                if (urlItemId) {
+                    candidateItemId = urlItemId;
+                }
+            } else {
+                var pInfo = playbackInfoFor(candidateItemId);
+                if (pInfo && pInfo.MediaSources && pInfo.MediaSources.length) {
+                    var ms0 = pInfo.MediaSources[0];
+                    var effectiveItemId = candidateItemId || (ms0.Id ? String(ms0.Id).replace(/-/g, '') : '');
+                    var candidate = ms0.TranscodingUrl || ms0.DirectStreamUrl || ('/Videos/' + encodeURIComponent(effectiveItemId) + '/stream?Static=true&mediaSourceId=' + encodeURIComponent(ms0.Id));
+                    if (candidate.indexOf("://") === -1) {
+                        candidate = serverBase() + (candidate.charAt(0) === '/' ? '' : '/') + candidate;
+                    }
+                    rawUrl = candidate;
+                    urlItemId = effectiveItemId;
+                    candidateItemId = effectiveItemId;
+                }
+            }
+        }
+
+        var u = new URL(rawUrl);
         var existingTicks = parseInt(u.searchParams.get("startTimeTicks") || "0", 10);
         if (isFinite(existingTicks) && existingTicks > 0) {
             startTicks = existingTicks;
@@ -1692,12 +1905,74 @@ const INIT_SCRIPT: &str = r##"
             } catch (e) {}
         }
         u.hash = "";
+
+        // Check whether this stream is a Live TV / infinite stream.
+        // Ensure playbackInfo corresponds to the current item being played.
+        var isLive = false;
+        var effectiveItem = urlItemId || candidateItemId;
+        var pInfoCurrent = playbackInfoFor(effectiveItem);
+        if (pInfoCurrent && pInfoCurrent.MediaSources && pInfoCurrent.MediaSources.length) {
+            var pms = pInfoCurrent.MediaSources[0];
+            if (pms.IsInfiniteStream === true || pms.LiveStreamId) isLive = true;
+        }
+        if (/live\.m3u8/i.test(u.pathname)) isLive = true;
+
+        // If this is a VOD HLS transcode/remux stream (e.g. /videos/{id}/master.m3u8), rewrite
+        // it to Jellyfin's direct static stream (/Videos/{id}/stream?Static=true).
+        // mpv/libmpv supports MKV, DTS, TrueHD, etc. natively, so the server never
+        // needs to burn CPU/GPU transcoding a stream just because the web browser's
+        // HTML5 <video> profile didn't support the container.
+        var m = findMediaSegment(u.pathname);
+        var isHlsPlaylist = /\/(?:master|main)\.m3u8/i.test(u.pathname);
+        if (m && isHlsPlaylist && !isLive) {
+            var type = m.type;
+            var streamItemId = m.itemId || urlItemId || candidateItemId;
+            var mediaSourceId = u.searchParams.get('MediaSourceId') || u.searchParams.get('mediaSourceId') ||
+                                (pInfoCurrent && pInfoCurrent.MediaSources && pInfoCurrent.MediaSources[0] && pInfoCurrent.MediaSources[0].Id) ||
+                                streamItemId;
+            var origin = serverBase();
+            var direct = new URL(origin + '/' + type + '/' + streamItemId + '/stream');
+
+            // Clone all existing query parameters from the HLS URL (DeviceId, PlaySessionId, Tag, AudioStreamIndex, etc.)
+            u.searchParams.forEach(function (val, key) {
+                direct.searchParams.set(key, val);
+            });
+
+            // Strip server-transcoder-specific parameters that mpv does not need
+            // Note: AudioStreamIndex is intentionally preserved in direct query parameters.
+            var transcodeParams = [
+                'VideoCodec', 'AudioCodec', 'VideoBitrate', 'AudioBitrate', 'AudioSampleRate',
+                'MaxFramerate', 'TranscodingMaxAudioChannels', 'RequireAvc', 'EnableAudioVbrEncoding',
+                'SegmentContainer', 'MinSegments', 'BreakOnNonKeyFrames', 'TranscodeReasons',
+                'SubtitleStreamIndex'
+            ];
+            for (var ti = 0; ti < transcodeParams.length; ti++) {
+                direct.searchParams.delete(transcodeParams[ti]);
+                direct.searchParams.delete(transcodeParams[ti].toLowerCase());
+            }
+            var keysToDelete = [];
+            direct.searchParams.forEach(function (v, k) {
+                if (/^(?:h264|h265|hevc|av1|vp9)-/i.test(k)) keysToDelete.push(k);
+            });
+            for (var ki = 0; ki < keysToDelete.length; ki++) {
+                direct.searchParams.delete(keysToDelete[ki]);
+            }
+
+            direct.searchParams.set('Static', 'true');
+            if (mediaSourceId) direct.searchParams.set('mediaSourceId', mediaSourceId);
+            if (startTicks > 0) direct.searchParams.set('startTimeTicks', String(startTicks));
+            var token = accessToken() || direct.searchParams.get('api_key') || '';
+            if (token) direct.searchParams.set('api_key', token);
+
+            return { url: direct.toString(), position_ticks: startTicks > 0 ? startTicks : null };
+        }
+
         if (startTicks > 0 && (!u.searchParams.has("startTimeTicks") || existingTicks <= 0)) {
             u.searchParams.set("startTimeTicks", String(startTicks));
         }
         if (!u.searchParams.has("api_key")) {
-            var token = accessToken();
-            if (token) u.searchParams.append("api_key", token);
+            var token2 = accessToken();
+            if (token2) u.searchParams.append("api_key", token2);
         }
         return { url: u.toString(), position_ticks: startTicks > 0 ? startTicks : null };
     }
@@ -1802,9 +2077,13 @@ const INIT_SCRIPT: &str = r##"
             if (cur !== src || !elem.isConnected) return;
             var startPos = built.position_ticks;
             if (!startPos || startPos <= 0) {
+                // Scope the PlaybackInfo resume point to THIS item — the global
+                // latest response can belong to a different item and leak its
+                // position into the next stream.
+                var pInfoResume = playbackInfoFor(subtitle.itemId);
                 var resumeTicks = (itemInfo && itemInfo.positionTicks) ||
-                                  (playbackInfo && playbackInfo.PlaybackPositionTicks) ||
-                                  (playbackInfo && playbackInfo.MediaSources && playbackInfo.MediaSources[0] && playbackInfo.MediaSources[0].PlaybackPositionTicks) ||
+                                  (pInfoResume && pInfoResume.PlaybackPositionTicks) ||
+                                  (pInfoResume && pInfoResume.MediaSources && pInfoResume.MediaSources[0] && pInfoResume.MediaSources[0].PlaybackPositionTicks) ||
                                   0;
                 if (resumeTicks > 0) {
                     startPos = resumeTicks;
@@ -1827,6 +2106,7 @@ const INIT_SCRIPT: &str = r##"
                 item_id: subtitle.itemId,
                 media_source_id: subtitle.mediaSourceId,
                 subtitle_stream_id: meta.subtitleStreamId != null ? meta.subtitleStreamId : subtitle.subtitleStreamId,
+                audio_stream_id: meta.audioStreamId,
                 subtitle_url: subtitle.subtitleUrl,
                 subtitle_tracks: meta.subtitleTracks.length ? meta.subtitleTracks : subtitle.subtitleTracks,
                 poster_url: meta.posterUrl,
@@ -1834,7 +2114,7 @@ const INIT_SCRIPT: &str = r##"
                 chapters: Array.isArray(chapters) ? chapters : [],
                 // Series/episode context so the frontend can show proper
                 // S/E info in the header pill and play prev/next episodes.
-                server_url: serverOrigin(),
+                server_url: serverBase(),
                 api_key: accessToken(),
                 series_id: itemInfo && itemInfo.seriesId ? itemInfo.seriesId : null,
                 series_name: (itemInfo && itemInfo.seriesName) || null,
@@ -1958,14 +2238,54 @@ const INIT_SCRIPT: &str = r##"
 
     // Observe network calls used by Jellyfin to obtain PlaybackInfo/MediaStreams.
     // This captures the requested subtitle/audio stream choices from PlaybackInfo requests.
+    function resolveCapturedHlsUrl(targetUrl) {
+        var resolved = String(targetUrl || '');
+        if (!resolved || resolved.indexOf('://') !== -1) return resolved;
+
+        // Preserve a configured reverse-proxy prefix for root-relative paths.
+        if (resolved.charAt(0) === '/' && resolved.charAt(1) !== '/') return serverBase() + resolved;
+
+        // Bare-relative and protocol-relative URLs still need a URL base.
+        return new URL(resolved, serverBase() + '/').toString();
+    }
+
     (function patchNetwork() {
         // The latest PlaybackInfo response is stored (not just logged) so the
         // handoff payload can carry the authoritative stream metadata.
-        function rememberPlaybackInfo(body) {
+        function rememberPlaybackInfo(body, reqUrl) {
             try {
                 if (!body || !body.MediaSources) return;
+                var reqItemId = null;
+                if (reqUrl) {
+                    var m = String(reqUrl).match(/\/Items\/([^/?#]+)\/PlaybackInfo/i);
+                    if (m) reqItemId = m[1].replace(/-/g, '');
+                }
+                if (!reqItemId && lastPlaybackInfoReq && lastPlaybackInfoReq.itemId) {
+                    reqItemId = String(lastPlaybackInfoReq.itemId).replace(/-/g, '');
+                }
                 playbackInfo = body;
-                diag('playback-info-response', { sources: body.MediaSources.length, session: String(body.PlaySessionId || '').slice(0, 12) });
+                lastPlaybackInfoAt = Date.now();
+                if (reqItemId) {
+                    playbackInfoByItem[reqItemId] = body;
+                }
+                diag('playback-info-response', {
+                    itemId: reqItemId,
+                    sources: body.MediaSources.length,
+                    session: String(body.PlaySessionId || '').slice(0, 12)
+                });
+            } catch (e) {}
+        }
+        function recordHlsRequest(targetUrl) {
+            try {
+                // Browser fetch/XHR can be called with a relative URL; the
+                // bridge later parses the captured URL with new URL(), which
+                // requires a base. Resolve it against the configured Jellyfin base
+                // so a relative master.m3u8 request never aborts the handoff.
+                var resolved = resolveCapturedHlsUrl(targetUrl);
+                var m = resolved && findMediaSegment(resolved);
+                if (m && /\/(?:master|main)\.m3u8/i.test(resolved)) {
+                    lastHlsStream = { url: resolved, itemId: m.itemId, at: Date.now() };
+                }
             } catch (e) {}
         }
         try {
@@ -1977,14 +2297,20 @@ const INIT_SCRIPT: &str = r##"
                     var url = typeof request === 'string' ? request : (request && request.url) || '';
                     var reqBody = (init && init.body) || (request && request.body) || null;
                     if (/PlaybackInfo/i.test(url)) recordPlaybackInfoReq(url, reqBody);
+                    recordHlsRequest(url);
                     if (/\/Sessions\/Playing(\/Progress|\/Stopped)?(?:\?|$)/i.test(url)) {
                         diag('suppressed-web-session-report', { url: url });
                         return Promise.resolve(new Response(null, { status: 204, statusText: 'No Content' }));
                     }
-                    if (/PlaybackInfo|Videos\/[^/]+\/stream/i.test(url)) diag('fetch', { url: url });
+                    if (/PlaybackInfo|(?:Videos|Audio)\/[^/]+\/(?:stream|master\.m3u8)/i.test(url)) diag('fetch', { url: url });
                     return originalFetch.apply(this, arguments).then(function (response) {
                         if (/PlaybackInfo/i.test(url)) {
-                            try { response.clone().json().then(rememberPlaybackInfo).catch(function () {}); } catch (e) {}
+                            try {
+                                var pUrl = url;
+                                response.clone().json().then(function (body) {
+                                    rememberPlaybackInfo(body, pUrl);
+                                }).catch(function () {});
+                            } catch (e) {}
                         } else if (/\/Items\/[^?/]+(?:\?|$)|[?&]Ids=/i.test(url)) {
                             // Item DTO responses can carry the Chapters array
                             // (Fields=Chapters is requested for playable items)
@@ -2008,14 +2334,16 @@ const INIT_SCRIPT: &str = r##"
                 var wrappedOpen = function (method, url) {
                     this.__ynotvUrl = String(url || '');
                     this.__ynotvSuppressed = /\/Sessions\/Playing(\/Progress|\/Stopped)?(?:\?|$)/i.test(this.__ynotvUrl);
-                    if (/PlaybackInfo|Videos\/[^/]+\/stream/i.test(this.__ynotvUrl)) diag('xhr-open', { method: method, url: this.__ynotvUrl });
+                    recordHlsRequest(this.__ynotvUrl);
+                    if (/PlaybackInfo|(?:Videos|Audio)\/[^/]+\/(?:stream|master\.m3u8)/i.test(this.__ynotvUrl)) diag('xhr-open', { method: method, url: this.__ynotvUrl });
                     var result = originalOpen.apply(this, arguments);
                     if (/PlaybackInfo/i.test(this.__ynotvUrl)) {
                         try {
                             var self = this;
+                            var pUrl2 = this.__ynotvUrl;
                             this.addEventListener('loadend', function () {
                                 try {
-                                    if (self.responseText) rememberPlaybackInfo(JSON.parse(self.responseText));
+                                    if (self.responseText) rememberPlaybackInfo(JSON.parse(self.responseText), pUrl2);
                                 } catch (e) {}
                             });
                         } catch (e) {}
@@ -2075,6 +2403,13 @@ const INIT_SCRIPT: &str = r##"
     window.__ynotvJfReenable = function () {
         try {
             window.__ynotvPlaybackActive = false;
+            lastSignalKey = null;
+            lastSignalAt = 0;
+            lastHlsStream = null;
+            lastPlaybackInfoAt = 0;
+            lastPlaybackInfoReq = null;
+            playbackInfo = null;
+            playbackInfoByItem = {};
             var els = document.querySelectorAll("video,audio");
             for (var i = 0; i < els.length; i++) releaseMedia(els[i]);
         } catch (e) {}
@@ -2086,10 +2421,14 @@ const INIT_SCRIPT: &str = r##"
             window.__ynotvPlaybackActive = false;
             lastSignalKey = null;
             lastSignalAt = 0;
+            lastHlsStream = null;
+            lastPlaybackInfoAt = 0;
+            lastPlaybackInfoReq = null;
             itemById = {};
             chaptersByItem = {};
             episodesBySeries = {};
             playbackInfo = null;
+            playbackInfoByItem = {};
             dismissPlaybackOverlay();
             if (window.playbackManager && typeof window.playbackManager.resetPlayer === 'function') {
                 try { window.playbackManager.resetPlayer(); } catch (e) {}
@@ -2115,5 +2454,102 @@ const INIT_SCRIPT: &str = r##"
         }
     };
 
+    // Test-only seam: nothing is exposed unless the hosting page opts in via
+    // window.__ynotvJfTestMode (set by the vitest harness before injection), so
+    // production Jellyfin pages never see these internals.
+    if (window.__ynotvJfTestMode) {
+        window.__ynotvJfInternals = {
+            playbackInfoFor: playbackInfoFor,
+            playbackInfoMeta: playbackInfoMeta,
+            buildPlayableUrl: buildPlayableUrl,
+            findMediaSegment: findMediaSegment,
+            extractMediaItemId: extractMediaItemId,
+            seedPlaybackInfo: function (itemId, body) {
+                playbackInfo = body;
+                lastPlaybackInfoAt = Date.now();
+                if (itemId) playbackInfoByItem[String(itemId).replace(/-/g, '')] = body;
+            },
+            seedPlaybackInfoReq: function (req) { lastPlaybackInfoReq = req; },
+            seedHlsStream: function (s) { lastHlsStream = s; },
+            resolveCapturedHlsUrl: resolveCapturedHlsUrl
+        };
+    }
+
 })();
 "##;
+#[cfg(test)]
+mod tests {
+    use super::{is_plausible_jellyfin_item_id, parse_play_url};
+
+    const GUID: &str = "abcdef01-2345-6789-abcd-ef0123456789";
+    const GUID_CLEAN: &str = "abcdef0123456789abcdef0123456789";
+
+    fn make_url(path: &str) -> String {
+        format!(
+            "http://jf.example:8096{}?api_key=KEY&mediaSourceId=ms1&startTimeTicks=10000000",
+            path
+        )
+    }
+
+    #[test]
+    fn parses_plain_video_direct_stream() {
+        let (base, key, id, msid, ticks) =
+            parse_play_url(&make_url(&format!("/Videos/{GUID}/stream.mkv"))).expect("parse");
+        assert_eq!(base, "http://jf.example:8096");
+        assert_eq!(key, "KEY");
+        assert_eq!(id, GUID_CLEAN);
+        assert_eq!(msid.as_deref(), Some("ms1"));
+        assert_eq!(ticks, 10_000_000);
+    }
+
+    #[test]
+    fn parses_plain_audio_direct_stream() {
+        let (base, _, id, _, _) =
+            parse_play_url(&make_url(&format!("/Audio/{GUID}/stream.flac"))).expect("parse");
+        assert_eq!(base, "http://jf.example:8096");
+        assert_eq!(id, GUID_CLEAN);
+    }
+
+    #[test]
+    fn parses_reverse_proxy_subpath() {
+        let (base, _, id, _, _) =
+            parse_play_url(&make_url(&format!("/jellyfin/Videos/{GUID}/stream"))).expect("parse");
+        assert_eq!(base, "http://jf.example:8096/jellyfin");
+        assert_eq!(id, GUID_CLEAN);
+    }
+
+    #[test]
+    fn skips_proxy_prefix_segment_named_videos() {
+        // /media/Videos/proxy/Videos/{id}/stream — the first "Videos" is part of
+        // the deployment prefix, not the media segment.
+        let (base, _, id, _, _) = parse_play_url(&make_url(&format!(
+            "/media/Videos/proxy/Videos/{GUID}/stream"
+        )))
+        .expect("parse");
+        assert_eq!(base, "http://jf.example:8096/media/Videos/proxy");
+        assert_eq!(id, GUID_CLEAN);
+    }
+
+    #[test]
+    fn rejects_media_segment_without_item_id() {
+        assert!(parse_play_url(&make_url("/Videos/stream.mkv")).is_none());
+        assert!(parse_play_url(&make_url("/Videos/")).is_none());
+    }
+
+    #[test]
+    fn rejects_word_after_media_segment() {
+        // "proxy" is not hex — must not be accepted as an item id.
+        assert!(parse_play_url(&make_url("/Videos/proxy/stream")).is_none());
+    }
+
+    #[test]
+    fn item_id_validation() {
+        assert!(is_plausible_jellyfin_item_id(GUID));
+        assert!(is_plausible_jellyfin_item_id(GUID_CLEAN));
+        assert!(is_plausible_jellyfin_item_id("deadbeef"));
+        assert!(!is_plausible_jellyfin_item_id("proxy"));
+        assert!(!is_plausible_jellyfin_item_id(""));
+        assert!(!is_plausible_jellyfin_item_id("abc"));
+        assert!(!is_plausible_jellyfin_item_id("stream.mkv"));
+    }
+}

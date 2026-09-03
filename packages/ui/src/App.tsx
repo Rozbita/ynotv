@@ -1950,6 +1950,7 @@ function useTmdbPresencePoster(
             jellyfinSubtitleTracks: payload.subtitleTracks,
             posterUrl: payload.posterUrl,
             jellyfinAudioTracks: payload.audioTracks,
+            jellyfinAudioStreamId: payload.audioStreamId,
             jellyfinChapters: payload.chapters,
             jellyfinServerUrl: payload.serverUrl,
             jellyfinApiKey: payload.apiKey,
@@ -1996,7 +1997,9 @@ function useTmdbPresencePoster(
       const server = (current.jellyfinServerUrl || '').replace(/\/+$/, '');
       const key = current.jellyfinApiKey || '';
       if (!server || !key) return false;
-      const url = `${server}/Videos/${encodeURIComponent(target.id)}/stream?Static=true&mediaSourceId=${encodeURIComponent(target.id)}&api_key=${encodeURIComponent(key)}${target.positionTicks ? `&startTimeTicks=${target.positionTicks}` : ''}`;
+      let mediaSourceId = target.id;
+      const buildEpisodeUrl = () => `${server}/Videos/${encodeURIComponent(target.id)}/stream?Static=true&mediaSourceId=${encodeURIComponent(mediaSourceId)}&api_key=${encodeURIComponent(key)}${target.positionTicks ? `&startTimeTicks=${target.positionTicks}` : ''}`;
+      let url = buildEpisodeUrl();
       // The adjacent episode is a different stream, so its subtitle/audio
       // tracks must be fetched from the server (the current episode's track
       // lists belong to its own stream and were never carried over). Jellyfin
@@ -2005,6 +2008,7 @@ function useTmdbPresencePoster(
       let subtitleStreamId: number | null | undefined;
       let subtitleTracks: import('./types/media').VodPlayInfo['jellyfinSubtitleTracks'] = [];
       let audioTracks: import('./types/media').VodPlayInfo['jellyfinAudioTracks'] = [];
+      let audioStreamId: number | null | undefined;
       try {
         const res = await fetch(
           `${server}/Items/${encodeURIComponent(target.id)}/PlaybackInfo`,
@@ -2014,6 +2018,10 @@ function useTmdbPresencePoster(
           const pi = await res.json();
           const ms = pi?.MediaSources?.[0];
           if (ms) {
+            if (typeof ms.Id === 'string' && ms.Id.trim()) {
+              mediaSourceId = ms.Id;
+              url = buildEpisodeUrl();
+            }
             const token = key;
             const prevSubId = current.jellyfinSubtitleStreamId;
             const prevActiveTrack = current.jellyfinSubtitleTracks?.find((t) => t.index === prevSubId);
@@ -2093,6 +2101,58 @@ function useTmdbPresencePoster(
               st.default = isMatch;
               subtitleTracks.push(st);
             }
+
+            // Carry the selected dubbed audio track across episodes: match the
+            // previous episode's active audio stream against the fetched track
+            // list by language/title (mirroring the subtitle strategy above),
+            // falling back to the server default. Without this, next/prev/
+            // autoplay episodes silently revert to mpv's default audio.
+            // Language codes are normalized (en/en-US/eng -> en) the same way
+            // the primary applyJellyfinAudioSelection path does, so variant
+            // tags from different episodes/containers still match.
+            const normAudioLang = (code?: string): string => {
+              if (!code) return '';
+              try {
+                return fromSubSourceLang(toSubSourceLang(code));
+              } catch {
+                return code.toLowerCase().trim();
+              }
+            };
+            const prevAudioId = current.jellyfinAudioStreamId;
+            const prevActiveAudio = current.jellyfinAudioTracks?.find((t) => t.index === prevAudioId);
+            if (prevActiveAudio) {
+              const targetLang = normAudioLang(prevActiveAudio.lang);
+              const targetTitle = (prevActiveAudio.title || '').toLowerCase().trim();
+              const cleanTargetTitle = targetTitle.replace(/\[.*?\]|\(.*?\)/g, '').trim();
+
+              let matchedAudio = audioTracks.find((t) => {
+                const l = normAudioLang(t.lang);
+                const ttl = (t.title || '').toLowerCase().trim();
+                return targetLang && targetTitle && l === targetLang && ttl === targetTitle;
+              });
+
+              if (!matchedAudio && cleanTargetTitle) {
+                matchedAudio = audioTracks.find((t) => {
+                  const ttl = (t.title || '').toLowerCase().trim().replace(/\[.*?\]|\(.*?\)/g, '').trim();
+                  return ttl && (ttl === cleanTargetTitle || ttl.includes(cleanTargetTitle) || cleanTargetTitle.includes(ttl));
+                });
+              }
+
+              if (!matchedAudio && targetLang) {
+                matchedAudio = audioTracks.find((t) => {
+                  const l = normAudioLang(t.lang);
+                  return l && l === targetLang;
+                });
+              }
+
+              if (matchedAudio) {
+                audioStreamId = matchedAudio.index;
+              } else {
+                audioStreamId = ms.DefaultAudioStreamIndex != null ? ms.DefaultAudioStreamIndex : undefined;
+              }
+            } else {
+              audioStreamId = ms.DefaultAudioStreamIndex != null ? ms.DefaultAudioStreamIndex : undefined;
+            }
           }
         }
       } catch (e) {
@@ -2109,6 +2169,7 @@ function useTmdbPresencePoster(
         seasonNum: target.parentIndexNumber ?? undefined,
         episodeNum: target.indexNumber ?? undefined,
         jellyfinItemId: target.id,
+        jellyfinMediaSourceId: mediaSourceId,
         jellyfinServerUrl: current.jellyfinServerUrl,
         jellyfinApiKey: current.jellyfinApiKey,
         jellyfinSeriesId: current.jellyfinSeriesId,
@@ -2120,6 +2181,7 @@ function useTmdbPresencePoster(
         jellyfinSubtitleStreamId: subtitleStreamId ?? undefined,
         jellyfinSubtitleTracks: subtitleTracks,
         jellyfinAudioTracks: audioTracks,
+        jellyfinAudioStreamId: audioStreamId ?? undefined,
         posterUrl: current.posterUrl,
       });
       if (ok) {

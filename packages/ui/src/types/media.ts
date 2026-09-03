@@ -89,6 +89,7 @@ export interface VodPlayInfo {
     codec?: string;
     isDefault?: boolean;
   }>;
+  jellyfinAudioStreamId?: number;
   // Chapter markers from the Jellyfin item DTO (Fields=Chapters), rendered as
   // ticks on the seek bar. startPositionTicks are 100ns units (div by 1e7 = secs).
   jellyfinChapters?: Array<{
