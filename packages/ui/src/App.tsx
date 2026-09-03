@@ -179,6 +179,97 @@ function sortByChannelNumThenName(a: StoredChannel, b: StoredChannel): number {
   return (a.channel_num ?? 0) - (b.channel_num ?? 0) || (a.alias || a.name).localeCompare(b.alias || b.name);
 }
 
+// ----------------------------------------------------------------------------
+// Jellyfin series metadata IDs (for intro skip)
+// ----------------------------------------------------------------------------
+// IntroDB is keyed by IMDb ID, but the Jellyfin handoff payload only carries
+// item GUIDs. An item DTO's ProviderIds contain the Imdb/Tmdb IDs (plus
+// ProductionYear), so resolve them from the Jellyfin API once per item per
+// session and carry them on the VodPlayInfo. The bridge also attempts to
+// capture them (payload.seriesProviderIds for episodes, itemProviderIds for
+// movies) — the fetch here is the reliable fallback for adjacent-episode
+// plays and cold handoffs.
+const jellyfinItemIdCache = new Map<string, { imdbId?: string; tmdbId?: number; year?: number }>();
+
+function parseJellyfinProviderIds(pids: any, productionYear?: unknown): { imdbId?: string; tmdbId?: number; year?: number } {
+  const result: { imdbId?: string; tmdbId?: number; year?: number } = {};
+  const imdb = pids?.Imdb ?? pids?.imdb;
+  if (typeof imdb === 'string' && /^tt\d{7,8}$/i.test(imdb.trim())) {
+    result.imdbId = imdb.trim();
+  }
+  const tmdb = pids?.Tmdb ?? pids?.tmdb;
+  if ((typeof tmdb === 'string' || typeof tmdb === 'number') && /^\d+$/.test(String(tmdb).trim())) {
+    const tmdbNum = Number(String(tmdb).trim());
+    if (Number.isSafeInteger(tmdbNum) && tmdbNum > 0) result.tmdbId = tmdbNum;
+  }
+  if (typeof productionYear === 'number' && Number.isSafeInteger(productionYear) && productionYear > 0) {
+    result.year = productionYear;
+  }
+  return result;
+}
+
+function cachedJellyfinItemIds(serverUrl?: string, itemId?: string) {
+  if (!serverUrl || !itemId) return undefined;
+  return jellyfinItemIdCache.get(`${serverUrl.replace(/\/+$/, '')}|${itemId}`);
+}
+
+// Apply late-resolved Jellyfin metadata (ProviderIds fetched after a cold
+// handoff started playback) to the active session so intro skip and
+// scrobbling still get real imdb/tmdb/year. The matches predicate scopes the
+// patch to the play that initiated the fetch: same series (series-level ids
+// are identical across episodes) or the same standalone item.
+function applyJellyfinResolvedIds(
+  patchVodInfo: (patch: Partial<import('./types/media').VodPlayInfo>, matches?: (cur: import('./types/media').VodPlayInfo) => boolean) => void,
+  forItemId: string | undefined,
+  forSeriesId: string | undefined,
+  ids: { imdbId?: string; tmdbId?: number; year?: number }
+) {
+  if (!ids.imdbId && !ids.tmdbId && ids.year == null) return;
+  patchVodInfo(
+    {
+      imdbId: ids.imdbId,
+      tmdbId: ids.tmdbId,
+      year: ids.year != null ? String(ids.year) : undefined,
+    },
+    (cur) =>
+      cur.source_id === 'jellyfin' &&
+      (forSeriesId != null ? cur.jellyfinSeriesId === forSeriesId : cur.jellyfinItemId === forItemId)
+  );
+}
+
+async function fetchJellyfinItemIds(
+  serverUrl?: string,
+  apiKey?: string,
+  itemId?: string
+): Promise<{ imdbId?: string; tmdbId?: number; year?: number }> {
+  const server = (serverUrl || '').replace(/\/+$/, '');
+  if (!server || !apiKey || !itemId) return {};
+  const cacheKey = `${server}|${itemId}`;
+  const cached = jellyfinItemIdCache.get(cacheKey);
+  if (cached) return cached;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const controller = new AbortController();
+    timer = setTimeout(() => controller.abort(), 3000);
+    const res = await fetch(`${server}/Items/${encodeURIComponent(itemId)}`, {
+      headers: { 'X-Emby-Token': apiKey },
+      signal: controller.signal,
+    });
+    if (!res.ok) return {};
+    const item = await res.json();
+    const result = parseJellyfinProviderIds(item?.ProviderIds, item?.ProductionYear);
+    // Cache successful responses, including valid responses with no provider IDs.
+    // Failed requests remain retryable instead of permanently caching {}.
+    jellyfinItemIdCache.set(cacheKey, result);
+    return result;
+  } catch (e) {
+    // Bounded best-effort — playback must never block on this.
+    return {};
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
 // Resolve the ordered channel list + current index for ch up/down navigation.
 // Prefers the in-memory list for the active category; when the playing channel
 // isn't in it (tuned via phone remote, sports, or search), falls back to the
@@ -908,6 +999,7 @@ function App() {
     handlePlayCatchup,
     handleCatchupSeek,
     handlePlayVod,
+    patchVodInfo,
     handlePlayRecording,
     handleStop: handleStopRaw,
     handleSeek,
@@ -1931,6 +2023,56 @@ function useTmdbPresencePoster(
     async (payload: import('./components/JellyfinPage').JellyfinPlayPayload) => {
       try {
         const isSeries = Boolean(payload.seriesId && payload.episodeIndex != null);
+        // Series-level metadata IDs (Imdb/Tmdb/year) so intro skip (IntroDB is
+        // keyed by IMDb ID) can resolve. Prefer the bridge-captured ProviderIds;
+        // fall back to a direct API fetch for cold handoffs / missed captures.
+        let imdbId: string | undefined;
+        let tmdbId: number | undefined;
+        let year: number | undefined;
+        if (payload.seriesProviderIds) {
+          const parsed = parseJellyfinProviderIds(payload.seriesProviderIds, payload.seriesProductionYear);
+          imdbId = parsed.imdbId;
+          tmdbId = parsed.tmdbId;
+          year = parsed.year;
+        }
+        if (!imdbId && !tmdbId && payload.seriesId) {
+          const cached = cachedJellyfinItemIds(payload.serverUrl, payload.seriesId);
+          if (cached) {
+            imdbId = cached.imdbId;
+            tmdbId = cached.tmdbId;
+            year = cached.year;
+          } else {
+            // Cold handoff: fetch asynchronously and patch the active play when
+            // it resolves so intro skip / scrobbling still get real ids.
+            void fetchJellyfinItemIds(payload.serverUrl, payload.apiKey, payload.seriesId).then((ids) => {
+              applyJellyfinResolvedIds(patchVodInfo, payload.itemId, payload.seriesId, ids);
+            });
+          }
+        }
+        // Movie/standalone plays have no series id — use the played item's own
+        // ProviderIds (bridge-captured), fetching the item DTO as a fallback,
+        // so movies scrobble and intro-resolve with real IDs instead of a
+        // title-only guess.
+        if (!imdbId && !tmdbId && payload.itemProviderIds) {
+          const parsed = parseJellyfinProviderIds(payload.itemProviderIds, payload.itemProductionYear);
+          imdbId = parsed.imdbId;
+          tmdbId = parsed.tmdbId;
+          year = parsed.year;
+        }
+        if (!imdbId && !tmdbId && !payload.seriesId && payload.itemId) {
+          const cached = cachedJellyfinItemIds(payload.serverUrl, payload.itemId);
+          if (cached) {
+            imdbId = cached.imdbId;
+            tmdbId = cached.tmdbId;
+            year = cached.year;
+          } else {
+            // Same cold-handoff patch as the series branch (movie items have no
+            // series id, so the match is scoped to this item only).
+            void fetchJellyfinItemIds(payload.serverUrl, payload.apiKey, payload.itemId).then((ids) => {
+              applyJellyfinResolvedIds(patchVodInfo, payload.itemId, undefined, ids);
+            });
+          }
+        }
         const ok = await handlePlayVod(
           {
             url: payload.url,
@@ -1944,6 +2086,9 @@ function useTmdbPresencePoster(
             episodeNum: payload.episodeIndex ?? undefined,
             source_id: 'jellyfin',
             mediaId: `jellyfin_${payload.url}`,
+            imdbId,
+            tmdbId,
+            year: year != null ? String(year) : undefined,
             jellyfinItemId: payload.itemId,
             jellyfinMediaSourceId: payload.mediaSourceId,
             jellyfinSubtitleStreamId: payload.subtitleStreamId,
@@ -1972,7 +2117,7 @@ function useTmdbPresencePoster(
         return false;
       }
     },
-    [handlePlayVod, setActiveView],
+    [handlePlayVod, setActiveView, patchVodInfo],
   );
 
   // Cancellable "idle -> return to Jellyfin tab" stop (see the
@@ -2158,6 +2303,32 @@ function useTmdbPresencePoster(
       } catch (e) {
         console.warn('[Jellyfin] Failed to fetch PlaybackInfo for adjacent episode:', e);
       }
+      // Carry the series' metadata IDs (Imdb/Tmdb/year) so intro skip keeps
+      // working across prev/next/autoplay episodes. Prefer what the current
+      // episode already resolved; fetch once per series otherwise.
+      let seriesImdbId = current.imdbId;
+      let seriesTmdbId =
+        typeof current.tmdbId === 'number'
+          ? current.tmdbId
+          : current.tmdbId != null
+            ? parseInt(String(current.tmdbId).replace(/[^0-9]/g, ''), 10) || undefined
+            : undefined;
+      let seriesYear = current.year != null ? Number(current.year) || undefined : undefined;
+      if (!seriesImdbId && !seriesTmdbId) {
+        const seriesId = current.jellyfinSeriesId || current.seriesId;
+        const cached = cachedJellyfinItemIds(server, seriesId);
+        if (cached) {
+          seriesImdbId = cached.imdbId;
+          seriesTmdbId = cached.tmdbId;
+          seriesYear = cached.year;
+        } else {
+          // Cold handoff for the adjacent episode: patch the (now active) play
+          // when it resolves so intro skip keeps working across episodes.
+          void fetchJellyfinItemIds(server, key, seriesId).then((ids) => {
+            applyJellyfinResolvedIds(patchVodInfo, target.id, seriesId, ids);
+          });
+        }
+      }
       const ok = await handlePlayVod({
         url,
         title: current.title || 'Jellyfin',
@@ -2165,6 +2336,9 @@ function useTmdbPresencePoster(
         episodeInfo: `${target.parentIndexNumber != null ? `S${target.parentIndexNumber} E${target.indexNumber}` : `E${target.indexNumber}`}${target.name ? ` · ${target.name}` : ''}`,
         source_id: 'jellyfin',
         mediaId: `jellyfin_${url}`,
+        imdbId: seriesImdbId,
+        tmdbId: seriesTmdbId,
+        year: seriesYear != null ? String(seriesYear) : undefined,
         seriesId: current.seriesId || current.jellyfinSeriesId,
         seasonNum: target.parentIndexNumber ?? undefined,
         episodeNum: target.indexNumber ?? undefined,
@@ -2198,7 +2372,7 @@ function useTmdbPresencePoster(
       }
       return ok;
     },
-    [handlePlayVod],
+    [handlePlayVod, patchVodInfo],
   );
 
   // When a Jellyfin stream ends in mpv (idle), Rust emits playing:false —
@@ -4163,12 +4337,32 @@ function useTmdbPresencePoster(
         type,
         season,
         episode,
+        sourceId: vodInfo.source_id,
         progressPercent: currentPercent
       };
 
+      // A vodInfo metadata patch (e.g. Jellyfin ProviderIds resolving after a
+      // cold handoff started playback) re-fires this effect for the same media.
+      // Enrich the active session with the newly resolved ids instead of
+      // sending a duplicate start, which Trakt/Simkl would reject (409) anyway.
+      const prevScrobble = scrobblingMediaRef.current;
+      const isIdEnrichment =
+        !!prevScrobble &&
+        !prevScrobble.imdbId &&
+        !prevScrobble.tmdbId &&
+        !!(imdbId || tmdbId) &&
+        prevScrobble.title === title &&
+        prevScrobble.type === type &&
+        prevScrobble.season === season &&
+        prevScrobble.episode === episode;
       scrobblingMediaRef.current = mediaInfo;
-      console.log('[Scrobbler] Starting/Resuming scrobble session:', mediaInfo);
-      scrobbler.startScrobble(mediaInfo).catch(console.error);
+      if (isIdEnrichment) {
+        scrobbler.updateActiveMediaIds(imdbId, tmdbId);
+        console.log('[Scrobbler] Enriched active scrobble session with resolved ids:', mediaInfo);
+      } else {
+        console.log('[Scrobbler] Starting/Resuming scrobble session:', mediaInfo);
+        scrobbler.startScrobble(mediaInfo).catch(console.error);
+      }
 
       // Clear any existing timer
       if (scrobbleTimerRef.current) {

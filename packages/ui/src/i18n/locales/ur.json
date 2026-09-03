@@ -1303,6 +1303,12 @@
     },
     "jellyfin": {
       "title": "Jellyfin",
+      "scrobblingTitle": "اسکروبنگ",
+      "scrobblingHint": "Jellyfin میں دیکھی گئی فلموں اور ایپی سوڈز کو Trakt اور/یا Simkl پر اسکروب کریں۔ بطور ڈیفالٹ بند — صرف اس صورت میں سروس فعال کریں اگر آپ پہلے سے سرور سائیڈ Trakt یا Simkl پلگ ان کے ذریعے Jellyfin کو اسکروب نہیں کرتے۔",
+      "traktScrobble": "Trakt اسکروبنگ فعال کریں",
+      "traktScrobbleHint": "Jellyfin پلے بیک پیش رفت اپنے Trakt اکاؤنٹ کو بھیجیں۔",
+      "simklScrobble": "Simkl اسکروبنگ فعال کریں",
+      "simklScrobbleHint": "Jellyfin پلے بیک پیش رفت اپنے Simkl اکاؤنٹ کو بھیجیں۔",
       "configured": "ترتیب شدہ",
       "enabled": "Jellyfin فعال کریں",
       "enabledHint": "ٹائٹل بار نیویگیشن میں Jellyfin ٹیب دکھائیں تاکہ آپ اپنے سرور کو براؤز کر سکیں اور ynoTV کے mpv پلیئر سے چلا سکیں۔ نئی انسٹالیشنز پر ڈیفالٹ طور پر غیر فعال ہے۔",

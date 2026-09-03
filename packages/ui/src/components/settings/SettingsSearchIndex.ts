@@ -186,6 +186,8 @@ const SETTINGS_SEARCH_INDEX: SettingsSearchResult[] = [
   { id: 'jellyfin-enabled', label: 'Enable Jellyfin', description: 'Show the Jellyfin tab in the titlebar navigation to browse your server. Disabled by default on new installs.', tabId: 'jellyfin', tabLabel: 'Jellyfin', section: 'Jellyfin' },
   { id: 'jellyfin-server-url', label: 'Jellyfin Server URL', description: 'Address of your Jellyfin server, e.g. http://192.168.1.10:8096.', tabId: 'jellyfin', tabLabel: 'Jellyfin', section: 'Jellyfin' },
   { id: 'jellyfin-open', label: 'Open Jellyfin', description: 'Open the embedded Jellyfin window to browse and play through ynoTV.', tabId: 'jellyfin', tabLabel: 'Jellyfin', section: 'Jellyfin' },
+  { id: 'jellyfin-trakt-scrobble', label: 'Enable Trakt Scrobbling (Jellyfin)', description: 'Scrobble Jellyfin playback to Trakt. Off by default so server-side Trakt Jellyfin plugins do not double-scrobble.', tabId: 'jellyfin', tabLabel: 'Jellyfin', section: 'Jellyfin' },
+  { id: 'jellyfin-simkl-scrobble', label: 'Enable Simkl Scrobbling (Jellyfin)', description: 'Scrobble Jellyfin playback to Simkl. Off by default so server-side Simkl Jellyfin plugins do not double-scrobble.', tabId: 'jellyfin', tabLabel: 'Jellyfin', section: 'Jellyfin' },
 
   // --- Theme ---
   { id: 'theme-tab', label: 'Theme', tabId: 'theme', tabLabel: 'Theme', section: 'Theme' },

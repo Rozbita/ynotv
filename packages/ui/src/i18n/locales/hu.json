@@ -1303,6 +1303,12 @@
     },
     "jellyfin": {
       "title": "Jellyfin",
+      "scrobblingTitle": "Scrobbling",
+      "scrobblingHint": "A Jellyfinben megnézett filmek és epizódok scrobble-olása a Trakt- és/vagy Simkl-fiókba. Alapértelmezés szerint ki van kapcsolva — csak akkor engedélyezzen egy szolgáltatást, ha a Jellyfint még nem scrobble-olja egy szerveroldali Trakt- vagy Simkl-bővítmény.",
+      "traktScrobble": "Trakt-scrobbling engedélyezése",
+      "traktScrobbleHint": "Küldje el a Jellyfin lejátszási előrehaladását a Trakt-fiókjába.",
+      "simklScrobble": "Simkl-scrobbling engedélyezése",
+      "simklScrobbleHint": "Küldje el a Jellyfin lejátszási előrehaladását a Simkl-fiókjába.",
       "configured": "Konfigurálva",
       "enabled": "Jellyfin engedélyezése",
       "enabledHint": "Megjeleníti a Jellyfin lapot a címsor navigációjában, hogy böngészhessen a szerverén, és az ynoTV mpv lejátszóján keresztül játszhassa le a tartalmat. Új telepítéseken alapból ki van kapcsolva.",

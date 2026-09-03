@@ -1303,6 +1303,12 @@
     },
     "jellyfin": {
       "title": "Jellyfin",
+      "scrobblingTitle": "التسجيل المباشر",
+      "scrobblingHint": "سجّل الأفلام والحلقات التي شاهدتها داخل Jellyfin في Trakt و/أو Simkl. معطّل افتراضيًا — فعِّل الخدمة فقط إذا كنت لا تسجّل Jellyfin بالفعل عبر إضافة Trakt أو Simkl من جانب الخادم.",
+      "traktScrobble": "تفعيل تسجيل Trakt",
+      "traktScrobbleHint": "أرسل تقدم التشغيل من Jellyfin إلى حسابك في Trakt.",
+      "simklScrobble": "تفعيل تسجيل Simkl",
+      "simklScrobbleHint": "أرسل تقدم التشغيل من Jellyfin إلى حسابك في Simkl.",
       "configured": "تم الإعداد",
       "enabled": "تمكين Jellyfin",
       "enabledHint": "اعرض تبويب Jellyfin في شريط التنقل العلوي لتتمكن من تصفح خادمك والتشغيل عبر مشغل mpv الخاص بـ ynoTV. معطّل افتراضيًا في عمليات التثبيت الجديدة.",

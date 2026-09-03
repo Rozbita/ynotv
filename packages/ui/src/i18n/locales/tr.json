@@ -1303,6 +1303,12 @@
     },
     "jellyfin": {
       "title": "Jellyfin",
+      "scrobblingTitle": "Scrobbling",
+      "scrobblingHint": "Jellyfin içinde izlenen filmleri ve bölümleri Trakt ve/veya Simkl'e scrobble edin. Varsayılan olarak kapalı — yalnızca Jellyfin'i sunucu tarafında bir Trakt veya Simkl eklentisiyle zaten scrobble etmiyorsanız bir hizmeti etkinleştirin.",
+      "traktScrobble": "Trakt Scrobbling'i Etkinleştir",
+      "traktScrobbleHint": "Jellyfin oynatma ilerlemesini Trakt hesabınıza gönderin.",
+      "simklScrobble": "Simkl Scrobbling'i Etkinleştir",
+      "simklScrobbleHint": "Jellyfin oynatma ilerlemesini Simkl hesabınıza gönderin.",
       "configured": "Yapılandırıldı",
       "enabled": "Jellyfin'i Etkinleştir",
       "enabledHint": "Sunucunuzda gezinebilmeniz ve ynoTV'nin mpv oynatıcısıyla oynatabilmeniz için Jellyfin sekmesini başlık çubuğu gezintisinde gösterir. Yeni kurulumlarda varsayılan olarak kapalıdır.",

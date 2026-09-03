@@ -1303,6 +1303,12 @@
     },
     "jellyfin": {
       "title": "Jellyfin",
+      "scrobblingTitle": "Scrobbling",
+      "scrobblingHint": "Scrobble films en afleveringen die je binnen Jellyfin hebt bekeken naar Trakt en/of Simkl. Standaard uitgeschakeld — schakel een dienst alleen in als je Jellyfin niet al scrobbelt via een Trakt- of Simkl-plugin aan de serverzijde.",
+      "traktScrobble": "Trakt-scrobbling inschakelen",
+      "traktScrobbleHint": "Stuur de afspeelvoortgang van Jellyfin naar je Trakt-account.",
+      "simklScrobble": "Simkl-scrobbling inschakelen",
+      "simklScrobbleHint": "Stuur de afspeelvoortgang van Jellyfin naar je Simkl-account.",
       "configured": "Geconfigureerd",
       "enabled": "Jellyfin inschakelen",
       "enabledHint": "Toont het Jellyfin-tabblad in de titelbalknavigatie, zodat je je server kunt verkennen en kunt afspelen via ynoTV's mpv-speler. Standaard uitgeschakeld bij nieuwe installaties.",

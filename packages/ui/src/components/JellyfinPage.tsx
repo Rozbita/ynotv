@@ -75,6 +75,15 @@ export interface JellyfinPlayPayload {
   apiKey?: string;
   seriesId?: string;
   seriesName?: string;
+  // Series-level metadata provider IDs (Imdb/Tmdb/...) captured by the bridge
+  // from the series item DTO, so intro skip (IntroDB is keyed by IMDb ID) can
+  // resolve without an extra API fetch.
+  seriesProviderIds?: Record<string, string>;
+  seriesProductionYear?: number | null;
+  // Item-level metadata provider IDs (Imdb/Tmdb/year) for movie/standalone
+  // plays that have no series — mirrors seriesProviderIds.
+  itemProviderIds?: Record<string, string> | null;
+  itemProductionYear?: number | null;
   episodeIndex?: number | null;
   episodeParentIndex?: number | null;
   episodeName?: string | null;

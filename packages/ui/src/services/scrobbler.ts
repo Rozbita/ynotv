@@ -143,6 +143,9 @@ export interface PlaybackMediaInfo {
   season?: number;
   episode?: number;
   progressPercent: number; // 0 to 100
+  // Origin of the playback session (e.g. 'jellyfin') so per-source scrobble
+  // opt-outs (server-side Trakt/Simkl plugin double-scrobbling) can gate sends.
+  sourceId?: string;
 }
 
 // Helper to handle cross-origin Tauri/Browser requests
@@ -498,6 +501,25 @@ class ScrobblerService {
     ]);
   }
 
+  /**
+   * Enrich the active session with provider IDs that resolved after playback
+   * started (e.g. Jellyfin ProviderIds fetched in the background). Used when
+   * a vodInfo metadata patch re-fires the scrobble effect for the same media,
+   * so the session is updated in place instead of sending a duplicate start.
+   */
+  updateActiveMediaIds(imdbId?: string, tmdbId?: number | string): void {
+    if (!this.lastActiveMedia) return;
+    if (imdbId && this.lastActiveMedia.imdbId !== imdbId) {
+      this.lastActiveMedia.imdbId = imdbId;
+    }
+    if (tmdbId != null) {
+      const cleanTmdb = typeof tmdbId === 'string' ? parseInt(tmdbId.replace(/[^0-9]/g, ''), 10) || undefined : tmdbId;
+      if (cleanTmdb != null && this.lastActiveMedia.tmdbId !== cleanTmdb) {
+        this.lastActiveMedia.tmdbId = cleanTmdb;
+      }
+    }
+  }
+
   async updateScrobble(progressPercent: number): Promise<void> {
     if (!this.isScrobblingActive || !this.lastActiveMedia) return;
     
@@ -559,6 +581,10 @@ class ScrobblerService {
   private async sendTraktScrobble(action: 'start' | 'pause' | 'stop', media: PlaybackMediaInfo): Promise<void> {
     const settings = await this.getSettings();
     if (!settings.traktEnabled || !settings.traktScrobbleEnabled || !settings.traktAccessToken) return;
+
+    // Jellyfin scrobbling is opt-in per service: users running the server-side
+    // Trakt plugin shouldn't double-scrobble by default.
+    if (media.sourceId === 'jellyfin' && !settings.jellyfinTraktScrobbleEnabled) return;
 
     try {
       const payload: any = {
@@ -624,6 +650,10 @@ class ScrobblerService {
   private async sendSimklScrobble(action: 'start' | 'pause' | 'stop', media: PlaybackMediaInfo): Promise<void> {
     const settings = await this.getSettings();
     if (!settings.simklEnabled || !settings.simklScrobbleEnabled || !settings.simklAccessToken) return;
+
+    // Jellyfin scrobbling is opt-in per service: users running the server-side
+    // Simkl plugin shouldn't double-scrobble by default.
+    if (media.sourceId === 'jellyfin' && !settings.jellyfinSimklScrobbleEnabled) return;
 
     const clientId = buildCredentials.simklClientId || DEFAULT_SIMKL_CLIENT_ID;
     const imdbClean = media.imdbId && media.imdbId.startsWith('tt') ? media.imdbId : undefined;

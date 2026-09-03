@@ -124,6 +124,31 @@ fn is_plausible_jellyfin_item_id(seg: &str) -> bool {
         && seg.chars().all(|c| c.is_ascii_hexdigit() || c == '-')
 }
 
+/// Allow only the metadata providers handled by the injected bridge. The
+/// page-to-Rust title channel is not trusted, so this validation is repeated
+/// here before handing a URL to the system opener.
+fn is_allowed_external_metadata_url(url: &str) -> bool {
+    let parsed = match tauri::Url::parse(url) {
+        Ok(value) => value,
+        Err(_) => return false,
+    };
+    if parsed.scheme() != "https" {
+        return false;
+    }
+    let host = match parsed.host_str() {
+        Some(value) => value.trim_start_matches("www.").to_ascii_lowercase(),
+        None => return false,
+    };
+    host == "imdb.com"
+        || host.ends_with(".imdb.com")
+        || host == "thetvdb.com"
+        || host.ends_with(".thetvdb.com")
+        || host == "themoviedb.org"
+        || host.ends_with(".themoviedb.org")
+        || host == "trakt.tv"
+        || host.ends_with(".trakt.tv")
+}
+
 /// Parse a direct-stream URL like
 /// `http://host:8096/Videos/{itemId}/stream.mkv?...&api_key=...&startTimeTicks=...`
 /// into `(server_base, api_key, item_id, media_source_id, start_ticks)`.
@@ -278,6 +303,15 @@ struct PlayPayload {
     api_key: Option<String>,
     series_id: Option<String>,
     series_name: Option<String>,
+    /// Series-level metadata provider IDs (Imdb/Tmdb/...) captured from the
+    /// series item DTO, surfaced so intro-skip can resolve the IMDb ID.
+    series_provider_ids: Option<serde_json::Value>,
+    series_production_year: Option<i64>,
+    /// Item-level metadata provider IDs (Imdb/Tmdb/year) for movie/standalone
+    /// plays that have no series — mirrors series_provider_ids so movie
+    /// playback can scrobble/intro-resolve with real IDs too.
+    item_provider_ids: Option<serde_json::Value>,
+    item_production_year: Option<i64>,
     episode_index: Option<i64>,
     episode_parent_index: Option<i64>,
     episode_name: Option<String>,
@@ -435,6 +469,18 @@ pub async fn jellyfin_embed_open<R: Runtime>(
                     if let Ok(payload) = serde_json::from_str::<serde_json::Value>(raw.trim()) {
                         let _ = wv.app_handle().emit("jellyfin:bridge-diagnostic", payload);
                     }
+                } else if let Some(raw) = title.strip_prefix("ynotv-jf:open:") {
+                    // External metadata link (IMDb/TMDb/TVDb/Trakt) clicked inside
+                    // the Jellyfin page — open it in the system browser instead of
+                    // navigating the embed. Format: <nonce>:<url>.
+                    if let Some((_, url)) = raw.split_once(':') {
+                        let url = url.trim();
+                        if is_allowed_external_metadata_url(url) {
+                            let _ = tauri_plugin_opener::open_url(url, None::<&str>);
+                        } else {
+                            log::warn!("[Jellyfin] Rejected external link with unsupported URL");
+                        }
+                    }
                 } else if let Some(raw) = title.strip_prefix(CHUNK_PREFIX) {
                     // `i/total:<data>` — one piece of the play payload. The
                     // title channel truncates at ~4096 chars, so the page
@@ -492,6 +538,10 @@ pub async fn jellyfin_embed_open<R: Runtime>(
                                         "apiKey": payload.api_key,
                                         "seriesId": payload.series_id,
                                         "seriesName": payload.series_name,
+                                        "seriesProviderIds": payload.series_provider_ids,
+                                        "seriesProductionYear": payload.series_production_year,
+                                        "itemProviderIds": payload.item_provider_ids,
+                                        "itemProductionYear": payload.item_production_year,
                                         "episodeIndex": payload.episode_index,
                                         "episodeParentIndex": payload.episode_parent_index,
                                         "episodeName": payload.episode_name,
@@ -1695,7 +1745,12 @@ const INIT_SCRIPT: &str = r##"
                     indexNumber: body.IndexNumber != null ? body.IndexNumber : null,
                     parentIndexNumber: body.ParentIndexNumber != null ? body.ParentIndexNumber : null,
                     positionTicks: (body.UserData && body.UserData.PlaybackPositionTicks) ? body.UserData.PlaybackPositionTicks : 0,
-                    type: body.Type || ""
+                    type: body.Type || "",
+                    // Metadata provider IDs (Imdb/Tmdb/Tvdb/Trakt) + release year
+                    // from the item DTO, surfaced so intro-skip (IntroDB is keyed
+                    // by IMDb ID) can resolve without an extra API round-trip.
+                    providerIds: body.ProviderIds || null,
+                    productionYear: body.ProductionYear != null ? body.ProductionYear : null
                 };
                 if (cleanId) itemById[cleanId] = info;
                 itemById[body.Id] = info;
@@ -1798,6 +1853,23 @@ const INIT_SCRIPT: &str = r##"
                 chapters = chaptersFor(b.Id) || chapters;
             }
             if (item && item.seriesId) {
+                // Best-effort: also remember the series item DTO so the play
+                // payload can carry the series-level ProviderIds (IMDb/TMDb)
+                // for intro skip. Non-blocking — the bounded timer still
+                // decides when playback metadata is delivered; if this lands
+                // late it simply benefits the next play.
+                (function () {
+                    var sClean = String(item.seriesId).replace(/-/g, '');
+                    if (itemById[sClean] || itemById[item.seriesId]) return;
+                    var sUrl = origin + "/Items/" + encodeURIComponent(item.seriesId);
+                    if (token) sUrl += "?api_key=" + encodeURIComponent(token);
+                    fetch(sUrl).then(function (r3) {
+                        if (!r3.ok) return null;
+                        return r3.json();
+                    }).then(function (b3) {
+                        if (b3 && b3.Id) rememberItemDto(b3);
+                    }).catch(function () {});
+                })();
                 var eps = episodesFor(item.seriesId) || episodes;
                 if (!eps) {
                     var epsUrl = origin + "/Shows/" + encodeURIComponent(item.seriesId) + "/Episodes?UserId=" + encodeURIComponent(uid) + "&Fields=Chapters";
@@ -2120,6 +2192,31 @@ const INIT_SCRIPT: &str = r##"
                 api_key: accessToken(),
                 series_id: itemInfo && itemInfo.seriesId ? itemInfo.seriesId : null,
                 series_name: (itemInfo && itemInfo.seriesName) || null,
+                // Series-level metadata IDs (Imdb/Tmdb + year) captured from the
+                // series item DTO, so intro skip can resolve without a fetch.
+                series_provider_ids: (function () {
+                    if (!itemInfo || !itemInfo.seriesId) return null;
+                    var sClean = String(itemInfo.seriesId).replace(/-/g, '');
+                    var seriesItem = itemById[sClean] || itemById[itemInfo.seriesId] || null;
+                    return seriesItem && seriesItem.providerIds ? seriesItem.providerIds : null;
+                })(),
+                series_production_year: (function () {
+                    if (!itemInfo || !itemInfo.seriesId) return null;
+                    var sClean = String(itemInfo.seriesId).replace(/-/g, '');
+                    var seriesItem = itemById[sClean] || itemById[itemInfo.seriesId] || null;
+                    return seriesItem && seriesItem.productionYear != null ? seriesItem.productionYear : null;
+                })(),
+                // Movie/standalone plays have no series — fall back to the played
+                // item's own DTO ProviderIds (Imdb/Tmdb + year) so movie
+                // playback can scrobble and intro-resolve with real IDs too.
+                item_provider_ids: (function () {
+                    if (!itemInfo || itemInfo.seriesId) return null;
+                    return itemInfo.providerIds ? itemInfo.providerIds : null;
+                })(),
+                item_production_year: (function () {
+                    if (!itemInfo || itemInfo.seriesId) return null;
+                    return itemInfo.productionYear != null ? itemInfo.productionYear : null;
+                })(),
                 episode_index: itemInfo ? itemInfo.indexNumber : null,
                 episode_parent_index: itemInfo ? itemInfo.parentIndexNumber : null,
                 episode_name: (itemInfo && itemInfo.name) || null,
@@ -2402,6 +2499,39 @@ const INIT_SCRIPT: &str = r##"
         } catch (e) { diag('xhr-patch-error', String(e)); }
     })();
 
+    // External metadata links (IMDb / TMDb / TVDb / Trakt) rendered from the
+    // item DTO's ExternalUrls are dead inside the child WebView (popups/new
+    // windows are blocked, and navigating away would tear down the embed).
+    // Intercept clicks and ask Rust to open them in the system browser via the
+    // document.title channel (same mechanism as diagnostics/play chunks).
+    function isKnownExternalLinkHost(host) {
+        var h = String(host || '').toLowerCase().replace(/^www\./, '');
+        return h === 'imdb.com' || h.endsWith('.imdb.com') ||
+               h === 'thetvdb.com' || h.endsWith('.thetvdb.com') ||
+               h === 'themoviedb.org' || h.endsWith('.themoviedb.org') ||
+               h === 'trakt.tv' || h.endsWith('.trakt.tv');
+    }
+    function installExternalLinkHandler() {
+        document.addEventListener('click', function (e) {
+            try {
+                var target = e.target;
+                var a = target && target.closest ? target.closest('a[href]') : null;
+                if (!a) return;
+                var href = a.getAttribute('href') || '';
+                if (!href || href.charAt(0) === '#') return;
+                var abs;
+                try { abs = new URL(href, serverBase()).href; } catch (err) { return; }
+                if (!isKnownExternalLinkHost(new URL(abs).hostname)) return;
+                e.preventDefault();
+                e.stopPropagation();
+                // Nonce keeps consecutive clicks of the same link from being
+                // deduped by the title-change listener.
+                document.title = 'ynotv-jf:open:' + Date.now().toString(36) + ':' + abs;
+            } catch (err) {}
+        }, true);
+    }
+    installExternalLinkHandler();
+
     window.__ynotvJfReenable = function () {
         try {
             window.__ynotvPlaybackActive = false;
@@ -2481,7 +2611,7 @@ const INIT_SCRIPT: &str = r##"
 "##;
 #[cfg(test)]
 mod tests {
-    use super::{is_plausible_jellyfin_item_id, parse_play_url};
+    use super::{is_allowed_external_metadata_url, is_plausible_jellyfin_item_id, parse_play_url};
 
     const GUID: &str = "abcdef01-2345-6789-abcd-ef0123456789";
     const GUID_CLEAN: &str = "abcdef0123456789abcdef0123456789";
@@ -2542,6 +2672,18 @@ mod tests {
     fn rejects_word_after_media_segment() {
         // "proxy" is not hex — must not be accepted as an item id.
         assert!(parse_play_url(&make_url("/Videos/proxy/stream")).is_none());
+    }
+
+    #[test]
+    fn external_metadata_url_validation() {
+        assert!(is_allowed_external_metadata_url("https://www.imdb.com/title/tt1234567"));
+        assert!(is_allowed_external_metadata_url("https://sub.thetvdb.com/series/1"));
+        assert!(is_allowed_external_metadata_url("https://themoviedb.org/movie/1"));
+        assert!(is_allowed_external_metadata_url("https://trakt.tv/movies/1"));
+        assert!(!is_allowed_external_metadata_url("http://imdb.com/title/tt1234567"));
+        assert!(!is_allowed_external_metadata_url("https://imdb.com.evil.example/title/1"));
+        assert!(!is_allowed_external_metadata_url("https://evil.example/?next=https%3A%2F%2Fimdb.com"));
+        assert!(!is_allowed_external_metadata_url("javascript:alert(1)"));
     }
 
     #[test]

@@ -1303,6 +1303,12 @@
     },
     "jellyfin": {
       "title": "Jellyfin",
+      "scrobblingTitle": "即時記錄",
+      "scrobblingHint": "將 Jellyfin 中觀看過的電影和劇集記錄到 Trakt 和/或 Simkl。預設為關閉 — 僅在您尚未透過伺服器端的 Trakt 或 Simkl 外掛程式記錄 Jellyfin 時，才啟用相應服務。",
+      "traktScrobble": "啟用 Trakt 記錄",
+      "traktScrobbleHint": "將 Jellyfin 播放進度傳送到您的 Trakt 帳戶。",
+      "simklScrobble": "啟用 Simkl 記錄",
+      "simklScrobbleHint": "將 Jellyfin 播放進度傳送到您的 Simkl 帳戶。",
       "configured": "已設定",
       "enabled": "啟用 Jellyfin",
       "enabledHint": "在標題列導覽中顯示 Jellyfin 標籤頁，以便瀏覽您的伺服器並透過 ynoTV 的 mpv 播放器播放。新安裝時預設關閉。",

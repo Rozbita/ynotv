@@ -1303,6 +1303,12 @@
     },
     "jellyfin": {
       "title": "Jellyfin",
+      "scrobblingTitle": "स्क्रॉबलिंग",
+      "scrobblingHint": "Jellyfin में देखी गई फ़िल्मों और एपिसोड को Trakt और/या Simkl पर स्क्रॉबल करें। डिफ़ॉल्ट रूप से बंद — केवल तभी सेवा सक्षम करें जब आप सर्वर-साइड Trakt या Simkl प्लगइन के माध्यम से Jellyfin को पहले से स्क्रॉबल नहीं करते।",
+      "traktScrobble": "Trakt स्क्रॉबलिंग सक्षम करें",
+      "traktScrobbleHint": "Jellyfin प्लेबैक प्रगति अपने Trakt खाते को भेजें।",
+      "simklScrobble": "Simkl स्क्रॉबलिंग सक्षम करें",
+      "simklScrobbleHint": "Jellyfin प्लेबैक प्रगति अपने Simkl खाते को भेजें।",
       "configured": "कॉन्फ़िगर किया गया",
       "enabled": "Jellyfin सक्षम करें",
       "enabledHint": "टाइटलबार नेविगेशन में Jellyfin टैब दिखाएं ताकि आप अपने सर्वर को ब्राउज़ कर सकें और ynoTV के mpv प्लेयर से चला सकें। नई इंस्टॉल पर डिफ़ॉल्ट रूप से अक्षम।",

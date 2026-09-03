@@ -1303,6 +1303,12 @@
     },
     "jellyfin": {
       "title": "Jellyfin",
+      "scrobblingTitle": "Скроблінг",
+      "scrobblingHint": "Скроблінг фільмів і серій, переглянутих у Jellyfin, у Trakt та/або Simkl. Вимкнено за замовчуванням — вмикайте службу лише якщо ви ще не скроблите Jellyfin через серверний плагін Trakt або Simkl.",
+      "traktScrobble": "Увімкнути скроблінг у Trakt",
+      "traktScrobbleHint": "Надсилати прогрес відтворення Jellyfin у ваш обліковий запис Trakt.",
+      "simklScrobble": "Увімкнути скроблінг у Simkl",
+      "simklScrobbleHint": "Надсилати прогрес відтворення Jellyfin у ваш обліковий запис Simkl.",
       "configured": "Налаштовано",
       "enabled": "Увімкнути Jellyfin",
       "enabledHint": "Показує вкладку Jellyfin у навігації заголовка вікна, щоб ви могли переглядати свій сервер і відтворювати контент через mpv-плеєр ynoTV. За замовчуванням вимкнено на нових інсталяціях.",

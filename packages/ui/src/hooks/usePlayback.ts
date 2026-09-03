@@ -377,6 +377,13 @@ export interface PlaybackState {
   handlePlayCatchup: (channel: StoredChannel, programTitle: string, startTimeMs: number, durationMinutes: number, programDesc?: string) => Promise<void>;
   handleCatchupSeek: (channel: StoredChannel, programTitle: string, startTimeMs: number, durationMinutes: number, seekSeconds: number, programDesc?: string) => Promise<void>;
   handlePlayVod: (info: VodPlayInfo, onCloseView?: () => void) => Promise<boolean>;
+  /**
+   * Merge fields into the currently active VOD info (state + ref), e.g.
+   * metadata that resolves after playback has already started. The optional
+   * predicate can guard against patching a newer play (only patch the session
+   * that initiated the async resolution). No-ops when nothing would change.
+   */
+  patchVodInfo: (patch: Partial<VodPlayInfo>, matches?: (current: VodPlayInfo) => boolean) => void;
   handlePlayRecording: (recording: import('../db').DvrRecording, onCloseView?: () => void) => Promise<void>;
   handleStop: () => Promise<void>;
   handleSeek: (seconds: number) => Promise<void>;
@@ -2863,6 +2870,27 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
     }
   }, [setIgnoreHttpErrors, setPosition, setDuration, clearPendingSeeks]);
 
+  // Merge late-resolved metadata into the active play (e.g. Jellyfin
+  // ProviderIds that arrive after playback already started). The optional
+  // predicate only lets the patch through when the current session still
+  // matches the play that initiated the async resolution.
+  const patchVodInfo = useCallback((patch: Partial<VodPlayInfo>, matches?: (current: VodPlayInfo) => boolean) => {
+    const current = vodInfoRef.current;
+    if (!current) return;
+    if (matches && !matches(current)) return;
+    let hasChange = false;
+    for (const k of Object.keys(patch) as (keyof VodPlayInfo)[]) {
+      if (patch[k] !== current[k]) {
+        hasChange = true;
+        break;
+      }
+    }
+    if (!hasChange) return;
+    const next = { ...current, ...patch };
+    vodInfoRef.current = next;
+    setVodInfo(next);
+  }, []);
+
   const handlePlayRecording = useCallback(async (recording: import('../db').DvrRecording, onCloseView?: () => void) => {
     setError(null);
     clearPendingSeeks();
@@ -3163,6 +3191,7 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
     handlePlayCatchup,
     handleCatchupSeek,
     handlePlayVod,
+    patchVodInfo,
     handlePlayRecording,
     handleStop,
     handleSeek,

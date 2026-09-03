@@ -1303,6 +1303,12 @@
     },
     "jellyfin": {
       "title": "Jellyfin",
+      "scrobblingTitle": "ثبت زنده",
+      "scrobblingHint": "فیلم‌ها و قسمت‌های تماشاشده در Jellyfin را در Trakt و/یا Simkl ثبت کنید. به‌طور پیش‌فرض غیرفعال است — سرویس را فقط در صورتی فعال کنید که Jellyfin را از طریق افزونه Trakt یا Simkl سمت سرور ثبت نمی‌کنید.",
+      "traktScrobble": "فعال‌سازی ثبت در Trakt",
+      "traktScrobbleHint": "پیشرفت پخش Jellyfin را به حساب Trakt خود ارسال کنید.",
+      "simklScrobble": "فعال‌سازی ثبت در Simkl",
+      "simklScrobbleHint": "پیشرفت پخش Jellyfin را به حساب Simkl خود ارسال کنید.",
       "configured": "پیکربندیشده",
       "enabled": "فعالسازی Jellyfin",
       "enabledHint": "تب Jellyfin را در نوار ناوبری عنوان نمایش میدهد تا بتوانید سرورتان را مرور و با پخشکنندهٔ mpv یونیتیوی پخش کنید. در نصبهای جدید بهطور پیشفرض غیرفعال است.",

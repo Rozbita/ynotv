@@ -1303,6 +1303,12 @@
     },
     "jellyfin": {
       "title": "Jellyfin",
+      "scrobblingTitle": "Scrobbling",
+      "scrobblingHint": "Rejestruj w Trakt i/lub Simkl filmy i odcinki obejrzane w Jellyfin. Wyłączone domyślnie — włącz usługę tylko wtedy, gdy nie rejestrujesz już Jellyfin przez wtyczkę Trakt lub Simkl po stronie serwera.",
+      "traktScrobble": "Włącz rejestrowanie w Trakt",
+      "traktScrobbleHint": "Wysyłaj postęp odtwarzania Jellyfin na swoje konto Trakt.",
+      "simklScrobble": "Włącz rejestrowanie w Simkl",
+      "simklScrobbleHint": "Wysyłaj postęp odtwarzania Jellyfin na swoje konto Simkl.",
       "configured": "Skonfigurowano",
       "enabled": "Włącz Jellyfin",
       "enabledHint": "Pokazuje kartę Jellyfin w pasku tytułu, dzięki czemu możesz przeglądać swój serwer i odtwarzać treści przez odtwarzacz mpv ynoTV. Domyślnie wyłączone na nowych instalacjach.",

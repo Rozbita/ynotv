@@ -201,6 +201,11 @@ export interface AppSettings {
     // Jellyfin integration — the titlebar Jellyfin tab is hidden until this is
     // explicitly enabled (new installs default to disabled)
     jellyfinEnabled?: boolean;
+    // Per-service scrobbling of Jellyfin playback — off by default so users who
+    // already scrobble via server-side Trakt/Simkl Jellyfin plugins don't
+    // double-scrobble, while keeping app scrobbling for other sources.
+    jellyfinTraktScrobbleEnabled?: boolean;
+    jellyfinSimklScrobbleEnabled?: boolean;
     // EPG button visibility — buttons hidden from LiveTV EPG header
     epgHiddenButtons?: string[];
     // Trakt integration settings

@@ -17,6 +17,9 @@ export function JellyfinTab() {
   useTranslation();
   const jellyfinEnabled = useSettingsStore((s) => s.jellyfinEnabled);
   const setJellyfinEnabled = useSettingsStore((s) => s.setJellyfinEnabled);
+  const jellyfinTraktScrobbleEnabled = useSettingsStore((s) => s.jellyfinTraktScrobbleEnabled);
+  const jellyfinSimklScrobbleEnabled = useSettingsStore((s) => s.jellyfinSimklScrobbleEnabled);
+  const setJellyfinSettings = useSettingsStore((s) => s.setJellyfinSettings);
   const [serverUrl, setServerUrl] = useState('');
   const [saved, setSaved] = useState(false);
 
@@ -158,6 +161,52 @@ export function JellyfinTab() {
               {i18n.t('settings:jellyfin.openBtn')}
             </button>
           </div>
+
+          {jellyfinEnabled && (
+            <div style={{ marginTop: '4px' }}>
+              <hr
+                style={{
+                  border: 'none',
+                  borderTop: '1px solid var(--surface-border)',
+                  margin: '18px 0 16px',
+                }}
+              />
+              <h3 style={{ margin: 0 }}>{i18n.t('settings:jellyfin.scrobblingTitle')}</h3>
+              <p className="section-description" style={{ marginTop: '6px' }}>
+                {i18n.t('settings:jellyfin.scrobblingHint')}
+              </p>
+
+              <div className="timeshift-toggle-row" style={{ marginBottom: '8px', marginTop: '4px' }}>
+                <div className="timeshift-toggle-info">
+                  <span className="timeshift-toggle-label">{i18n.t('settings:jellyfin.traktScrobble')}</span>
+                  <span className="timeshift-toggle-sub">{i18n.t('settings:jellyfin.traktScrobbleHint')}</span>
+                </div>
+                <label className="toggle-switch">
+                  <input
+                    type="checkbox"
+                    checked={jellyfinTraktScrobbleEnabled}
+                    onChange={(e) => setJellyfinSettings({ jellyfinTraktScrobbleEnabled: e.target.checked })}
+                  />
+                  <span className="toggle-slider"></span>
+                </label>
+              </div>
+
+              <div className="timeshift-toggle-row" style={{ marginBottom: '8px' }}>
+                <div className="timeshift-toggle-info">
+                  <span className="timeshift-toggle-label">{i18n.t('settings:jellyfin.simklScrobble')}</span>
+                  <span className="timeshift-toggle-sub">{i18n.t('settings:jellyfin.simklScrobbleHint')}</span>
+                </div>
+                <label className="toggle-switch">
+                  <input
+                    type="checkbox"
+                    checked={jellyfinSimklScrobbleEnabled}
+                    onChange={(e) => setJellyfinSettings({ jellyfinSimklScrobbleEnabled: e.target.checked })}
+                  />
+                  <span className="toggle-slider"></span>
+                </label>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

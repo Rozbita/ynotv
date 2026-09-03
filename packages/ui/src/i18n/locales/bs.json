@@ -1303,6 +1303,12 @@
     },
     "jellyfin": {
       "title": "Jellyfin",
+      "scrobblingTitle": "Scrobbling",
+      "scrobblingHint": "Registrujte filmove i epizode pogledane unutar Jellyfina na Trakt i/ili Simkl. Isključeno po zadanim postavkama — uključite uslugu samo ako već ne registrujete Jellyfin putem Trakt ili Simkl dodatka na strani servera.",
+      "traktScrobble": "Omogući Trakt registraciju",
+      "traktScrobbleHint": "Šaljite napredak reprodukcije Jellyfina na vaš Trakt nalog.",
+      "simklScrobble": "Omogući Simkl registraciju",
+      "simklScrobbleHint": "Šaljite napredak reprodukcije Jellyfina na vaš Simkl nalog.",
       "configured": "Konfigurisano",
       "enabled": "Omogući Jellyfin",
       "enabledHint": "Prikaži Jellyfin karticu u navigaciji na traci naslova kako biste mogli pregledavati svoj server i reproducirati sadržaj preko ynoTV-ovog mpv playera. Onemogućeno je po zadanim postavkama na novim instalacijama.",

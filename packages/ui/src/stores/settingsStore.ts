@@ -104,6 +104,12 @@ export interface SimklSettings {
   simklScrobbleEnabled: boolean;
 }
 
+export interface JellyfinSettings {
+  jellyfinEnabled: boolean;
+  jellyfinTraktScrobbleEnabled: boolean;
+  jellyfinSimklScrobbleEnabled: boolean;
+}
+
 export interface CategorySettings {
   showAllChannels: boolean;
   showFavorites: boolean;
@@ -367,7 +373,12 @@ export interface SettingsState {
 
   // Jellyfin integration (titlebar tab hidden until explicitly enabled)
   jellyfinEnabled: boolean;
+  // Per-service Jellyfin scrobbling opt-ins — off by default so users running
+  // server-side Trakt/Simkl Jellyfin plugins don't double-scrobble.
+  jellyfinTraktScrobbleEnabled: boolean;
+  jellyfinSimklScrobbleEnabled: boolean;
   setJellyfinEnabled: (enabled: boolean) => void;
+  setJellyfinSettings: (partial: Partial<JellyfinSettings>) => void;
 
   // TV calendar auto-sync
   tvCalendarAutoSync: boolean;
@@ -1726,9 +1737,19 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   // Jellyfin integration
   jellyfinEnabled: false,
+  jellyfinTraktScrobbleEnabled: false,
+  jellyfinSimklScrobbleEnabled: false,
   setJellyfinEnabled: (enabled) => {
     set({ jellyfinEnabled: enabled });
     persistSettings({ jellyfinEnabled: enabled });
+  },
+  setJellyfinSettings: (partial) => {
+    const patch: Record<string, any> = {};
+    if (partial.jellyfinEnabled !== undefined) patch.jellyfinEnabled = partial.jellyfinEnabled;
+    if (partial.jellyfinTraktScrobbleEnabled !== undefined) patch.jellyfinTraktScrobbleEnabled = partial.jellyfinTraktScrobbleEnabled;
+    if (partial.jellyfinSimklScrobbleEnabled !== undefined) patch.jellyfinSimklScrobbleEnabled = partial.jellyfinSimklScrobbleEnabled;
+    set(patch);
+    persistSettings(patch);
   },
 
   // TV calendar auto-sync

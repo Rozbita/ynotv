@@ -336,6 +336,26 @@ describe('settings store hydration', () => {
     expect(useSettingsStore.getState().jellyfinEnabled).toBe(false);
   });
 
+  it('defaults Jellyfin Trakt/Simkl scrobbling to disabled on fresh installs', async () => {
+    // Jellyfin scrobbling is opt-in so users running the server-side Trakt or
+    // Simkl Jellyfin plugins don't double-scrobble by default.
+    await ensureSettingsHydration();
+    await vi.waitFor(() => expect(useSettingsStore.getState().layoutSettingsLoaded).toBe(true));
+
+    expect(useSettingsStore.getState().jellyfinTraktScrobbleEnabled).toBe(false);
+    expect(useSettingsStore.getState().jellyfinSimklScrobbleEnabled).toBe(false);
+  });
+
+  it('hydrates explicit Jellyfin scrobbling choices across restarts', async () => {
+    storageBackend.jellyfinTraktScrobbleEnabled = true;
+    storageBackend.jellyfinSimklScrobbleEnabled = false;
+    await ensureSettingsHydration();
+    await vi.waitFor(() => expect(useSettingsStore.getState().layoutSettingsLoaded).toBe(true));
+
+    expect(useSettingsStore.getState().jellyfinTraktScrobbleEnabled).toBe(true);
+    expect(useSettingsStore.getState().jellyfinSimklScrobbleEnabled).toBe(false);
+  });
+
   it('is idempotent: calling ensureSettingsHydration twice performs one load', async () => {
     storageBackend.theme = 'dark';
     await ensureSettingsHydration();

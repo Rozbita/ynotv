@@ -1303,6 +1303,12 @@
     },
     "jellyfin": {
       "title": "Jellyfin",
+      "scrobblingTitle": "实时记录",
+      "scrobblingHint": "将 Jellyfin 中观看过的电影和剧集记录到 Trakt 和/或 Simkl。默认关闭 — 仅当您尚未通过服务器端的 Trakt 或 Simkl 插件记录 Jellyfin 时，才启用相应服务。",
+      "traktScrobble": "启用 Trakt 记录",
+      "traktScrobbleHint": "将 Jellyfin 播放进度发送到您的 Trakt 账户。",
+      "simklScrobble": "启用 Simkl 记录",
+      "simklScrobbleHint": "将 Jellyfin 播放进度发送到您的 Simkl 账户。",
       "configured": "已配置",
       "enabled": "启用 Jellyfin",
       "enabledHint": "在标题栏导航中显示 Jellyfin 标签页，以便浏览您的服务器并通过 ynoTV 的 mpv 播放器播放。新安装时默认关闭。",

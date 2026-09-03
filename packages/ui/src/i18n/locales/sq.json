@@ -1303,6 +1303,12 @@
     },
     "jellyfin": {
       "title": "Jellyfin",
+      "scrobblingTitle": "Scrobbling",
+      "scrobblingHint": "Regjistro filmat dhe episodet e shikuara brenda Jellyfin në Trakt dhe/ose Simkl. Çaktivizuar si parazgjedhje — aktivizo një shërbim vetëm nëse nuk e regjistron tashmë Jellyfin përmes një shtojce Trakt ose Simkl në anën e serverit.",
+      "traktScrobble": "Aktivizo regjistrimin në Trakt",
+      "traktScrobbleHint": "Dërgo progresin e luajtjes së Jellyfin në llogarinë tënde Trakt.",
+      "simklScrobble": "Aktivizo regjistrimin në Simkl",
+      "simklScrobbleHint": "Dërgo progresin e luajtjes së Jellyfin në llogarinë tënde Simkl.",
       "configured": "Konfiguruar",
       "enabled": "Aktivizo Jellyfin",
       "enabledHint": "Shfaq skedën Jellyfin në navigimin e shiritit të titullit, që të mund të shfletoni serverin tuaj dhe të luani përmes player-it mpv të ynoTV. Çaktivizuar si parazgjedhje në instalimet e reja.",

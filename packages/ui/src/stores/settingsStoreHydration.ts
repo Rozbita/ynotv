@@ -64,7 +64,8 @@ const BOOLEAN_KEYS = new Set([
   'autoBackupEnabled', 'streamingCatalogsEnabled', 'streamingNuvioCatalogsEnabled',
   'rpdbBackdropsEnabled', 'traktEnabled', 'traktScrobbleEnabled', 'traktSyncEnabled',
   'traktCatalogsBeforeAddon', 'traktNuvioCatalogsBeforeAddon', 'simklEnabled',
-  'simklScrobbleEnabled', 'jellyfinEnabled',
+  'simklScrobbleEnabled', 'jellyfinEnabled', 'jellyfinTraktScrobbleEnabled',
+  'jellyfinSimklScrobbleEnabled',
   'tvCalendarAutoSync', 'showAllChannels', 'showFavorites',
   'showWatchlist', 'showRecentlyViewed', 'alwaysSortFavoritesAlphabetically', 'collapseSourceCategoriesOnStartup',
   'showVodAll', 'showVodFavorites', 'showVodPlaylists', 'showVodLocal', 'showVodRecent',
@@ -429,6 +430,8 @@ async function hydrateSettingsStore(): Promise<void> {
         // configured a server (URL saved from the tab or the settings panel)
         // keep the tab visible until the user explicitly turns it off.
         jellyfinEnabled: data.jellyfinEnabled ?? Boolean(data.jellyfinServerUrl || data.jellyfinUsername),
+        jellyfinTraktScrobbleEnabled: data.jellyfinTraktScrobbleEnabled ?? false,
+        jellyfinSimklScrobbleEnabled: data.jellyfinSimklScrobbleEnabled ?? false,
         tvCalendarAutoSync: data.tvCalendarAutoSync ?? true,
         showAllChannels: data.showAllChannels ?? true,
         showFavorites: data.showFavorites ?? true,

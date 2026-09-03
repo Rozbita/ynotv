@@ -2884,6 +2884,12 @@
     },
     "jellyfin": {
       "title": "Jellyfin",
+      "scrobblingTitle": "Ghi nhận trực tiếp",
+      "scrobblingHint": "Ghi nhận các phim và tập đã xem trong Jellyfin lên Trakt và/hoặc Simkl. Tắt theo mặc định — chỉ bật dịch vụ nếu bạn chưa ghi nhận Jellyfin qua plugin Trakt hoặc Simkl phía máy chủ.",
+      "traktScrobble": "Bật ghi nhận Trakt",
+      "traktScrobbleHint": "Gửi tiến trình phát của Jellyfin tới tài khoản Trakt của bạn.",
+      "simklScrobble": "Bật ghi nhận Simkl",
+      "simklScrobbleHint": "Gửi tiến trình phát của Jellyfin tới tài khoản Simkl của bạn.",
       "configured": "Đã cấu hình",
       "enabled": "Bật Jellyfin",
       "enabledHint": "Hiển thị tab Jellyfin trong thanh tiêu đề để bạn duyệt máy chủ của mình và phát qua trình phát mpv của ynoTV. Mặc định tắt trên các bản cài đặt mới.",
