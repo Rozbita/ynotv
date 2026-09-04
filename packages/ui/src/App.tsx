@@ -5578,6 +5578,16 @@ function useTmdbPresencePoster(
   }, []);
 
   // ==========================================================================
+  // App Icon Restoration
+  // ==========================================================================
+  useEffect(() => {
+    const savedIcon = localStorage.getItem('ynotv_app_icon') || 'midnight-4b';
+    invoke('set_app_icon', { iconId: savedIcon }).catch((err) => {
+      console.error('[App] Failed to restore app icon:', err);
+    });
+  }, []);
+
+  // ==========================================================================
   // Check for Updates
   // ==========================================================================
   useEffect(() => {

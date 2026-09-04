@@ -326,6 +326,7 @@ mod gamepad;
 mod raw_hid_gamepad;
 mod web_server;
 mod jellyfin_web;
+mod icon_switcher;
 
 #[tauri::command]
 fn get_connected_gamepads() -> Vec<gamepad::GamepadInfo> {
@@ -5130,6 +5131,9 @@ pub fn run() {
             // paints it has no visible content - making it visible early means
             // a slow startup shows the boot splash instead of "no window".
             if let Some(window) = app.get_webview_window("main") {
+                if let Some(icon) = app.default_window_icon() {
+                    let _ = window.set_icon(icon.clone());
+                }
                 let _ = window.show();
                 let _ = window.unminimize();
                 let _ = window.set_focus();
@@ -5537,7 +5541,9 @@ pub fn run() {
             jellyfin_web::jellyfin_embed_is_open,
             jellyfin_web::jellyfin_confirm_playback,
             jellyfin_web::jellyfin_embed_reenable,
-            jellyfin_web::jellyfin_embed_notify_playback_ended
+            jellyfin_web::jellyfin_embed_notify_playback_ended,
+            // App icon switcher
+            icon_switcher::set_app_icon
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

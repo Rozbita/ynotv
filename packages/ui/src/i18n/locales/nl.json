@@ -1836,7 +1836,10 @@
       "ytdlpUpToDate": "Actueel ({{version}})",
       "ytdlpUpdated": "Bijgewerkt naar {{version}}",
       "ytdlpError": "Bijwerken mislukt: {{message}}",
-      "ytdlpNotSupported": "Updates worden niet ondersteund op dit platform."
+      "ytdlpNotSupported": "Updates worden niet ondersteund op dit platform.",
+      "appIconTitle": "App-pictogram",
+      "appIconDescription": "Kies je favoriete app-pictogram. Het pictogram van het venster en de taakbalk wordt direct bijgewerkt.",
+      "appIconApplying": "Toepassen..."
     },
     "tmdb": {
       "title": "TMDB-integratie",

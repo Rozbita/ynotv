@@ -1836,7 +1836,10 @@
       "ytdlpUpToDate": "Atualizado ({{version}})",
       "ytdlpUpdated": "Atualizado para {{version}}",
       "ytdlpError": "Falha na atualização: {{message}}",
-      "ytdlpNotSupported": "As atualizações não são suportadas nesta plataforma."
+      "ytdlpNotSupported": "As atualizações não são suportadas nesta plataforma.",
+      "appIconTitle": "Ícone do aplicativo",
+      "appIconDescription": "Selecione o ícone do aplicativo de sua preferência. O ícone da janela e da barra de tarefas é atualizado instantaneamente.",
+      "appIconApplying": "Aplicando..."
     },
     "tmdb": {
       "title": "Integração TMDB",

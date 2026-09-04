@@ -1836,7 +1836,10 @@
       "ytdlpUpToDate": "به‌روز ({{version}})",
       "ytdlpUpdated": "به {{version}} به‌روزرسانی شد",
       "ytdlpError": "به‌روزرسانی ناموفق بود: {{message}}",
-      "ytdlpNotSupported": "به‌روزرسانی‌ها در این پلتفرم پشتیبانی نمی‌شوند."
+      "ytdlpNotSupported": "به‌روزرسانی‌ها در این پلتفرم پشتیبانی نمی‌شوند.",
+      "appIconTitle": "آیکون برنامه",
+      "appIconDescription": "آیکون برنامهٔ موردعلاقهٔ خود را انتخاب کنید. آیکون پنجره و نوار وظیفه بلافاصله به‌روزرسانی می‌شود.",
+      "appIconApplying": "در حال اعمال..."
     },
     "tmdb": {
       "title": "یکپارچه‌سازی TMDB",

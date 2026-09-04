@@ -1836,7 +1836,10 @@
       "ytdlpUpToDate": "Güncel ({{version}})",
       "ytdlpUpdated": "{{version}} sürümüne güncellendi",
       "ytdlpError": "Güncelleme başarısız: {{message}}",
-      "ytdlpNotSupported": "Bu platformada güncellemeler desteklenmiyor."
+      "ytdlpNotSupported": "Bu platformada güncellemeler desteklenmiyor.",
+      "appIconTitle": "Uygulama Simgesi",
+      "appIconDescription": "Tercih ettiğiniz uygulama simgesini seçin. Pencere ve görev çubuğu simgesi anında güncellenir.",
+      "appIconApplying": "Uygulanıyor..."
     },
     "tmdb": {
       "title": "TMDB Entegrasyonu",

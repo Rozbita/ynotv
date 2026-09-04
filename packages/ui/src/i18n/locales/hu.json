@@ -1836,7 +1836,10 @@
       "ytdlpUpToDate": "Naprakész ({{version}})",
       "ytdlpUpdated": "Frissítve erre: {{version}}",
       "ytdlpError": "A frissítés sikertelen: {{message}}",
-      "ytdlpNotSupported": "Ezen a platformon a frissítések nem támogatottak."
+      "ytdlpNotSupported": "Ezen a platformon a frissítések nem támogatottak.",
+      "appIconTitle": "Alkalmazásikon",
+      "appIconDescription": "Válassza ki a kívánt alkalmazásikont. Az ablak és a tálca ikonja azonnal frissül.",
+      "appIconApplying": "Alkalmazás..."
     },
     "tmdb": {
       "title": "TMDB-integráció",

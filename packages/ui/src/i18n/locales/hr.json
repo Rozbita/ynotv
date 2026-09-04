@@ -1836,7 +1836,10 @@
       "ytdlpUpToDate": "Ažurirano ({{version}})",
       "ytdlpUpdated": "Ažurirano na {{version}}",
       "ytdlpError": "Ažuriranje nije uspjelo: {{message}}",
-      "ytdlpNotSupported": "Ažuriranja nisu podržana na ovoj platformi."
+      "ytdlpNotSupported": "Ažuriranja nisu podržana na ovoj platformi.",
+      "appIconTitle": "Ikona aplikacije",
+      "appIconDescription": "Odaberite željenu ikonu aplikacije. Ikona prozora i programske trake ažurira se odmah.",
+      "appIconApplying": "Primjena..."
     },
     "tmdb": {
       "title": "TMDB integracija",

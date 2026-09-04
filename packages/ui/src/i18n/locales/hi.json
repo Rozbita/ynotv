@@ -1836,7 +1836,10 @@
       "ytdlpUpToDate": "नवीनतम ({{version}})",
       "ytdlpUpdated": "{{version}} में अपडेट किया गया",
       "ytdlpError": "अपडेट विफल: {{message}}",
-      "ytdlpNotSupported": "इस प्लेटफ़ॉर्म पर अपडेट समर्थित नहीं हैं।"
+      "ytdlpNotSupported": "इस प्लेटफ़ॉर्म पर अपडेट समर्थित नहीं हैं।",
+      "appIconTitle": "ऐप आइकन",
+      "appIconDescription": "अपना पसंदीदा ऐप आइकन चुनें। विंडो और टास्कबार आइकन तुरंत अपडेट हो जाता है।",
+      "appIconApplying": "लागू हो रहा है..."
     },
     "tmdb": {
       "title": "TMDB एकीकरण",

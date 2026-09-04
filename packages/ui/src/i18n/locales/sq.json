@@ -1836,7 +1836,10 @@
       "ytdlpUpToDate": "I përditësuar ({{version}})",
       "ytdlpUpdated": "U përditësua në {{version}}",
       "ytdlpError": "Përditësimi dështoi: {{message}}",
-      "ytdlpNotSupported": "Përditësimet nuk mbështeten në këtë platformë."
+      "ytdlpNotSupported": "Përditësimet nuk mbështeten në këtë platformë.",
+      "appIconTitle": "Ikona e aplikacionit",
+      "appIconDescription": "Zgjidhni ikonën e preferuar të aplikacionit. Ikona e dritares dhe e shiritit të detyrave përditësohet menjëherë.",
+      "appIconApplying": "Duke aplikuar..."
     },
     "tmdb": {
       "title": "Integrimi me TMDB",

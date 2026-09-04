@@ -12,6 +12,11 @@ fn main() {
         }
     }
 
+    println!("cargo:rerun-if-changed=tauri.conf.json");
+    println!("cargo:rerun-if-changed=icons/icon.ico");
+    println!("cargo:rerun-if-changed=icons/icon.png");
+
+
     if target_os == "macos" {
         let mut prefixes: Vec<String> = Vec::new();
         if let Ok(p) = std::env::var("HOMEBREW_PREFIX") {

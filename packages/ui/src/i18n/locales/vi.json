@@ -3370,7 +3370,10 @@
       "ytdlpUpToDate": "Đã cập nhật ({{version}})",
       "ytdlpUpdated": "Đã cập nhật lên {{version}}",
       "ytdlpError": "Cập nhật thất bại: {{message}}",
-      "ytdlpNotSupported": "Không hỗ trợ cập nhật trên nền tảng này."
+      "ytdlpNotSupported": "Không hỗ trợ cập nhật trên nền tảng này.",
+      "appIconTitle": "Biểu tượng ứng dụng",
+      "appIconDescription": "Chọn biểu tượng ứng dụng bạn muốn. Biểu tượng cửa sổ và thanh tác vụ được cập nhật ngay lập tức.",
+      "appIconApplying": "Đang áp dụng..."
     },
     "tmdb": {
       "title": "Tích Hợp TMDB",

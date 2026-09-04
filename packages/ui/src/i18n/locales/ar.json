@@ -1836,7 +1836,10 @@
       "ytdlpUpToDate": "أحدث إصدار ({{version}})",
       "ytdlpUpdated": "تم التحديث إلى {{version}}",
       "ytdlpError": "فشل التحديث: {{message}}",
-      "ytdlpNotSupported": "التحديثات غير مدعومة على هذه المنصة."
+      "ytdlpNotSupported": "التحديثات غير مدعومة على هذه المنصة.",
+      "appIconTitle": "أيقونة التطبيق",
+      "appIconDescription": "اختر أيقونة التطبيق المفضلة لديك. يتم تحديث أيقونة النافذة وشريط المهام فورًا.",
+      "appIconApplying": "جارٍ التطبيق..."
     },
     "tmdb": {
       "title": "تكامل TMDB",

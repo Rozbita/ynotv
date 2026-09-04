@@ -1836,7 +1836,10 @@
       "ytdlpUpToDate": "Aktuell ({{version}})",
       "ytdlpUpdated": "Aktualisiert auf {{version}}",
       "ytdlpError": "Aktualisierung fehlgeschlagen: {{message}}",
-      "ytdlpNotSupported": "Updates werden auf dieser Plattform nicht unterstützt."
+      "ytdlpNotSupported": "Updates werden auf dieser Plattform nicht unterstützt.",
+      "appIconTitle": "App-Symbol",
+      "appIconDescription": "Wählen Sie Ihr bevorzugtes App-Symbol. Das Fenster- und Taskleistensymbol wird sofort aktualisiert.",
+      "appIconApplying": "Wird angewendet..."
     },
     "tmdb": {
       "title": "TMDB-Integration",

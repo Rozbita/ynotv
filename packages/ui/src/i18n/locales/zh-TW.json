@@ -1836,7 +1836,10 @@
       "ytdlpUpToDate": "已是最新 ({{version}})",
       "ytdlpUpdated": "已更新至 {{version}}",
       "ytdlpError": "更新失敗：{{message}}",
-      "ytdlpNotSupported": "此平台不支援更新。"
+      "ytdlpNotSupported": "此平台不支援更新。",
+      "appIconTitle": "應用程式圖示",
+      "appIconDescription": "選擇您喜歡的應用程式圖示。視窗和工作列圖示會立即更新。",
+      "appIconApplying": "正在套用..."
     },
     "tmdb": {
       "title": "TMDB 集成",

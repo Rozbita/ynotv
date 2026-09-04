@@ -1836,7 +1836,10 @@
       "ytdlpUpToDate": "Aktualne ({{version}})",
       "ytdlpUpdated": "Zaktualizowano do {{version}}",
       "ytdlpError": "Aktualizacja nie powiodła się: {{message}}",
-      "ytdlpNotSupported": "Aktualizacje nie są obsługiwane na tej platformie."
+      "ytdlpNotSupported": "Aktualizacje nie są obsługiwane na tej platformie.",
+      "appIconTitle": "Ikona aplikacji",
+      "appIconDescription": "Wybierz preferowaną ikonę aplikacji. Ikona okna i paska zadań zostanie zaktualizowana natychmiast.",
+      "appIconApplying": "Stosowanie..."
     },
     "tmdb": {
       "title": "Integracja TMDB",

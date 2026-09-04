@@ -1836,7 +1836,10 @@
       "ytdlpUpToDate": "À jour ({{version}})",
       "ytdlpUpdated": "Mis à jour vers {{version}}",
       "ytdlpError": "Échec de la mise à jour : {{message}}",
-      "ytdlpNotSupported": "Les mises à jour ne sont pas prises en charge sur cette plateforme."
+      "ytdlpNotSupported": "Les mises à jour ne sont pas prises en charge sur cette plateforme.",
+      "appIconTitle": "Icône de l’application",
+      "appIconDescription": "Choisissez l’icône d’application de votre choix. Met à jour instantanément l’icône de la fenêtre et de la barre des tâches.",
+      "appIconApplying": "Application..."
     },
     "tmdb": {
       "title": "Intégration TMDB",

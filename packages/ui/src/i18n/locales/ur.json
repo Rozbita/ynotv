@@ -1836,7 +1836,10 @@
       "ytdlpUpToDate": "تازہ ترین ({{version}})",
       "ytdlpUpdated": "{{version}} میں اپڈیٹ کیا گیا",
       "ytdlpError": "اپڈیٹ ناکام: {{message}}",
-      "ytdlpNotSupported": "اس پلیٹ فارم پر اپڈیٹس تعاون یافتہ نہیں ہیں۔"
+      "ytdlpNotSupported": "اس پلیٹ فارم پر اپڈیٹس تعاون یافتہ نہیں ہیں۔",
+      "appIconTitle": "ایپ آئیکن",
+      "appIconDescription": "اپنی پسندیدہ ایپ کا آئیکن منتخب کریں۔ ونڈو اور ٹاسک بار کا آئیکن فوراً اپ ڈیٹ ہو جاتا ہے۔",
+      "appIconApplying": "لاگو ہو رہا ہے..."
     },
     "tmdb": {
       "title": "ٹی ایم ڈی بی انٹیگریشن",

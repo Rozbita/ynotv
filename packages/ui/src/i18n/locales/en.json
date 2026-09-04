@@ -1836,7 +1836,10 @@
       "ytdlpUpToDate": "Up to date ({{version}})",
       "ytdlpUpdated": "Updated to {{version}}",
       "ytdlpError": "Update failed: {{message}}",
-      "ytdlpNotSupported": "Updates are not supported on this platform."
+      "ytdlpNotSupported": "Updates are not supported on this platform.",
+      "appIconTitle": "App Icon",
+      "appIconDescription": "Choose your preferred application icon. Updates the window and taskbar icon instantly.",
+      "appIconApplying": "Applying..."
     },
     "tmdb": {
       "title": "TMDB Integration",

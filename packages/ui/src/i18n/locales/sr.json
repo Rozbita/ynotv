@@ -1836,7 +1836,10 @@
       "ytdlpUpToDate": "Ажурирано ({{version}})",
       "ytdlpUpdated": "Ажурирано на {{version}}",
       "ytdlpError": "Ажурирање није успело: {{message}}",
-      "ytdlpNotSupported": "Ажурирања нису подржана на овој платформи."
+      "ytdlpNotSupported": "Ажурирања нису подржана на овој платформи.",
+      "appIconTitle": "Иконица апликације",
+      "appIconDescription": "Изаберите жељену иконицу апликације. Иконица прозора и траке задатака ажурира се одмах.",
+      "appIconApplying": "Примена..."
     },
     "tmdb": {
       "title": "TMDB интеграција",

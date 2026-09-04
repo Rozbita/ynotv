@@ -1836,7 +1836,10 @@
       "ytdlpUpToDate": "Актуально ({{version}})",
       "ytdlpUpdated": "Обновлено до {{version}}",
       "ytdlpError": "Не удалось обновить: {{message}}",
-      "ytdlpNotSupported": "Обновления не поддерживаются на этой платформе."
+      "ytdlpNotSupported": "Обновления не поддерживаются на этой платформе.",
+      "appIconTitle": "Значок приложения",
+      "appIconDescription": "Выберите предпочтительный значок приложения. Значок окна и панели задач обновляется мгновенно.",
+      "appIconApplying": "Применение..."
     },
     "tmdb": {
       "title": "Интеграция TMDB",
