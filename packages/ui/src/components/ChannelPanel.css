@@ -1081,6 +1081,13 @@
   box-shadow: var(--guide-navbtn-hover-shadow, none);
 }
 
+/* Catch-up only filter toggle active state (Settings -> Navigation -> EPG) */
+.guide-nav-btn.guide-catchup-filter-btn.active {
+  border-color: var(--accent-primary, #00d4ff);
+  background: var(--surface-glow, rgba(0, 212, 255, 0.15));
+  color: var(--accent-primary, #00d4ff);
+}
+
 .guide-now-btn {
   padding: 4px 12px;
   border: var(--guide-nowbtn-border, 1px solid var(--accent-primary, rgba(0, 212, 255, 0.4)));

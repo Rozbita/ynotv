@@ -114,6 +114,8 @@ export function NavigationTab({
   const storeShowVodLocal = useSettingsStore((s) => s.showVodLocal);
   const storeShowVodRecent = useSettingsStore((s) => s.showVodRecent);
   const setVodNavigationSettings = useSettingsStore((s) => s.setVodNavigationSettings);
+  const epgCatchupFilterEnabled = useSettingsStore((s) => s.epgCatchupFilterEnabled);
+  const setEpgCatchupFilterEnabled = useSettingsStore((s) => s.setEpgCatchupFilterEnabled);
 
   const effectiveShowVodAll = showVodAll ?? storeShowVodAll;
   const effectiveShowVodFavorites = showVodFavorites ?? storeShowVodFavorites;
@@ -433,6 +435,49 @@ export function NavigationTab({
                 />
               </div>
             ))}
+
+            <div className="timeshift-toggle-row" style={{ marginTop: '1rem' }}>
+              <div className="timeshift-toggle-info">
+                <span className="timeshift-toggle-label">
+                  {i18n.t('settings:navigation.epgCatchupFilter')}
+                  <button
+                    type="button"
+                    className="settings-help-btn"
+                    title={i18n.t('settings:navigation.epgCatchupFilterTooltip', {
+                      defaultValue: 'Adds a filter button to the LiveTV channel list header that shows only channels with catch-up (tv_archive) support. Off by default.',
+                    })}
+                    style={{
+                      marginLeft: '8px',
+                      width: '18px',
+                      height: '18px',
+                      borderRadius: '50%',
+                      border: '1px solid var(--surface-border)',
+                      background: 'transparent',
+                      color: 'var(--text-secondary, #9aa0aa)',
+                      fontSize: '0.7rem',
+                      lineHeight: '1',
+                      cursor: 'help',
+                      padding: '0',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      verticalAlign: 'middle',
+                    }}
+                  >
+                    ?
+                  </button>
+                </span>
+                <span className="timeshift-toggle-sub">{i18n.t('settings:navigation.epgCatchupFilterSub')}</span>
+              </div>
+              <label className="toggle-switch">
+                <input
+                  type="checkbox"
+                  checked={epgCatchupFilterEnabled}
+                  onChange={(e) => setEpgCatchupFilterEnabled(e.target.checked)}
+                />
+                <span className="toggle-slider" />
+              </label>
+            </div>
           </div>
         )}
       </div>

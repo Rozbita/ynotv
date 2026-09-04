@@ -508,6 +508,7 @@ export function ChannelPanel({
   const channelSortOrder = useChannelSortOrder();
   const epgHiddenButtons = useUIStore((s) => s.epgHiddenButtons);
   const epgResolutionFilterEnabled = useSettingsStore((s) => s.epgResolutionFilterEnabled);
+  const epgCatchupFilterEnabled = useSettingsStore((s) => s.epgCatchupFilterEnabled);
   // Soft-cap the "All Channels" view: beyond this many channels the full list
   // is unusable (a multi-second block to transfer + parse every channel), so we
   // skip materializing it and show a notice pointing at categories/search
@@ -532,10 +533,17 @@ export function ChannelPanel({
   const [showResolutionMenu, setShowResolutionMenu] = useState(false);
   const [resolutionMetaMap, setResolutionMetaMap] = useState<Map<string, string> | null>(null);
 
-  // Reset the active filter whenever the setting is turned off
+  // Catch-up only filter (Settings -> Navigation -> EPG)
+  const [catchupOnly, setCatchupOnly] = useState(false);
+
+  // Reset the active filters whenever their setting is turned off
   useEffect(() => {
     if (!epgResolutionFilterEnabled) setResolutionFilter('all');
   }, [epgResolutionFilterEnabled]);
+
+  useEffect(() => {
+    if (!epgCatchupFilterEnabled) setCatchupOnly(false);
+  }, [epgCatchupFilterEnabled]);
 
   // Load quality labels for the current category's sources when a filter is active.
   // Uses the indexed source_id lookup so one query covers the whole category.
@@ -573,8 +581,11 @@ export function ChannelPanel({
         return !!label && qualityLabelMatchesFilter(label, resolutionFilter);
       });
     }
+    if (catchupOnly) {
+      result = result.filter((ch) => Boolean(ch.tv_archive) || ch.tv_archive === 1);
+    }
     return result;
-  }, [channels, channelSearchQuery, resolutionFilter, resolutionMetaMap]);
+  }, [channels, channelSearchQuery, resolutionFilter, resolutionMetaMap, catchupOnly]);
 
   // Alphabet A-Z Quick Jumper (for Alphabetical Sort Order)
   const [showAlphabetMenu, setShowAlphabetMenu] = useState(false);
@@ -3692,6 +3703,25 @@ export function ChannelPanel({
             )}
           </div>
           <div className="guide-header-right">
+            {/* Catch-up only filter toggle (Settings -> Navigation -> EPG) */}
+            {epgCatchupFilterEnabled && !isSearchMode && !isWatchlistMode && (
+              <button
+                className={`guide-nav-btn guide-catchup-filter-btn ${catchupOnly ? 'active' : ''}`}
+                onClick={() => setCatchupOnly((prev) => !prev)}
+                title={t('catchupFilterOnly')}
+                aria-pressed={catchupOnly}
+                style={{
+                  padding: '0 8px',
+                  width: 'auto',
+                  marginRight: '8px',
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0 }}>
+                  <circle cx="12" cy="12" r="9"/>
+                  <path d="M12 7v5l3 2"/>
+                </svg>
+              </button>
+            )}
             {/* Resolution Filter Menu (Settings -> LiveTV -> Resolution filter) */}
             {epgResolutionFilterEnabled && !isSearchMode && !isWatchlistMode && (
               <div

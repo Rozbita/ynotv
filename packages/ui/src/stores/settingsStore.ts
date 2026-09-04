@@ -549,6 +549,8 @@ export interface SettingsState {
   setEpgMetadataBadgeFhdLabels: (enabled: boolean) => void;
   epgResolutionFilterEnabled: boolean;
   setEpgResolutionFilterEnabled: (enabled: boolean) => void;
+  epgCatchupFilterEnabled: boolean;
+  setEpgCatchupFilterEnabled: (enabled: boolean) => void;
   epgMetadataBadgeSound: boolean;
   setEpgMetadataBadgeSound: (enabled: boolean) => void;
   epgMetadataBadgeBitrate: boolean;
@@ -1415,6 +1417,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setEpgResolutionFilterEnabled: (enabled) => {
     set({ epgResolutionFilterEnabled: enabled });
     persistSettings({ epgResolutionFilterEnabled: enabled });
+  },
+  epgCatchupFilterEnabled: (cachedSettings?.epgCatchupFilterEnabled as boolean) ?? false,
+  setEpgCatchupFilterEnabled: (enabled) => {
+    set({ epgCatchupFilterEnabled: enabled });
+    persistSettings({ epgCatchupFilterEnabled: enabled });
   },
   epgMetadataBadgeSound: (cachedSettings?.epgMetadataBadgeSound as boolean) ?? true,
   setEpgMetadataBadgeSound: (enabled) => {
