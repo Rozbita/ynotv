@@ -34,6 +34,9 @@ interface FailoverChannelOverlayProps {
   showLabel?: boolean;
   placement?: 'bottom-right' | 'top-right' | 'default';
   onDropdownOpenChange?: (open: boolean) => void;
+  /** When provided, shows a gear button in the dropdown header (next to the
+      streams badge) that opens the full failover group manager modal. */
+  onOpenGroupList?: () => void;
 }
 
 interface MemberChannel {
@@ -191,6 +194,7 @@ export function FailoverChannelOverlay({
   showLabel = false,
   placement = 'default',
   onDropdownOpenChange,
+  onOpenGroupList,
 }: FailoverChannelOverlayProps) {
   const { t } = useTranslation('player');
   const [isOpen, setIsOpen] = useState(false);
@@ -440,12 +444,31 @@ export function FailoverChannelOverlay({
                 {groupName}
               </span>
             </div>
-            <span className="fco-header-count">
-              {t('failoverStreamsCount', {
-                defaultValue: '{{count}} streams',
-                count: members.length,
-              })}
-            </span>
+            <div className="fco-header-right">
+              <span className="fco-header-count">
+                {t('failoverStreamsCount', {
+                  defaultValue: '{{count}} streams',
+                  count: members.length,
+                })}
+              </span>
+              {onOpenGroupList && (
+                <button
+                  type="button"
+                  className="fco-header-gear-btn"
+                  onClick={() => {
+                    setIsOpen(false);
+                    onOpenGroupList();
+                  }}
+                  title={t('manageFailoverGroups', { defaultValue: 'Manage Failover Groups' })}
+                  aria-label={t('manageFailoverGroups', { defaultValue: 'Manage Failover Groups' })}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="3" />
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                  </svg>
+                </button>
+              )}
+            </div>
           </div>
 
           {/* List (Max 5 items with Nuvio-styled glowing scrollbar) — full-surface drag to reorder */}

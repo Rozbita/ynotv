@@ -165,6 +165,34 @@
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
 
+.fco-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Gear button opening the full failover group manager modal */
+.fco-header-gear-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.65);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.fco-header-gear-btn:hover {
+  color: var(--accent-primary, #00d4ff);
+  border-color: rgba(0, 212, 255, 0.4);
+  background: rgba(0, 212, 255, 0.12);
+  box-shadow: 0 0 8px rgba(0, 212, 255, 0.25);
+}
+
 /* Liquid Glass Header Streams Count Badge */
 .fco-header-count {
   font-size: 0.7rem;

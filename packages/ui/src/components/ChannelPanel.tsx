@@ -2809,10 +2809,30 @@ export function ChannelPanel({
   );
 
   const renderGuideManageButtons = () => {
-    if (!canManageChannels) return null;
+    // The playlist editor, failover group manager, and channel probe are
+    // universal tools (not scoped to a single source), so they are offered in
+    // every channel category — including virtual ones such as Favorites and
+    // Custom Groups, which skip the source-scoped actions below.
+    const isFavoritesCategory =
+      categoryId === '__favorites__' || (!!categoryId && categoryId.startsWith('__favsrc_'));
+    const showGuideTools = canManageChannels || isCustomGroup || isFavoritesCategory;
+    if (!showGuideTools) return null;
+
+    // Aggregate/virtual categories (Favorites, Custom Groups) have no single
+    // source or category to scope the probe to, so probe the channels that are
+    // currently shown in the guide instead.
+    const openChannelProbeForView = () => {
+      if (typeof (window as any).openChannelProbe !== 'function') return;
+      if (canManageChannels && !isCustomGroup) {
+        (window as any).openChannelProbe(sourceId, categoryId);
+      } else {
+        (window as any).openChannelProbe(null, categoryId, channels);
+      }
+    };
+
     return (
       <>
-                    {!epgHiddenButtons.includes('manage-channels') && (
+                    {canManageChannels && !epgHiddenButtons.includes('manage-channels') && (
                       <button
                         className="guide-manage-channels-btn"
                         onClick={isCustomGroup ? () => setManagingCustomGroup({ id: categoryId!, name: customGroupName }) : handleManageChannels}
@@ -2836,7 +2856,7 @@ export function ChannelPanel({
                         )}
                       </button>
                     )}
-                    {!isCustomGroup && (
+                    {canManageChannels && !isCustomGroup && (
                       <>
                         {!isCustomCategory && !sourceId?.startsWith('playlist:') && !epgHiddenButtons.includes('refresh-source') && (
                           <button
@@ -2873,61 +2893,58 @@ export function ChannelPanel({
                             <span className="btn-label">{currentEpgOffset === 0 ? t('epgShift') : t('shiftHours', { hours: `${currentEpgOffset > 0 ? '+' : ''}${currentEpgOffset}` })}</span>
                           </button>
                         )}
-                        {!epgHiddenButtons.includes('playlist-editor') && (
-                          <button
-                            className="guide-epg-shift-btn"
-                            onClick={() => setShowPlaylistListModal(true)}
-                            title={t('playlistEditor')}
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0 }}>
-                              <line x1="8" y1="6" x2="21" y2="6"></line>
-                              <line x1="8" y1="12" x2="21" y2="12"></line>
-                              <line x1="8" y1="18" x2="21" y2="18"></line>
-                              <line x1="3" y1="6" x2="3.01" y2="6"></line>
-                              <line x1="3" y1="12" x2="3.01" y2="12"></line>
-                              <line x1="3" y1="18" x2="3.01" y2="18"></line>
-                            </svg>
-                            <span className="btn-label">{t('playlistEditor')}</span>
-                          </button>
-                        )}
-                        {!epgHiddenButtons.includes('failover-group') && (
-                          <button
-                            className="guide-epg-shift-btn"
-                            onClick={() => setShowFailoverGroupModal(true)}
-                            title={t('failoverGroup')}
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0 }}>
-                              <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                              <path d="M2 17l10 5 10-5"/>
-                              <path d="M2 12l10 5 10-5"/>
-                            </svg>
-                            <span className="btn-label">{t('failoverGroup')}</span>
-                          </button>
-                        )}
-                        {!epgHiddenButtons.includes('channel-probe') && (
-                          <button
-                            className="guide-epg-shift-btn"
-                            onClick={() => {
-                              if (typeof (window as any).openChannelProbe === 'function') {
-                                (window as any).openChannelProbe(sourceId, categoryId);
-                              }
-                            }}
-                            title={i18n.t('probe:guideButtonTitle')}
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0 }}>
-                              <circle cx="12" cy="12" r="2" />
-                              <path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14" />
-                            </svg>
-                            <span className="btn-label">{i18n.t('probe:guideButtonLabel')}</span>
-                          </button>
-                        )}
-                        {epgSyncStatus && epgSyncStatus.total > 0 && (
-                          <span className="guide-epg-sync-status">
-                            <span className="sync-spinner">⟳</span>
-                            <span>{t('epgCompleted', { completed: epgSyncStatus.completed, total: epgSyncStatus.total })}</span>
-                          </span>
-                        )}
                       </>
+                    )}
+
+                    {!epgHiddenButtons.includes('playlist-editor') && (
+                      <button
+                        className="guide-epg-shift-btn"
+                        onClick={() => setShowPlaylistListModal(true)}
+                        title={t('playlistEditor')}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0 }}>
+                          <line x1="8" y1="6" x2="21" y2="6"></line>
+                          <line x1="8" y1="12" x2="21" y2="12"></line>
+                          <line x1="8" y1="18" x2="21" y2="18"></line>
+                          <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                          <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                          <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                        </svg>
+                        <span className="btn-label">{t('playlistEditor')}</span>
+                      </button>
+                    )}
+                    {!epgHiddenButtons.includes('failover-group') && (
+                      <button
+                        className="guide-epg-shift-btn"
+                        onClick={() => setShowFailoverGroupModal(true)}
+                        title={t('failoverGroup')}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0 }}>
+                          <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                          <path d="M2 17l10 5 10-5"/>
+                          <path d="M2 12l10 5 10-5"/>
+                        </svg>
+                        <span className="btn-label">{t('failoverGroup')}</span>
+                      </button>
+                    )}
+                    {!epgHiddenButtons.includes('channel-probe') && (
+                      <button
+                        className="guide-epg-shift-btn"
+                        onClick={openChannelProbeForView}
+                        title={i18n.t('probe:guideButtonTitle')}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0 }}>
+                          <circle cx="12" cy="12" r="2" />
+                          <path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14" />
+                        </svg>
+                        <span className="btn-label">{i18n.t('probe:guideButtonLabel')}</span>
+                      </button>
+                    )}
+                    {canManageChannels && !isCustomGroup && epgSyncStatus && epgSyncStatus.total > 0 && (
+                      <span className="guide-epg-sync-status">
+                        <span className="sync-spinner">⟳</span>
+                        <span>{t('epgCompleted', { completed: epgSyncStatus.completed, total: epgSyncStatus.total })}</span>
+                      </span>
                     )}
       </>
     );
@@ -3482,6 +3499,7 @@ export function ChannelPanel({
                               isCleanDesign={true}
                               showLabel={true}
                               placement="bottom-right"
+                              onOpenGroupList={() => setShowFailoverGroupModal(true)}
                             />
                           </div>
                         )}
