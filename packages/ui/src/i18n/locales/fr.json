@@ -2134,7 +2134,11 @@
       "alwaysPlayPrimaryTooltip": "Lors de la sélection d'une chaîne appartenant à un groupe de basculement, démarre automatiquement avec le flux principal en premier, sauf si sélectionné directement depuis le widget de basculement ou basculé pendant la récupération.",
       "playbackBehavior": "Lecture :",
       "keepView": "Conserver la vue sur la chaîne sélectionnée",
-      "keepViewTooltip": "Lors de la sélection d'une chaîne appartenant à un groupe de basculement, le flux principal est lu, mais le guide/la catégorie reste sur la chaîne que vous avez choisie, afin que la navigation haut/bas continue de parcourir la catégorie que vous consultiez."
+      "keepViewTooltip": "Lors de la sélection d'une chaîne appartenant à un groupe de basculement, le flux principal est lu, mais le guide/la catégorie reste sur la chaîne que vous avez choisie, afin que la navigation haut/bas continue de parcourir la catégorie que vous consultiez.",
+      "sortByLabel": "Trier par",
+      "sortChannels": "Plus de chaînes",
+      "sortCreated": "Date de création",
+      "sortName": "Nom"
     },
     "movies": {
       "genreCarousels": "Carrousels de genres de films",

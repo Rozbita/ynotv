@@ -3636,7 +3636,11 @@
       "alwaysPlayPrimaryTooltip": "Khi chọn bất kỳ kênh nào thuộc nhóm chuyển đổi dự phòng, luôn tự động phát luồng chính trước, trừ khi được chọn trực tiếp từ tiện ích chuyển đổi dự phòng hoặc chuyển đổi khi xảy ra sự cố.",
       "playbackBehavior": "Phát lại:",
       "keepView": "Giữ chế độ xem trên kênh đã chọn",
-      "keepViewTooltip": "Khi chọn một kênh thuộc nhóm chuyển đổi dự phòng, luồng chính sẽ được phát nhưng hướng dẫn/danh mục vẫn ở trên kênh bạn đã chọn, để chuyển kênh lên/xuống tiếp tục điều hướng trong danh mục bạn đang xem."
+      "keepViewTooltip": "Khi chọn một kênh thuộc nhóm chuyển đổi dự phòng, luồng chính sẽ được phát nhưng hướng dẫn/danh mục vẫn ở trên kênh bạn đã chọn, để chuyển kênh lên/xuống tiếp tục điều hướng trong danh mục bạn đang xem.",
+      "sortByLabel": "Sắp Xếp Theo",
+      "sortChannels": "Nhiều Kênh Nhất",
+      "sortCreated": "Ngày Tạo",
+      "sortName": "Tên"
     }
   },
   "sports": {

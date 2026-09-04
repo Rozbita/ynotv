@@ -47,6 +47,44 @@ interface FailoverGroupItem {
     created_at: number;
 }
 
+type GroupSortMode = 'name' | 'created' | 'channels';
+type GroupSortDir = 'asc' | 'desc';
+
+// Natural first-click direction per sort option (clicking the active
+// option again reverses it): A→Z for names, newest/most channels first.
+const GROUP_SORT_DEFAULT_DIR: Record<GroupSortMode, GroupSortDir> = {
+    name: 'asc',
+    created: 'desc',
+    channels: 'desc',
+};
+
+// Remember the chosen sort across modal sessions so closing and reopening
+// the dialog keeps the user's preferred ordering.
+const FGL_SORT_STORAGE_KEY = 'ynotv_failover_group_sort';
+
+interface StoredGroupSort {
+    mode: GroupSortMode;
+    dir: GroupSortDir;
+}
+
+function loadStoredGroupSort(): StoredGroupSort | null {
+    try {
+        const raw = localStorage.getItem(FGL_SORT_STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as Partial<StoredGroupSort>;
+        if (
+            parsed &&
+            (parsed.mode === 'name' || parsed.mode === 'created' || parsed.mode === 'channels') &&
+            (parsed.dir === 'asc' || parsed.dir === 'desc')
+        ) {
+            return { mode: parsed.mode, dir: parsed.dir };
+        }
+    } catch {
+        // Ignore corrupt/unreadable values and fall back to defaults.
+    }
+    return null;
+}
+
 interface MemberDetail {
     stream_id: string;
     name: string;
@@ -121,6 +159,18 @@ function TvSvg({ size = 14 }: { size?: number }) {
         <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.6, flexShrink: 0 }}>
             <rect width="20" height="15" x="2" y="7" rx="2" ry="2" />
             <polyline points="17 2 12 7 7 2" />
+        </svg>
+    );
+}
+
+function SortArrowSvg({ dir }: { dir: GroupSortDir }) {
+    return (
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+            {dir === 'asc' ? (
+                <polyline points="18 15 12 9 6 15" />
+            ) : (
+                <polyline points="6 9 12 15 18 9" />
+            )}
         </svg>
     );
 }
@@ -220,6 +270,9 @@ export function FailoverGroupListModal({ onClose }: FailoverGroupListModalProps)
     const [groups, setGroups] = useState<FailoverGroupItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
+    const [storedGroupSort] = useState<StoredGroupSort | null>(loadStoredGroupSort);
+    const [sortMode, setSortMode] = useState<GroupSortMode>(storedGroupSort?.mode ?? 'name');
+    const [sortDir, setSortDir] = useState<GroupSortDir>(storedGroupSort?.dir ?? 'asc');
     const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(new Set());
     const [groupMembersMap, setGroupMembersMap] = useState<Map<string, MemberDetail[]>>(new Map());
 
@@ -260,6 +313,15 @@ export function FailoverGroupListModal({ onClose }: FailoverGroupListModalProps)
     useEffect(() => {
         loadGroups();
     }, [loadGroups]);
+
+    // Keep the chosen group sort in localStorage so it survives closing/reopening.
+    useEffect(() => {
+        try {
+            localStorage.setItem(FGL_SORT_STORAGE_KEY, JSON.stringify({ mode: sortMode, dir: sortDir }));
+        } catch {
+            // Ignore storage write failures (private mode / quota).
+        }
+    }, [sortMode, sortDir]);
 
     useEffect(() => {
         if (creating && newNameInputRef.current) {
@@ -428,6 +490,40 @@ export function FailoverGroupListModal({ onClose }: FailoverGroupListModalProps)
         return groups.reduce((acc, g) => acc + g.memberCount, 0);
     }, [groups]);
 
+    const handleSortSelect = (mode: GroupSortMode) => {
+        if (mode === sortMode) {
+            setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+        } else {
+            setSortMode(mode);
+            setSortDir(GROUP_SORT_DEFAULT_DIR[mode]);
+        }
+    };
+
+    // Search filter is applied first, then the active group sort
+    const visibleGroups = useMemo(() => {
+        const dir = sortDir === 'asc' ? 1 : -1;
+        const byName = (a: FailoverGroupItem, b: FailoverGroupItem) =>
+            a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+        return [...filteredGroups].sort((a, b) => {
+            let v = 0;
+            if (sortMode === 'name') {
+                v = byName(a, b);
+            } else if (sortMode === 'created') {
+                v = (a.created_at ?? 0) - (b.created_at ?? 0);
+            } else {
+                v = a.memberCount - b.memberCount;
+            }
+            if (v !== 0) return v * dir;
+            return byName(a, b); // stable tie-break so re-sorts don't shuffle
+        });
+    }, [filteredGroups, sortMode, sortDir]);
+
+    const sortOptionLabels: Record<GroupSortMode, string> = {
+        name: t('failover.sortName', { defaultValue: 'Name' }),
+        created: t('failover.sortCreated', { defaultValue: 'Date Created' }),
+        channels: t('failover.sortChannels', { defaultValue: 'Most Channels' }),
+    };
+
     return createPortal(
         <>
             <div className="failover-group-list-overlay" onClick={onClose}>
@@ -594,6 +690,35 @@ export function FailoverGroupListModal({ onClose }: FailoverGroupListModalProps)
                             </div>
                         </div>
 
+                        {/* Group sorting */}
+                        {!loading && filteredGroups.length > 0 && (
+                            <div className="fgl-sort-row">
+                                <span className="fgl-sort-label">{t('failover.sortByLabel', { defaultValue: 'Sort by' })}</span>
+                                <div className="fgl-sort-chips" role="group" aria-label={t('failover.sortByLabel', { defaultValue: 'Sort by' })}>
+                                    {(['name', 'created', 'channels'] as GroupSortMode[]).map((mode) => {
+                                        const active = sortMode === mode;
+                                        return (
+                                            <button
+                                                key={mode}
+                                                type="button"
+                                                className={`fgl-sort-chip${active ? ' active' : ''}`}
+                                                aria-pressed={active}
+                                                title={
+                                                    active
+                                                        ? (sortDir === 'asc' ? i18n.t('vod:sortAscending') : i18n.t('vod:sortDescending'))
+                                                        : undefined
+                                                }
+                                                onClick={() => handleSortSelect(mode)}
+                                            >
+                                                <span>{sortOptionLabels[mode]}</span>
+                                                {active ? <SortArrowSvg dir={sortDir} /> : null}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
                         {/* List */}
                         {loading ? (
                             <div className="fgl-empty">{t('failover.loading')}</div>
@@ -604,7 +729,7 @@ export function FailoverGroupListModal({ onClose }: FailoverGroupListModalProps)
                             </div>
                         ) : (
                             <div className="fgl-list">
-                                {filteredGroups.map((group) => {
+                                {visibleGroups.map((group) => {
                                     const isExpanded = expandedGroupIds.has(group.group_id);
                                     const members = groupMembersMap.get(group.group_id) || [];
 

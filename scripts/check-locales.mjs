@@ -180,7 +180,7 @@ const UNTRANSLATED_ALLOWLIST = new Set([
   'stremio.home', 'common.contextMenu.start', 'epg.start', 'epg.startRequired', 'common.no',
   'nav.items.series', 'settings.startup.views.series', 'stremio.series', 'nav.items.sports',
   'settings.startup.views.sports', 'sports.brandName', 'vod.recent', 'widgets.recentWithCount',
-  'stremio.plot', 'settings.sources.name', 'settings.about.version', 'settings.sources.sourcesTitle',
+  'stremio.plot', 'settings.sources.name', 'settings.failover.sortName', 'settings.about.version', 'settings.sources.sourcesTitle',
   'settings.tabs.sources', 'settings.failover.tabSources', 'settings.sources.sourceColon',
   'common.contextMenu.source', 'epg.sourceLabel', 'live.source', 'player.source', 'playlist.source',
   'settings.startup.slotChannel', 'settings.proxy.serverLabel', 'settings.overlay.horizontal169',

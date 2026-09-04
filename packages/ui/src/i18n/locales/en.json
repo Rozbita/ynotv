@@ -2134,7 +2134,11 @@
       "alwaysPlayPrimaryTooltip": "When tuning any channel that belongs to a failover group, automatically start with the primary stream first unless selected directly from the failover widget or switched during failover.",
       "playbackBehavior": "Playback:",
       "keepView": "Keep View on Selected Channel",
-      "keepViewTooltip": "When tuning a channel that belongs to a failover group, play the primary stream but keep the guide/category on the channel you picked, so channel up/down keeps navigating the category you were browsing."
+      "keepViewTooltip": "When tuning a channel that belongs to a failover group, play the primary stream but keep the guide/category on the channel you picked, so channel up/down keeps navigating the category you were browsing.",
+      "sortByLabel": "Sort by",
+      "sortChannels": "Most Channels",
+      "sortCreated": "Date Created",
+      "sortName": "Name"
     },
     "movies": {
       "genreCarousels": "Movie Genre Carousels",

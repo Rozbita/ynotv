@@ -2134,7 +2134,11 @@
       "alwaysPlayPrimaryTooltip": "Ha a kiválasztott csatorna egy feladatátvételi csoporthoz tartozik, automatikusan az elsődleges stream indul el, kivéve ha közvetlenül a feladatátvételi widgetből választja ki vagy hiba esetén átkapcsol.",
       "playbackBehavior": "Lejátszás:",
       "keepView": "Nézet megtartása a kiválasztott csatornán",
-      "keepViewTooltip": "Ha a csatorna feladatátvételi csoporthoz tartozik, az elsődleges stream indul, de a nézet (útmutató/kategória) az általad kiválasztott csatornán marad, így a csatornaváltás fel/le továbbra is abban a kategóriában navigál, amelyet böngésztél."
+      "keepViewTooltip": "Ha a csatorna feladatátvételi csoporthoz tartozik, az elsődleges stream indul, de a nézet (útmutató/kategória) az általad kiválasztott csatornán marad, így a csatornaváltás fel/le továbbra is abban a kategóriában navigál, amelyet böngésztél.",
+      "sortByLabel": "Rendezés",
+      "sortChannels": "Legtöbb csatorna",
+      "sortCreated": "Létrehozás dátuma",
+      "sortName": "Név"
     },
     "movies": {
       "genreCarousels": "Film műfaji körhinták",
