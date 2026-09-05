@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import i18n from '../i18n';
 import { createPortal } from 'react-dom';
@@ -95,7 +95,11 @@ function SortableGroupChannelItem(props: {
             <div className="cgm-item-actions" onPointerDown={(e) => e.stopPropagation()}>
                 <button
                     className="cgm-order-btn"
-                    onClick={() => handleMoveToTop(ch.stream_id)}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={(e) => {
+                        e.currentTarget.blur();
+                        handleMoveToTop(ch.stream_id);
+                    }}
                     disabled={isFirst}
                     title={i18n.t('common:moveToTop', { defaultValue: 'Move to top' })}
                 >
@@ -103,7 +107,11 @@ function SortableGroupChannelItem(props: {
                 </button>
                 <button
                     className="cgm-order-btn"
-                    onClick={() => handleMoveToBottom(ch.stream_id)}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={(e) => {
+                        e.currentTarget.blur();
+                        handleMoveToBottom(ch.stream_id);
+                    }}
                     disabled={isLast}
                     title={i18n.t('common:moveToBottom', { defaultValue: 'Move to bottom' })}
                 >
@@ -111,7 +119,11 @@ function SortableGroupChannelItem(props: {
                 </button>
                 <button
                     className="remove-btn"
-                    onClick={() => handleRemove(ch.stream_id)}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={(e) => {
+                        e.currentTarget.blur();
+                        handleRemove(ch.stream_id);
+                    }}
                     title={i18n.t('common:remove', { defaultValue: 'Remove' })}
                 >✕</button>
             </div>
@@ -430,6 +442,21 @@ export function CustomGroupManager({ groupId, groupName, onClose }: CustomGroupM
     const [renameValue, setRenameValue] = useState(groupName);
     const [currentName, setCurrentName] = useState(groupName);
     const renameInputRef = useRef<HTMLInputElement>(null);
+    const listContainerRef = useRef<HTMLDivElement>(null);
+    const savedScrollTopRef = useRef<number | null>(null);
+
+    useLayoutEffect(() => {
+        if (savedScrollTopRef.current !== null && listContainerRef.current) {
+            const targetScrollTop = savedScrollTopRef.current;
+            listContainerRef.current.scrollTop = targetScrollTop;
+            requestAnimationFrame(() => {
+                if (listContainerRef.current && savedScrollTopRef.current === null) {
+                    listContainerRef.current.scrollTop = targetScrollTop;
+                }
+            });
+            savedScrollTopRef.current = null;
+        }
+    }, [groupChannels]);
 
     const groupChannelIds = new Set(groupChannels.map(c => c.stream_id));
     const enabledSourceIdsKey = sourcesAndCategories
@@ -506,6 +533,12 @@ export function CustomGroupManager({ groupId, groupName, onClose }: CustomGroupM
     }, [groupId]);
 
     const handleRemove = useCallback(async (streamId: string) => {
+        if (listContainerRef.current) {
+            savedScrollTopRef.current = listContainerRef.current.scrollTop;
+        }
+        if (document.activeElement instanceof HTMLElement && listContainerRef.current?.contains(document.activeElement)) {
+            document.activeElement.blur();
+        }
         setGroupChannels(prev => prev.filter(c => c.stream_id !== streamId));
         try { await removeChannelsFromGroup(groupId, [streamId]); }
         catch (e) { console.error('Failed to remove:', e); }
@@ -518,6 +551,12 @@ export function CustomGroupManager({ groupId, groupName, onClose }: CustomGroupM
     }, [groupId]);
 
     const handleMoveToTop = useCallback(async (streamId: string) => {
+        if (listContainerRef.current) {
+            savedScrollTopRef.current = listContainerRef.current.scrollTop;
+        }
+        if (document.activeElement instanceof HTMLElement && listContainerRef.current?.contains(document.activeElement)) {
+            document.activeElement.blur();
+        }
         setGroupChannels(prev => {
             const oldIndex = prev.findIndex(c => c.stream_id === streamId);
             if (oldIndex <= 0) return prev;
@@ -534,6 +573,12 @@ export function CustomGroupManager({ groupId, groupName, onClose }: CustomGroupM
     }, [groupId]);
 
     const handleMoveToBottom = useCallback(async (streamId: string) => {
+        if (listContainerRef.current) {
+            savedScrollTopRef.current = listContainerRef.current.scrollTop;
+        }
+        if (document.activeElement instanceof HTMLElement && listContainerRef.current?.contains(document.activeElement)) {
+            document.activeElement.blur();
+        }
         setGroupChannels(prev => {
             const oldIndex = prev.findIndex(c => c.stream_id === streamId);
             if (oldIndex === -1 || oldIndex >= prev.length - 1) return prev;
@@ -666,7 +711,7 @@ export function CustomGroupManager({ groupId, groupName, onClose }: CustomGroupM
                                         items={groupChannels.map((ch) => ch.stream_id)}
                                         strategy={verticalListSortingStrategy}
                                     >
-                                        <div className="channel-list-container">
+                                        <div ref={listContainerRef} className="channel-list-container">
                                             {groupChannels.map((ch, index) => {
                                                 const activeIndex = activeDragId ? groupChannels.findIndex(c => c.stream_id === activeDragId) : -1;
                                                 const overIndex = overDragId ? groupChannels.findIndex(c => c.stream_id === overDragId) : -1;
