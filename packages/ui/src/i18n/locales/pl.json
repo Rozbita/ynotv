@@ -211,7 +211,12 @@
       "hour_two": "{{count}} godziny",
       "hour_zero": "{{count}} godziny",
       "hr_two": "{{count}} godz",
-      "hr_zero": "{{count}} godz"
+      "hr_zero": "{{count}} godz",
+      "quickProbe": "Szybki test",
+      "quickProbing": "Testowanie {{name}}…",
+      "quickProbeSuccess": "Przetestowano {{name}}: {{summary}}",
+      "quickProbeFailed": "Test nie powiódł się dla {{name}}: {{error}}",
+      "quickProbeAlreadyRunning": "Test jest już uruchomiony dla {{name}}"
     },
     "channel": "Kanał",
     "closeTransparentGuide": "Zamknij przezroczysty przewodnik EPG",

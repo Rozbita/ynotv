@@ -9,6 +9,8 @@ import { addChannelToFailoverGroup, createFailoverGroup } from '../services/fail
 import { addToRecentChannels } from '../utils/recentChannels';
 import { EpgEditorModal } from './EpgEditorModal';
 import { useEpgClockFormat } from '../stores/uiStore';
+import { quickProbeChannel, formatProbeResultSummary, activeQuickProbes } from '../services/stream-probe';
+import { useToastStore } from '../stores/toastStore';
 import { useTranslation } from 'react-i18next';
 import i18n from '../i18n';
 import './ProgramContextMenu.css'; // Reuse the same styles
@@ -205,6 +207,67 @@ export function ChannelContextMenu({
         document.addEventListener('keydown', handleEscape);
         return () => document.removeEventListener('keydown', handleEscape);
     }, [onClose]);
+
+    const handleQuickProbe = async () => {
+        onClose();
+        const displayName = channel.alias || channel.name;
+
+        if (activeQuickProbes.has(channel.stream_id)) {
+            useToastStore.getState().addToast(
+                i18n.t('contextMenu.quickProbeAlreadyRunning', {
+                    name: displayName,
+                    defaultValue: 'Probe already running for {{name}}',
+                }),
+                'error'
+            );
+            return;
+        }
+
+        activeQuickProbes.add(channel.stream_id);
+        useToastStore.getState().addToast(
+            i18n.t('contextMenu.quickProbing', {
+                name: displayName,
+                defaultValue: 'Probing {{name}}…',
+            }),
+            'success'
+        );
+
+        try {
+            const result = await quickProbeChannel(channel);
+            if (result.status === 'alive') {
+                const summary = formatProbeResultSummary(result);
+                useToastStore.getState().addToast(
+                    i18n.t('contextMenu.quickProbeSuccess', {
+                        name: displayName,
+                        summary,
+                        defaultValue: 'Probed {{name}}: {{summary}}',
+                    }),
+                    'success'
+                );
+            } else {
+                useToastStore.getState().addToast(
+                    i18n.t('contextMenu.quickProbeFailed', {
+                        name: displayName,
+                        error: result.error_reason || result.status,
+                        defaultValue: 'Probe failed for {{name}}: {{error}}',
+                    }),
+                    'error'
+                );
+            }
+        } catch (err) {
+            const errMsg = err instanceof Error ? err.message : String(err);
+            useToastStore.getState().addToast(
+                i18n.t('contextMenu.quickProbeFailed', {
+                    name: displayName,
+                    error: errMsg,
+                    defaultValue: 'Probe failed for {{name}}: {{error}}',
+                }),
+                'error'
+            );
+        } finally {
+            activeQuickProbes.delete(channel.stream_id);
+        }
+    };
 
     async function handleCopyStreamUrl() {
         try {
@@ -1187,6 +1250,9 @@ export function ChannelContextMenu({
             </div>
             <div className="context-menu-item" onClick={() => { setShowEpgEditor(true); }}>
                 {i18n.t('contextMenu.editEpg')}
+            </div>
+            <div className="context-menu-item" onClick={handleQuickProbe}>
+                {i18n.t('contextMenu.quickProbe', { defaultValue: 'Quick Probe' })}
             </div>
             <div className="context-menu-separator" />
             <div className="context-menu-item" onClick={handleRenameChannel}>

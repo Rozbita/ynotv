@@ -211,7 +211,12 @@
       "hr_few": "{{count}} u",
       "hr_many": "{{count}} u",
       "hr_two": "{{count}} u",
-      "hr_zero": "{{count}} u"
+      "hr_zero": "{{count}} u",
+      "quickProbe": "Snelle test",
+      "quickProbing": "{{name}} testen…",
+      "quickProbeSuccess": "Getest {{name}}: {{summary}}",
+      "quickProbeFailed": "Test mislukt voor {{name}}: {{error}}",
+      "quickProbeAlreadyRunning": "Test is al actief voor {{name}}"
     },
     "channel": "Kanaal",
     "closeTransparentGuide": "Transparante EPG-gids sluiten",

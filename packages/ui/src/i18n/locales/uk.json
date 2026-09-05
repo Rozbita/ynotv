@@ -211,7 +211,12 @@
       "hour_two": "{{count}} години",
       "hour_zero": "{{count}} години",
       "hr_two": "{{count}} години",
-      "hr_zero": "{{count}} години"
+      "hr_zero": "{{count}} години",
+      "quickProbe": "Швидка перевірка",
+      "quickProbing": "Перевірка {{name}}…",
+      "quickProbeSuccess": "Перевірено {{name}}: {{summary}}",
+      "quickProbeFailed": "Помилка перевірки для {{name}}: {{error}}",
+      "quickProbeAlreadyRunning": "Перевірка вже виконується для {{name}}"
     },
     "channel": "Канал",
     "closeTransparentGuide": "Закрити прозорий гід EPG",

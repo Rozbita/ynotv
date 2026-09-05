@@ -211,7 +211,12 @@
       "hr_few": "{{count}} گھنٹے",
       "hr_many": "{{count}} گھنٹے",
       "hr_two": "{{count}} گھنٹے",
-      "hr_zero": "{{count}} گھنٹے"
+      "hr_zero": "{{count}} گھنٹے",
+      "quickProbe": "فوری جانچ",
+      "quickProbing": "{{name}} کی جانچ ہو رہی ہے…",
+      "quickProbeSuccess": "{{name}} کی جانچ مکمل: {{summary}}",
+      "quickProbeFailed": "{{name}} کی جانچ ناکام: {{error}}",
+      "quickProbeAlreadyRunning": "{{name}} کی جانچ پہلے ہی جاری ہے"
     },
     "channel": "چینل",
     "closeTransparentGuide": "ٹرانسپیرنٹ ای پی جی گائیڈ بند کریں",

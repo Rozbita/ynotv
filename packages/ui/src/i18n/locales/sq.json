@@ -211,7 +211,12 @@
       "hr_few": "{{count}} orë.",
       "hr_many": "{{count}} orë.",
       "hr_two": "{{count}} orë.",
-      "hr_zero": "{{count}} orë."
+      "hr_zero": "{{count}} orë.",
+      "quickProbe": "Test i shpejtë",
+      "quickProbing": "Duke testuar {{name}}…",
+      "quickProbeSuccess": "U testua {{name}}: {{summary}}",
+      "quickProbeFailed": "Testimi dështoi për {{name}}: {{error}}",
+      "quickProbeAlreadyRunning": "Testimi tashmë po ekzekutohet për {{name}}"
     },
     "channel": "Kanali",
     "closeTransparentGuide": "Mbyll udhëzuesin transparent të EPG-së",

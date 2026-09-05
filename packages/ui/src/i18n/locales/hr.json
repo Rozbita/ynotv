@@ -211,7 +211,12 @@
       "hour_zero": "{{count}} sata",
       "hr_many": "{{count}} sata",
       "hr_two": "{{count}} sata",
-      "hr_zero": "{{count}} sata"
+      "hr_zero": "{{count}} sata",
+      "quickProbe": "Brzo testiranje",
+      "quickProbing": "Testiranje kanala {{name}}…",
+      "quickProbeSuccess": "Testirano {{name}}: {{summary}}",
+      "quickProbeFailed": "Testiranje nije uspjelo za {{name}}: {{error}}",
+      "quickProbeAlreadyRunning": "Testiranje je već u tijeku za {{name}}"
     },
     "channel": "Kanal",
     "closeTransparentGuide": "Zatvori providni EPG vodič",

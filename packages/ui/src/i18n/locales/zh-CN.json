@@ -211,7 +211,12 @@
       "hr_few": "{{count}} 小时",
       "hr_many": "{{count}} 小时",
       "hr_two": "{{count}} 小时",
-      "hr_zero": "{{count}} 小时"
+      "hr_zero": "{{count}} 小时",
+      "quickProbe": "快速检测",
+      "quickProbing": "正在检测 {{name}}…",
+      "quickProbeSuccess": "已检测 {{name}}：{{summary}}",
+      "quickProbeFailed": "{{name}} 检测失败：{{error}}",
+      "quickProbeAlreadyRunning": "{{name}} 已在检测中"
     },
     "channel": "频道",
     "closeTransparentGuide": "关闭透明 EPG 指南",

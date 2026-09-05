@@ -211,7 +211,12 @@
       "hr_few": "{{count}} ساعت",
       "hr_many": "{{count}} ساعت",
       "hr_two": "{{count}} ساعت",
-      "hr_zero": "{{count}} ساعت"
+      "hr_zero": "{{count}} ساعت",
+      "quickProbe": "بررسی سریع",
+      "quickProbing": "در حال بررسی {{name}}…",
+      "quickProbeSuccess": "بررسی شد {{name}}: {{summary}}",
+      "quickProbeFailed": "بررسی برای {{name}} ناموفق بود: {{error}}",
+      "quickProbeAlreadyRunning": "بررسی برای {{name}} در حال اجرا است"
     },
     "channel": "کانال",
     "closeTransparentGuide": "بستن راهنمای EPG شفاف",

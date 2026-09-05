@@ -7,9 +7,10 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import { db, type ChannelMetadata } from '../db';
+import { db, type ChannelMetadata, type StoredChannel } from '../db';
 import { dbEvents } from '../db/sqlite-adapter';
 import { clearMetadataCache } from './video-metadata';
+import { useSettingsStore } from '../stores/settingsStore';
 
 // ============================================================================
 // Types
@@ -361,3 +362,114 @@ export function computeProbeHealthScore(results: ProbeChannelResult[]): {
     statusLabel,
   };
 }
+
+/**
+ * Format probed stream result into a concise summary string
+ * (e.g. "1080p 60fps · V: 4.6M · A: 128K")
+ */
+export function formatProbeResultSummary(result: ProbeChannelResult): string {
+  const parts: string[] = [];
+  const quality = result.quality_label || result.resolution || (result.height ? `${result.height}p` : '');
+  if (quality) parts.push(quality);
+  if (result.fps) parts.push(`${Math.round(result.fps)}fps`);
+  if (result.audio_channels && result.audio_channels !== 'Stereo') {
+    parts.push(result.audio_channels);
+  }
+  if (result.video_bitrate_kbps && result.video_bitrate_kbps > 0) {
+    const vBitrate = result.video_bitrate_kbps >= 1000
+      ? `${(result.video_bitrate_kbps / 1000).toFixed(1).replace(/\.0$/, '')}M`
+      : `${Math.round(result.video_bitrate_kbps)}K`;
+    parts.push(`V: ${vBitrate}`);
+  }
+  if (result.audio_bitrate_kbps && result.audio_bitrate_kbps > 0) {
+    const aBitrate = result.audio_bitrate_kbps >= 1000
+      ? `${(result.audio_bitrate_kbps / 1000).toFixed(1).replace(/\.0$/, '')}M`
+      : `${Math.round(result.audio_bitrate_kbps)}K`;
+    parts.push(`A: ${aBitrate}`);
+  }
+  return parts.join(' · ') || result.status;
+}
+
+/** In-flight channel stream IDs currently being probed via Quick Probe */
+export const activeQuickProbes = new Set<string>();
+
+/**
+ * Quick probe a single channel: resolves the stream URL, executes single stream probe
+ * with bitrate measurement enabled (8-second sample for accurate average bitrates),
+ * persists metadata to SQLite, notifies the UI to refresh badges, and returns the result.
+ */
+export async function quickProbeChannel(
+  channel: StoredChannel,
+  options?: { timeoutSecs?: number }
+): Promise<ProbeChannelResult> {
+  let streamUrl = channel.direct_url || (channel as any).url || '';
+  let userAgent = useSettingsStore.getState().globalLiveTvUserAgent || 'VLC/3.0.18 LibVLC/3.0.18';
+
+  if (channel.source_id && window.storage) {
+    try {
+      const sourceRes = await window.storage.getSource(channel.source_id);
+      const source = sourceRes?.data;
+      if (source?.user_agent) {
+        userAgent = source.user_agent;
+      }
+
+      // If it's an Xtream source and direct_url isn't already a full URL, build it
+      if (source?.type === 'xtream' && source.username && source.password && !streamUrl.startsWith('http')) {
+        const baseUrl = source.url.replace(/\/+$/, '');
+        const rawStreamId = channel.stream_id.replace(`${channel.source_id}_`, '');
+        streamUrl = `${baseUrl}/live/${encodeURIComponent(source.username)}/${encodeURIComponent(source.password)}/${rawStreamId}.ts`;
+      }
+
+      // Resolve Stalker or custom URLs
+      if (
+        source?.type === 'stalker' ||
+        streamUrl.startsWith('stalker_') ||
+        streamUrl.startsWith('/media/') ||
+        !streamUrl.startsWith('http')
+      ) {
+        const { resolvePlayUrl } = await import('./stream-resolver');
+        const resolved = await resolvePlayUrl(channel.source_id, streamUrl);
+        streamUrl = resolved.url;
+        if (resolved.userAgent) {
+          userAgent = resolved.userAgent;
+        }
+        // Ensure background probe resolution does not flip playback resolving state
+        (window as any).isPlaybackResolving = false;
+      }
+    } catch (e) {
+      console.warn('[StreamProbe] Failed to resolve channel URL:', e);
+    }
+  }
+
+  if (!streamUrl) {
+    throw new Error('Could not resolve stream URL');
+  }
+
+  const timeoutSecs = options?.timeoutSecs ?? 12;
+  const probed = await probeSingleStream(streamUrl, userAgent, timeoutSecs, true);
+
+  const fullResult: ProbeChannelResult = {
+    ...probed,
+    stream_id: channel.stream_id,
+    source_id: channel.source_id,
+    name: channel.name,
+    url: streamUrl,
+    category_id: Array.isArray(channel.category_ids) ? String(channel.category_ids[0]) : undefined,
+  };
+
+  if (fullResult.status === 'alive') {
+    await saveProbedMetadataToDb([fullResult]);
+
+    // Ensure bitrate badge display is enabled in settings so the user can immediately see it
+    const settings = useSettingsStore.getState();
+    if (!settings.epgMetadataBadgeBitrate) {
+      settings.setEpgMetadataBadgeBitrate(true);
+    }
+    if (!settings.epgMetadataBadgeAudioBitrate) {
+      settings.setEpgMetadataBadgeAudioBitrate(true);
+    }
+  }
+
+  return fullResult;
+}
+

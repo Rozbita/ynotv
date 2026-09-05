@@ -274,7 +274,12 @@
       "hr_few": "{{count}} giờ",
       "hr_many": "{{count}} giờ",
       "hr_two": "{{count}} giờ",
-      "hr_zero": "{{count}} giờ"
+      "hr_zero": "{{count}} giờ",
+      "quickProbe": "Kiểm tra nhanh",
+      "quickProbing": "Đang kiểm tra {{name}}…",
+      "quickProbeSuccess": "Đã kiểm tra {{name}}: {{summary}}",
+      "quickProbeFailed": "Kiểm tra thất bại cho {{name}}: {{error}}",
+      "quickProbeAlreadyRunning": "Đang tiến hành kiểm tra cho {{name}}"
     },
     "channel": "Kênh",
     "closeTransparentGuide": "Đóng Hướng Dẫn EPG Trong Suốt",

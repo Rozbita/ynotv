@@ -211,7 +211,12 @@
       "hr_few": "{{count}} घं",
       "hr_many": "{{count}} घं",
       "hr_two": "{{count}} घं",
-      "hr_zero": "{{count}} घं"
+      "hr_zero": "{{count}} घं",
+      "quickProbe": "त्वरित जाँच",
+      "quickProbing": "{{name}} की जाँच हो रही है…",
+      "quickProbeSuccess": "{{name}} की जाँच पूरी: {{summary}}",
+      "quickProbeFailed": "{{name}} की जाँच विफल: {{error}}",
+      "quickProbeAlreadyRunning": "{{name}} की जाँच पहले से चल रही है"
     },
     "channel": "चैनल",
     "closeTransparentGuide": "पारदर्शी EPG गाइड बंद करें",

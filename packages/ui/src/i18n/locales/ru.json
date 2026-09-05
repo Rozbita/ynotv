@@ -211,7 +211,12 @@
       "hour_two": "{{count}} часа",
       "hour_zero": "{{count}} часа",
       "hr_two": "{{count}} часа",
-      "hr_zero": "{{count}} часа"
+      "hr_zero": "{{count}} часа",
+      "quickProbe": "Быстрая проверка",
+      "quickProbing": "Проверка {{name}}…",
+      "quickProbeSuccess": "Проверено {{name}}: {{summary}}",
+      "quickProbeFailed": "Ошибка проверки для {{name}}: {{error}}",
+      "quickProbeAlreadyRunning": "Проверка уже выполняется для {{name}}"
     },
     "channel": "Канал",
     "closeTransparentGuide": "Закрыть прозрачный гид EPG",

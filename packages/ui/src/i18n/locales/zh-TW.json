@@ -211,7 +211,12 @@
       "hr_few": "{{count}} 小時",
       "hr_many": "{{count}} 小時",
       "hr_two": "{{count}} 小時",
-      "hr_zero": "{{count}} 小時"
+      "hr_zero": "{{count}} 小時",
+      "quickProbe": "快速偵測",
+      "quickProbing": "正在偵測 {{name}}…",
+      "quickProbeSuccess": "已偵測 {{name}}：{{summary}}",
+      "quickProbeFailed": "{{name}} 偵測失敗：{{error}}",
+      "quickProbeAlreadyRunning": "{{name}} 已在偵測中"
     },
     "channel": "頻道",
     "closeTransparentGuide": "關閉透明 EPG 指南",

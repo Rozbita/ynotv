@@ -211,7 +211,12 @@
       "hr_few": "{{count}} sa",
       "hr_many": "{{count}} sa",
       "hr_two": "{{count}} sa",
-      "hr_zero": "{{count}} sa"
+      "hr_zero": "{{count}} sa",
+      "quickProbe": "Hızlı Test",
+      "quickProbing": "{{name}} test ediliyor…",
+      "quickProbeSuccess": "Test edildi {{name}}: {{summary}}",
+      "quickProbeFailed": "{{name}} için test başarısız: {{error}}",
+      "quickProbeAlreadyRunning": "{{name}} için test zaten çalışıyor"
     },
     "channel": "Kanal",
     "closeTransparentGuide": "Saydam Rehberi Kapat",

@@ -211,7 +211,12 @@
       "hr_few": "{{count}} h",
       "hr_many": "{{count}} h",
       "hr_two": "{{count}} h",
-      "hr_zero": "{{count}} h"
+      "hr_zero": "{{count}} h",
+      "quickProbe": "Teste rápido",
+      "quickProbing": "Testando {{name}}…",
+      "quickProbeSuccess": "Testado {{name}}: {{summary}}",
+      "quickProbeFailed": "Falha ao testar {{name}}: {{error}}",
+      "quickProbeAlreadyRunning": "Teste já em andamento para {{name}}"
     },
     "channel": "Canal",
     "closeTransparentGuide": "Fechar guia transparente",

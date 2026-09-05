@@ -211,7 +211,12 @@
       "hr_few": "{{count}} h",
       "hr_many": "{{count}} h",
       "hr_two": "{{count}} h",
-      "hr_zero": "{{count}} h"
+      "hr_zero": "{{count}} h",
+      "quickProbe": "Test rapido",
+      "quickProbing": "Test di {{name}}…",
+      "quickProbeSuccess": "Testato {{name}}: {{summary}}",
+      "quickProbeFailed": "Test fallito per {{name}}: {{error}}",
+      "quickProbeAlreadyRunning": "Test già in corso per {{name}}"
     },
     "channel": "Canale",
     "closeTransparentGuide": "Chiudi Guida EPG Trasparente",

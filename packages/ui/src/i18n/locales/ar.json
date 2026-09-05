@@ -211,7 +211,12 @@
       "hr_few": "{{count}} ساعات",
       "hr_many": "{{count}} ساعة",
       "hr_zero": "{{count}} ساعة",
-      "hour_two": "{{count}} ساعات"
+      "hour_two": "{{count}} ساعات",
+      "quickProbe": "فحص سريع",
+      "quickProbing": "جارٍ فحص {{name}}…",
+      "quickProbeSuccess": "تم فحص {{name}}: {{summary}}",
+      "quickProbeFailed": "فشل فحص {{name}}: {{error}}",
+      "quickProbeAlreadyRunning": "الفحص قيد التشغيل بالفعل لـ {{name}}"
     },
     "channel": "القناة",
     "closeTransparentGuide": "إغلاق دليل البرامج الشفاف",

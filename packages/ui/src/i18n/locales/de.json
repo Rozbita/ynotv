@@ -211,7 +211,12 @@
       "hr_few": "{{count}} Std.",
       "hr_many": "{{count}} Std.",
       "hr_two": "{{count}} Std.",
-      "hr_zero": "{{count}} Std."
+      "hr_zero": "{{count}} Std.",
+      "quickProbe": "Schnelltest",
+      "quickProbing": "Teste {{name}}…",
+      "quickProbeSuccess": "Getestet {{name}}: {{summary}}",
+      "quickProbeFailed": "Test fehlgeschlagen für {{name}}: {{error}}",
+      "quickProbeAlreadyRunning": "Test läuft bereits für {{name}}"
     },
     "channel": "Sender",
     "closeTransparentGuide": "Transparenten EPG-Leitfaden schließen",

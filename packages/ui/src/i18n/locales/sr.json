@@ -211,7 +211,12 @@
       "hour_zero": "{{count}} сата",
       "hr_many": "{{count}} хрс",
       "hr_two": "{{count}} хрс",
-      "hr_zero": "{{count}} хрс"
+      "hr_zero": "{{count}} хрс",
+      "quickProbe": "Брзо тестирање",
+      "quickProbing": "Тестирање канала {{name}}…",
+      "quickProbeSuccess": "Тестирано {{name}}: {{summary}}",
+      "quickProbeFailed": "Тестирање није успело за {{name}}: {{error}}",
+      "quickProbeAlreadyRunning": "Тестирање је већ у току за {{name}}"
     },
     "channel": "Канал",
     "closeTransparentGuide": "Затвори провидни EPG водич",

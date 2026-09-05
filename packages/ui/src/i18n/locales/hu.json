@@ -211,7 +211,12 @@
       "hr_few": "{{count}} ó",
       "hr_many": "{{count}} ó",
       "hr_two": "{{count}} ó",
-      "hr_zero": "{{count}} ó"
+      "hr_zero": "{{count}} ó",
+      "quickProbe": "Gyors teszt",
+      "quickProbing": "{{name}} tesztelése…",
+      "quickProbeSuccess": "Tesztelve {{name}}: {{summary}}",
+      "quickProbeFailed": "A teszt sikertelen ehhez: {{name}}: {{error}}",
+      "quickProbeAlreadyRunning": "A teszt már folyamatban van ehhez: {{name}}"
     },
     "channel": "Csatorna",
     "closeTransparentGuide": "Átlátszó EPG útmutató bezárása",

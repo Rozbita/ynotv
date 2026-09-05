@@ -211,7 +211,12 @@
       "hr_few": "{{count}} ώρ",
       "hr_many": "{{count}} ώρ",
       "hr_two": "{{count}} ώρ",
-      "hr_zero": "{{count}} ώρ"
+      "hr_zero": "{{count}} ώρ",
+      "quickProbe": "Γρήγορος έλεγχος",
+      "quickProbing": "Έλεγχος {{name}}…",
+      "quickProbeSuccess": "Ελέγχθηκε {{name}}: {{summary}}",
+      "quickProbeFailed": "Αποτυχία ελέγχου για {{name}}: {{error}}",
+      "quickProbeAlreadyRunning": "Ο έλεγχος εκτελείται ήδη για {{name}}"
     },
     "channel": "Κανάλι",
     "closeTransparentGuide": "Κλείσιμο Διαφανούς Οδηγού EPG",

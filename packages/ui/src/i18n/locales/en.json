@@ -211,7 +211,12 @@
       "hr_few": "{{count}} hrs",
       "hr_many": "{{count}} hrs",
       "hr_two": "{{count}} hrs",
-      "hr_zero": "{{count}} hrs"
+      "hr_zero": "{{count}} hrs",
+      "quickProbe": "Quick Probe",
+      "quickProbing": "Probing {{name}}…",
+      "quickProbeSuccess": "Probed {{name}}: {{summary}}",
+      "quickProbeFailed": "Probe failed for {{name}}: {{error}}",
+      "quickProbeAlreadyRunning": "Probe already running for {{name}}"
     },
     "channel": "Channel",
     "closeTransparentGuide": "Close Transparent EPG Guide",
