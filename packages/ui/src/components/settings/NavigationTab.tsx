@@ -436,10 +436,20 @@ export function NavigationTab({
               </div>
             ))}
 
-            <div className="timeshift-toggle-row" style={{ marginTop: '1rem' }}>
-              <div className="timeshift-toggle-info">
-                <span className="timeshift-toggle-label">
-                  {i18n.t('settings:navigation.epgCatchupFilter')}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '0.75rem 0',
+                borderBottom: '1px solid var(--surface-border)',
+              }}
+            >
+              <div style={{ flex: 1 }}>
+                <div style={{ color: 'var(--text-primary)', fontSize: '0.95rem', display: 'flex', alignItems: 'center' }}>
+                  <label htmlFor="epg-catchup-filter" style={{ cursor: 'pointer' }}>
+                    {i18n.t('settings:navigation.epgCatchupFilter')}
+                  </label>
                   <button
                     type="button"
                     className="settings-help-btn"
@@ -466,17 +476,15 @@ export function NavigationTab({
                   >
                     ?
                   </button>
-                </span>
-                <span className="timeshift-toggle-sub">{i18n.t('settings:navigation.epgCatchupFilterSub')}</span>
+                </div>
               </div>
-              <label className="toggle-switch">
-                <input
-                  type="checkbox"
-                  checked={epgCatchupFilterEnabled}
-                  onChange={(e) => setEpgCatchupFilterEnabled(e.target.checked)}
-                />
-                <span className="toggle-slider" />
-              </label>
+              <input
+                id="epg-catchup-filter"
+                type="checkbox"
+                checked={epgCatchupFilterEnabled}
+                onChange={(e) => setEpgCatchupFilterEnabled(e.target.checked)}
+                style={{ cursor: 'pointer', marginLeft: '1rem' }}
+              />
             </div>
           </div>
         )}
