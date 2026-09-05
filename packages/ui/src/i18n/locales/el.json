@@ -1279,7 +1279,16 @@
       "usernamePlaceholder": "όνομα χρήστη",
       "passwordPlaceholder": "κωδικός",
       "uaPlaceholderEx": "Παράδειγμα: VLC/3.0.18 LibVLC/3.0.18",
-      "uaPlaceholderEg": "π.χ. VLC/3.0.18 LibVLC/3.0.18"
+      "uaPlaceholderEg": "π.χ. VLC/3.0.18 LibVLC/3.0.18",
+      "bulkAddStalker": "Μαζική προσθήκη πυλών",
+      "bulkStalkerTitle": "Μαζική προσθήκη πυλών Stalker",
+      "bulkStalkerDesc": "Επικολλήστε πολλαπλές διευθύνσεις URL και MAC πυλών Stalker. Κάθε URL ξεκινά μια νέα πηγή. Η πρώτη διεύθυνση MAC κάτω από κάθε URL γίνεται η κύρια MAC και οι επιπλέον διευθύνσεις MAC γίνονται εφεδρικές.",
+      "bulkStalkerPlaceholder": "http://vod.url1.com/c/\n11:22:33:44:55:66\n22:33:44:55:66:77\n\nhttp://tv.url2.com:80/c/\n11:22:33:44:55:66",
+      "bulkStalkerDetected": "Εντοπίστηκαν {{count}} πύλες:",
+      "bulkStalkerAddBtn": "Προσθήκη {{count}} πηγών",
+      "bulkStalkerNoEntries": "Δεν εντοπίστηκαν ακόμη έγκυρες καταχωρήσεις πυλών. Βεβαιωθείτε ότι κάθε καταχώρηση έχει ένα URL ακολουθούμενο από τουλάχιστον μία διεύθυνση MAC.",
+      "bulkStalkerBackupsCount": "+{{count}} εφεδρικές",
+      "bulkStalkerSuccess": "Προστέθηκαν {{count}} πύλες Stalker"
     },
     "scrobbling": {
       "title": "Trakt",
@@ -1637,7 +1646,23 @@
       "usernamePlaceholder": "Όνομα χρήστη διαμεσολαβητή",
       "passwordPlaceholder": "Κωδικός διαμεσολαβητή",
       "serverPlaceholder": "π.χ. 127.0.0.1:1080 ή socks5h://127.0.0.1:1080",
-      "notEnabled": "Ο διαμεσολαβητής δεν είναι ενεργοποιημένος ή το πεδίο διακομιστή είναι κενό"
+      "notEnabled": "Ο διαμεσολαβητής δεν είναι ενεργοποιημένος ή το πεδίο διακομιστή είναι κενό",
+      "savedProxies": "Αποθηκευμένοι διαμεσολαβητές",
+      "savedProxiesHint": "Αποθηκεύστε και εναλλάξτε μεταξύ πολλαπλών διαμορφώσεων διακομιστή διαμεσολάβησης με ένα κλικ.",
+      "selectProxy": "Επιλέξτε αποθηκευμένο διαμεσολαβητή...",
+      "customOrUnsaved": "Προσαρμοσμένο / Μη αποθηκευμένο",
+      "noSavedProxies": "Δεν υπάρχουν αποθηκευμένοι διαμεσολαβητές",
+      "saveAsNew": "Αποθήκευση ως νέο",
+      "updateProfile": "Ενημέρωση προφίλ",
+      "deleteProfile": "Διαγραφή",
+      "profileNamePrompt": "Εισάγετε ένα περιγραφικό όνομα για αυτή τη διαμόρφωση διαμεσολαβητή:",
+      "profileNamePlaceholder": "π.χ. Οικιακός SOCKS5 ή VPN Ολλανδίας",
+      "newProfileModalTitle": "Αποθήκευση προφίλ διαμεσολαβητή",
+      "deleteProfileModalTitle": "Διαγραφή προφίλ διαμεσολαβητή",
+      "deleteProfileConfirm": "Είστε βέβαιοι ότι θέλετε να διαγράψετε το προφίλ διαμεσολαβητή \"{{name}}\";",
+      "profileSaved": "Το προφίλ αποθηκεύτηκε",
+      "profileUpdated": "Το προφίλ ενημερώθηκε",
+      "profileDeleted": "Το προφίλ διαγράφηκε"
     },
     "optimization": {
       "title": "Επιτάχυνση Υλικού",

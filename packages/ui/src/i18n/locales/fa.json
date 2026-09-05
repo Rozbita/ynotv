@@ -1279,7 +1279,16 @@
       "usernamePlaceholder": "نام کاربری",
       "passwordPlaceholder": "رمز عبور",
       "uaPlaceholderEx": "مثال: VLC/3.0.18 LibVLC/3.0.18",
-      "uaPlaceholderEg": "مثلاً VLC/3.0.18 LibVLC/3.0.18"
+      "uaPlaceholderEg": "مثلاً VLC/3.0.18 LibVLC/3.0.18",
+      "bulkAddStalker": "افزودن دسته‌ای پورتال‌ها",
+      "bulkStalkerTitle": "افزودن انبوه پورتال‌های Stalker",
+      "bulkStalkerDesc": "چندین URL و آدرس MAC پورتال Stalker را جای‌گذاری کنید. هر URL یک منبع جدید شروع می‌کند. اولین آدرس MAC زیر هر URL، MAC اصلی می‌شود و آدرس‌های MAC اضافی به عنوان پشتیبان ذخیره می‌شوند.",
+      "bulkStalkerPlaceholder": "http://vod.url1.com/c/\n11:22:33:44:55:66\n22:33:44:55:66:77\n\nhttp://tv.url2.com:80/c/\n11:22:33:44:55:66",
+      "bulkStalkerDetected": "{{count}} پورتال شناسایی شد:",
+      "bulkStalkerAddBtn": "افزودن {{count}} منبع",
+      "bulkStalkerNoEntries": "هنوز هیچ ورودی پورتال معتبری شناسایی نشده است. مطمئن شوید هر ورودی دارای یک URL و حداقل یک آدرس MAC باشد.",
+      "bulkStalkerBackupsCount": "+{{count}} پشتیبان",
+      "bulkStalkerSuccess": "{{count}} پورتال Stalker اضافه شد"
     },
     "scrobbling": {
       "title": "Trakt",
@@ -1637,7 +1646,23 @@
       "usernamePlaceholder": "نام کاربری پروکسی",
       "passwordPlaceholder": "رمز عبور پروکسی",
       "serverPlaceholder": "مثلاً 127.0.0.1:1080 یا socks5h://127.0.0.1:1080",
-      "notEnabled": "پروکسی فعال نیست یا فیلد سرور پروکسی خالی است"
+      "notEnabled": "پروکسی فعال نیست یا فیلد سرور پروکسی خالی است",
+      "savedProxies": "پروکسی‌های ذخیره‌شده",
+      "savedProxiesHint": "با یک کلیک بین چندین پیکربندی سرور پروکسی ذخیره و جابه‌جا شوید.",
+      "selectProxy": "انتخاب پروکسی ذخیره‌شده...",
+      "customOrUnsaved": "سفارشی / ذخیره‌نشده",
+      "noSavedProxies": "پروکسی ذخیره‌شده‌ای وجود ندارد",
+      "saveAsNew": "ذخیره به عنوان جدید",
+      "updateProfile": "به‌روزرسانی پروفایل",
+      "deleteProfile": "حذف",
+      "profileNamePrompt": "یک نام توصیفی برای این پیکربندی پروکسی وارد کنید:",
+      "profileNamePlaceholder": "مثلاً SOCKS5 خانگی یا VPN هلند",
+      "newProfileModalTitle": "ذخیره پروفایل پروکسی",
+      "deleteProfileModalTitle": "حذف پروفایل پروکسی",
+      "deleteProfileConfirm": "آیا از حذف پروفایل پروکسی «{{name}}» مطمئن هستید؟",
+      "profileSaved": "پروفایل ذخیره شد",
+      "profileUpdated": "پروفایل به‌روزرسانی شد",
+      "profileDeleted": "پروفایل حذف شد"
     },
     "optimization": {
       "title": "شتاب‌دهی سخت‌افزاری",

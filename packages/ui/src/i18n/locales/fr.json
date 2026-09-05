@@ -1279,7 +1279,16 @@
       "usernamePlaceholder": "nom d'utilisateur",
       "passwordPlaceholder": "mot de passe",
       "uaPlaceholderEx": "Ex : VLC/3.0.18 LibVLC/3.0.18",
-      "uaPlaceholderEg": "p. ex. VLC/3.0.18 LibVLC/3.0.18"
+      "uaPlaceholderEg": "p. ex. VLC/3.0.18 LibVLC/3.0.18",
+      "bulkAddStalker": "Ajout groupé de portails",
+      "bulkStalkerTitle": "Ajout groupé de portails Stalker",
+      "bulkStalkerDesc": "Collez plusieurs URL de portails Stalker et adresses MAC. Chaque URL démarre une nouvelle source. La première adresse MAC sous chaque URL devient la MAC principale, et les adresses MAC supplémentaires deviennent des sauvegardes.",
+      "bulkStalkerPlaceholder": "http://vod.url1.com/c/\n11:22:33:44:55:66\n22:33:44:55:66:77\n\nhttp://tv.url2.com:80/c/\n11:22:33:44:55:66",
+      "bulkStalkerDetected": "{{count}} portail(s) détecté(s) :",
+      "bulkStalkerAddBtn": "Ajouter {{count}} source(s)",
+      "bulkStalkerNoEntries": "Aucune entrée de portail valide détectée pour le moment. Assurez-vous que chaque entrée contient une URL suivie d'au moins une adresse MAC.",
+      "bulkStalkerBackupsCount": "+{{count}} secours",
+      "bulkStalkerSuccess": "{{count}} portail(s) Stalker ajouté(s)"
     },
     "scrobbling": {
       "title": "Trakt",
@@ -1637,7 +1646,23 @@
       "usernamePlaceholder": "Nom d’utilisateur du proxy",
       "passwordPlaceholder": "Mot de passe du proxy",
       "serverPlaceholder": "p. ex. 127.0.0.1:1080 ou socks5h://127.0.0.1:1080",
-      "notEnabled": "Le proxy n’est pas activé ou le champ du serveur proxy est vide"
+      "notEnabled": "Le proxy n’est pas activé ou le champ du serveur proxy est vide",
+      "savedProxies": "Proxys enregistrés",
+      "savedProxiesHint": "Enregistrez et basculez entre plusieurs configurations de serveur proxy en un seul clic.",
+      "selectProxy": "Sélectionner un proxy enregistré...",
+      "customOrUnsaved": "Personnalisé / Non enregistré",
+      "noSavedProxies": "Aucun proxy enregistré",
+      "saveAsNew": "Enregistrer comme nouveau",
+      "updateProfile": "Mettre à jour le profil",
+      "deleteProfile": "Supprimer",
+      "profileNamePrompt": "Saisissez un nom descriptif pour cette configuration de proxy :",
+      "profileNamePlaceholder": "p. ex. SOCKS5 maison ou VPN Pays-Bas",
+      "newProfileModalTitle": "Enregistrer le profil de proxy",
+      "deleteProfileModalTitle": "Supprimer le profil de proxy",
+      "deleteProfileConfirm": "Voulez-vous vraiment supprimer le profil proxy « {{name}} » ?",
+      "profileSaved": "Profil enregistré",
+      "profileUpdated": "Profil mis à jour",
+      "profileDeleted": "Profil supprimé"
     },
     "optimization": {
       "title": "Accélération matérielle",

@@ -29,7 +29,7 @@ import { DiscordTab } from './settings/DiscordTab';
 import { useModal } from './Modal';
 import { TmdbTab } from './settings/TmdbTab';
 import { useSettingsStore, DEFAULT_MAX_SEARCH_RESULTS, clampMaxSearchResults } from '../stores/settingsStore';
-import type { ShortcutsMap, ThemeId, CustomThemeConfig } from '../types/app';
+import type { ShortcutsMap, ThemeId, CustomThemeConfig, SavedProxyProfile } from '../types/app';
 import type { StremioStreamPickerMode, BadgeSource, StreamAutoPlayMode, StreamAutoPlaySourceScope } from '../types/stremio';
 import { DEFAULT_BADGE_SOURCES, mergeDefaultBadgeSources } from '../utils/streamBadges';
 import { useTranslation } from 'react-i18next';
@@ -434,6 +434,8 @@ export function Settings({
   const [socks5ProxyServer, setSocks5ProxyServer] = useState('');
   const [socks5ProxyUsername, setSocks5ProxyUsername] = useState('');
   const [socks5ProxyPassword, setSocks5ProxyPassword] = useState('');
+  const [socks5ProxyProfiles, setSocks5ProxyProfiles] = useState<SavedProxyProfile[]>([]);
+  const [socks5ProxyActiveProfileId, setSocks5ProxyActiveProfileId] = useState<string | null>(null);
 
   // Discord Rich Presence state
   const [discordRichPresenceState, setDiscordRichPresenceState] = useState(false);
@@ -947,6 +949,8 @@ export function Settings({
         socks5ProxyServer?: string;
         socks5ProxyUsername?: string;
         socks5ProxyPassword?: string;
+        socks5ProxyProfiles?: SavedProxyProfile[];
+        socks5ProxyActiveProfileId?: string | null;
         discordRichPresence?: boolean;
         discordHideTitle?: boolean;
         discordShowWhenPaused?: boolean;
@@ -1147,6 +1151,8 @@ export function Settings({
       setSocks5ProxyServer(result.data.socks5ProxyServer ?? '');
       setSocks5ProxyUsername(result.data.socks5ProxyUsername ?? '');
       setSocks5ProxyPassword(result.data.socks5ProxyPassword ?? '');
+      setSocks5ProxyProfiles(result.data.socks5ProxyProfiles ?? []);
+      setSocks5ProxyActiveProfileId(result.data.socks5ProxyActiveProfileId ?? null);
       setDiscordRichPresenceState(result.data.discordRichPresence ?? false);
       setDiscordHideTitleState(result.data.discordHideTitle ?? false);
       setDiscordShowWhenPausedState(result.data.discordShowWhenPaused ?? true);
@@ -2765,6 +2771,10 @@ export function Settings({
             onSocks5ProxyUsernameChange={handleSocks5ProxyUsernameChange}
             socks5ProxyPassword={socks5ProxyPassword}
             onSocks5ProxyPasswordChange={handleSocks5ProxyPasswordChange}
+            socks5ProxyProfiles={socks5ProxyProfiles}
+            onSocks5ProxyProfilesChange={setSocks5ProxyProfiles}
+            socks5ProxyActiveProfileId={socks5ProxyActiveProfileId}
+            onSocks5ProxyActiveProfileIdChange={setSocks5ProxyActiveProfileId}
           />
         );
       case 'discord':

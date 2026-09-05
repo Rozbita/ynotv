@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { useTranslation } from 'react-i18next';
 import i18n, { translateNativeError } from '../../i18n';
+import type { SavedProxyProfile } from '../../types/app';
 import '../Modal.css';
 
 interface ProxyTabProps {
@@ -13,6 +14,10 @@ interface ProxyTabProps {
   onSocks5ProxyUsernameChange: (val: string) => void;
   socks5ProxyPassword: string;
   onSocks5ProxyPasswordChange: (val: string) => void;
+  socks5ProxyProfiles?: SavedProxyProfile[];
+  onSocks5ProxyProfilesChange?: (profiles: SavedProxyProfile[]) => void;
+  socks5ProxyActiveProfileId?: string | null;
+  onSocks5ProxyActiveProfileIdChange?: (id: string | null) => void;
 }
 
 export function ProxyTab({
@@ -24,6 +29,10 @@ export function ProxyTab({
   onSocks5ProxyUsernameChange,
   socks5ProxyPassword,
   onSocks5ProxyPasswordChange,
+  socks5ProxyProfiles,
+  onSocks5ProxyProfilesChange,
+  socks5ProxyActiveProfileId,
+  onSocks5ProxyActiveProfileIdChange,
 }: ProxyTabProps) {
   useTranslation();
   const [enabled, setEnabled] = useState(socks5ProxyEnabled);
@@ -35,15 +44,138 @@ export function ProxyTab({
   const [showRestartModal, setShowRestartModal] = useState(false);
   const [showDisableModal, setShowDisableModal] = useState(false);
 
+  // Saved profiles state
+  const [profiles, setProfiles] = useState<SavedProxyProfile[]>(socks5ProxyProfiles ?? []);
+  const [selectedProfileId, setSelectedProfileId] = useState<string>(() => {
+    if (socks5ProxyActiveProfileId && (socks5ProxyProfiles ?? []).some((p) => p.id === socks5ProxyActiveProfileId)) {
+      return socks5ProxyActiveProfileId;
+    }
+    const match = (socks5ProxyProfiles ?? []).find(
+      (p) => p.server === socks5ProxyServer && p.username === socks5ProxyUsername
+    );
+    return match ? match.id : '';
+  });
+
+  const [showSaveProfileModal, setShowSaveProfileModal] = useState(false);
+  const [showDeleteProfileModal, setShowDeleteProfileModal] = useState(false);
+  const [profileNameInput, setProfileNameInput] = useState('');
+  const [profileFeedback, setProfileFeedback] = useState('');
+
+  useEffect(() => {
+    if (socks5ProxyProfiles) {
+      setProfiles(socks5ProxyProfiles);
+    }
+  }, [socks5ProxyProfiles]);
+
+  useEffect(() => {
+    if (socks5ProxyActiveProfileId !== undefined) {
+      setSelectedProfileId(socks5ProxyActiveProfileId ?? '');
+    }
+  }, [socks5ProxyActiveProfileId]);
+
   // Diagnostics state
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; ip?: string; error?: string } | null>(null);
+
+  const selectedProfile = profiles.find((p) => p.id === selectedProfileId);
+  const isModifiedFromSelectedProfile = selectedProfile
+    ? server !== selectedProfile.server ||
+      username !== selectedProfile.username ||
+      password !== (selectedProfile.password ?? '')
+    : false;
 
   const hasUnsavedChanges =
     enabled !== socks5ProxyEnabled ||
     server !== socks5ProxyServer ||
     username !== socks5ProxyUsername ||
     password !== socks5ProxyPassword;
+
+  function handleProfileSelect(profileId: string) {
+    setSelectedProfileId(profileId);
+    onSocks5ProxyActiveProfileIdChange?.(profileId || null);
+    if (!profileId) return;
+    const target = profiles.find((p) => p.id === profileId);
+    if (target) {
+      setServer(target.server);
+      setUsername(target.username);
+      setPassword(target.password ?? '');
+      onSocks5ProxyServerChange(target.server);
+      onSocks5ProxyUsernameChange(target.username);
+      onSocks5ProxyPasswordChange(target.password ?? '');
+      setSaveStatus('idle');
+      setProfileFeedback('');
+    }
+  }
+
+  async function handleConfirmSaveProfile() {
+    const trimmedName = profileNameInput.trim();
+    if (!trimmedName || !server.trim()) return;
+
+    const newProfile: SavedProxyProfile = {
+      id: crypto.randomUUID(),
+      name: trimmedName,
+      server: server.trim(),
+      username: username.trim(),
+      password: password,
+    };
+    const updated = [...profiles, newProfile];
+    setProfiles(updated);
+    setSelectedProfileId(newProfile.id);
+    onSocks5ProxyProfilesChange?.(updated);
+    onSocks5ProxyActiveProfileIdChange?.(newProfile.id);
+
+    if (window.storage) {
+      await window.storage.updateSettings({
+        socks5ProxyProfiles: updated,
+        socks5ProxyActiveProfileId: newProfile.id,
+      });
+    }
+    setShowSaveProfileModal(false);
+    setProfileNameInput('');
+    setProfileFeedback(i18n.t('settings:proxy.profileSaved', { defaultValue: 'Profile saved' }));
+    setTimeout(() => setProfileFeedback(''), 3000);
+  }
+
+  async function handleUpdateProfile() {
+    if (!selectedProfile) return;
+    const updated = profiles.map((p) =>
+      p.id === selectedProfile.id
+        ? {
+            ...p,
+            server: server.trim(),
+            username: username.trim(),
+            password: password,
+          }
+        : p
+    );
+    setProfiles(updated);
+    onSocks5ProxyProfilesChange?.(updated);
+    if (window.storage) {
+      await window.storage.updateSettings({
+        socks5ProxyProfiles: updated,
+      });
+    }
+    setProfileFeedback(i18n.t('settings:proxy.profileUpdated', { defaultValue: 'Profile updated' }));
+    setTimeout(() => setProfileFeedback(''), 3000);
+  }
+
+  async function handleConfirmDeleteProfile() {
+    if (!selectedProfile) return;
+    const updated = profiles.filter((p) => p.id !== selectedProfile.id);
+    setProfiles(updated);
+    setSelectedProfileId('');
+    onSocks5ProxyProfilesChange?.(updated);
+    onSocks5ProxyActiveProfileIdChange?.(null);
+    if (window.storage) {
+      await window.storage.updateSettings({
+        socks5ProxyProfiles: updated,
+        socks5ProxyActiveProfileId: null,
+      });
+    }
+    setShowDeleteProfileModal(false);
+    setProfileFeedback(i18n.t('settings:proxy.profileDeleted', { defaultValue: 'Profile deleted' }));
+    setTimeout(() => setProfileFeedback(''), 3000);
+  }
 
   function handleSaveClick() {
     setShowRestartModal(true);
@@ -65,6 +197,8 @@ export function ProxyTab({
           socks5ProxyServer: server,
           socks5ProxyUsername: username,
           socks5ProxyPassword: password,
+          socks5ProxyProfiles: profiles,
+          socks5ProxyActiveProfileId: selectedProfileId || null,
         });
 
         // Notify backend to reload environment variables and apply changes
@@ -93,6 +227,8 @@ export function ProxyTab({
       if (window.storage) {
         await window.storage.updateSettings({
           socks5ProxyEnabled: false,
+          socks5ProxyProfiles: profiles,
+          socks5ProxyActiveProfileId: selectedProfileId || null,
         });
 
         const { invoke } = await import('@tauri-apps/api/core');
@@ -209,6 +345,108 @@ export function ProxyTab({
             </p>
           </div>
 
+          {/* Saved Proxies Dropdown & Actions */}
+          <div className="form-group" style={{
+            marginBottom: '1.5rem',
+            padding: '1rem',
+            borderRadius: '8px',
+            backgroundColor: 'var(--surface-color, rgba(255, 255, 255, 0.04))',
+            border: '1px solid var(--border-color, rgba(255, 255, 255, 0.1))',
+            opacity: enabled ? 1 : 0.6,
+            transition: 'opacity 0.2s',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.6rem' }}>
+              <label style={{ margin: 0, fontWeight: 600, fontSize: '0.9rem', color: 'var(--text-primary)' }}>
+                {i18n.t('settings:proxy.savedProxies', { defaultValue: 'Saved Proxies' })}
+              </label>
+              {profileFeedback && (
+                <span style={{ fontSize: '0.8rem', color: '#10b981', fontWeight: 600 }}>
+                  ✓ {profileFeedback}
+                </span>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <select
+                value={selectedProfileId}
+                onChange={(e) => handleProfileSelect(e.target.value)}
+                disabled={!enabled}
+                style={{
+                  flex: '1 1 240px',
+                  minWidth: '200px',
+                  height: '38px',
+                }}
+              >
+                <option value="">
+                  {profiles.length === 0
+                    ? i18n.t('settings:proxy.noSavedProxies', { defaultValue: 'No saved proxies' })
+                    : i18n.t('settings:proxy.customOrUnsaved', { defaultValue: 'Custom / Unsaved' })}
+                </option>
+                {profiles.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} ({p.server})
+                  </option>
+                ))}
+              </select>
+
+              <button
+                type="button"
+                className="modal-btn modal-btn-secondary"
+                onClick={() => {
+                  setProfileNameInput(selectedProfile ? `${selectedProfile.name} (Copy)` : '');
+                  setShowSaveProfileModal(true);
+                }}
+                disabled={!enabled || !server.trim()}
+                title={i18n.t('settings:proxy.saveAsNew', { defaultValue: 'Save as New' })}
+                style={{ height: '38px', padding: '0 14px', fontSize: '0.82rem', whiteSpace: 'nowrap' }}
+              >
+                + {i18n.t('settings:proxy.saveAsNew', { defaultValue: 'Save as New' })}
+              </button>
+
+              {selectedProfile && (
+                <>
+                  <button
+                    type="button"
+                    className="modal-btn modal-btn-secondary"
+                    onClick={handleUpdateProfile}
+                    disabled={!enabled || !isModifiedFromSelectedProfile}
+                    title={i18n.t('settings:proxy.updateProfile', { defaultValue: 'Update Profile' })}
+                    style={{
+                      height: '38px',
+                      padding: '0 14px',
+                      fontSize: '0.82rem',
+                      whiteSpace: 'nowrap',
+                      opacity: isModifiedFromSelectedProfile ? 1 : 0.5,
+                    }}
+                  >
+                    {i18n.t('settings:proxy.updateProfile', { defaultValue: 'Update Profile' })}
+                  </button>
+
+                  <button
+                    type="button"
+                    className="modal-btn modal-btn-danger"
+                    onClick={() => setShowDeleteProfileModal(true)}
+                    disabled={!enabled}
+                    title={i18n.t('settings:proxy.deleteProfile', { defaultValue: 'Delete' })}
+                    style={{
+                      height: '38px',
+                      padding: '0 12px',
+                      fontSize: '0.82rem',
+                      background: 'rgba(239, 68, 68, 0.15)',
+                      border: '1px solid rgba(239, 68, 68, 0.3)',
+                      color: '#ef4444',
+                    }}
+                  >
+                    {i18n.t('settings:proxy.deleteProfile', { defaultValue: 'Delete' })}
+                  </button>
+                </>
+              )}
+            </div>
+            <p className="form-hint" style={{ marginTop: '0.5rem', marginBottom: 0 }}>
+              {i18n.t('settings:proxy.savedProxiesHint', { defaultValue: 'Save and switch between multiple proxy server configurations with a single click.' })}
+            </p>
+          </div>
+
           <div className="form-group" style={{ marginBottom: '1.5rem', opacity: enabled ? 1 : 0.5, transition: 'opacity 0.2s' }}>
             <label>{i18n.t('settings:proxy.serverAddress')}</label>
             <input
@@ -217,6 +455,7 @@ export function ProxyTab({
               disabled={!enabled}
               onChange={(e) => {
                 setServer(e.target.value);
+                onSocks5ProxyServerChange(e.target.value);
                 setSaveStatus('idle');
               }}
               placeholder={i18n.t('settings:proxy.serverPlaceholder')}
@@ -236,6 +475,7 @@ export function ProxyTab({
                 disabled={!enabled}
                 onChange={(e) => {
                   setUsername(e.target.value);
+                  onSocks5ProxyUsernameChange(e.target.value);
                   setSaveStatus('idle');
                 }}
                 placeholder={i18n.t('settings:proxy.usernamePlaceholder')}
@@ -250,6 +490,7 @@ export function ProxyTab({
                 disabled={!enabled}
                 onChange={(e) => {
                   setPassword(e.target.value);
+                  onSocks5ProxyPasswordChange(e.target.value);
                   setSaveStatus('idle');
                 }}
                 placeholder={i18n.t('settings:proxy.passwordPlaceholder')}
@@ -446,6 +687,73 @@ export function ProxyTab({
               </button>
               <button className="modal-btn modal-btn-primary" onClick={handleDisableAndRestart}>
                 {i18n.t('settings:proxy.disableAndRestart')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showSaveProfileModal && (
+        <div className="modal-overlay" onClick={() => setShowSaveProfileModal(false)}>
+          <div className="modal-container" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '440px' }}>
+            <div className="modal-header">
+              <h3 className="modal-title">{i18n.t('settings:proxy.newProfileModalTitle', { defaultValue: 'Save Proxy Profile' })}</h3>
+            </div>
+            <div className="modal-body">
+              <p className="modal-message" style={{ marginBottom: '1rem' }}>
+                {i18n.t('settings:proxy.profileNamePrompt', { defaultValue: 'Enter a descriptive name for this proxy configuration:' })}
+              </p>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <input
+                  type="text"
+                  autoFocus
+                  value={profileNameInput}
+                  onChange={(e) => setProfileNameInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleConfirmSaveProfile();
+                    if (e.key === 'Escape') setShowSaveProfileModal(false);
+                  }}
+                  placeholder={i18n.t('settings:proxy.profileNamePlaceholder', { defaultValue: 'e.g. Home SOCKS5 or Netherlands VPN' })}
+                  style={{ width: '100%' }}
+                />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="modal-btn modal-btn-secondary" onClick={() => setShowSaveProfileModal(false)}>
+                {i18n.t('common:cancel', { defaultValue: 'Cancel' })}
+              </button>
+              <button
+                className="modal-btn modal-btn-primary"
+                onClick={handleConfirmSaveProfile}
+                disabled={!profileNameInput.trim()}
+              >
+                {i18n.t('common:save', { defaultValue: 'Save' })}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDeleteProfileModal && selectedProfile && (
+        <div className="modal-overlay" onClick={() => setShowDeleteProfileModal(false)}>
+          <div className="modal-container" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '440px' }}>
+            <div className="modal-header">
+              <h3 className="modal-title">{i18n.t('settings:proxy.deleteProfileModalTitle', { defaultValue: 'Delete Proxy Profile' })}</h3>
+            </div>
+            <div className="modal-body">
+              <p className="modal-message">
+                {i18n.t('settings:proxy.deleteProfileConfirm', {
+                  name: selectedProfile.name,
+                  defaultValue: `Are you sure you want to delete the "${selectedProfile.name}" proxy profile?`,
+                })}
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button className="modal-btn modal-btn-secondary" onClick={() => setShowDeleteProfileModal(false)}>
+                {i18n.t('common:cancel', { defaultValue: 'Cancel' })}
+              </button>
+              <button className="modal-btn modal-btn-danger" onClick={handleConfirmDeleteProfile} style={{ background: '#ef4444', color: '#fff' }}>
+                {i18n.t('common:delete', { defaultValue: 'Delete' })}
               </button>
             </div>
           </div>

@@ -45,6 +45,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useTranslation } from 'react-i18next';
 import { formatTime, formatDate, activeLocale } from '../../utils/dateTime';
 import i18n, { translateNativeError } from '../../i18n';
+import { parseBulkStalkerInput, type ParsedStalkerPortal } from '../../utils/stalkerBulkParser';
 
 export type SourcesSubTabId = 'source' | 'epg' | 'refresh' | 'global_ua';
 
@@ -162,6 +163,25 @@ function isExpiryWarning(dateString?: string): boolean {
   if (isNaN(d.getTime())) return false;
   const daysLeft = (d.getTime() - Date.now()) / (1000 * 60 * 60 * 24);
   return daysLeft <= 30;
+}
+
+// Helper to detect LAN URLs (RFC 1918 private IPs, localhost, etc)
+function isLanUrl(urlString: string): boolean {
+  try {
+    const url = new URL(urlString);
+    const host = url.hostname;
+    if (host === 'localhost' || host === '127.0.0.1') return true;
+    if (host.startsWith('10.')) return true;
+    if (host.startsWith('192.168.')) return true;
+    if (host.startsWith('172.')) {
+      const octet = parseInt(host.split('.')[1], 10);
+      if (octet >= 16 && octet <= 31) return true;
+    }
+    if (host.endsWith('.local') || host.endsWith('.lan')) return true;
+    return false;
+  } catch (e) {
+    return false;
+  }
 }
 
 // Format time difference in human-readable format
@@ -707,6 +727,13 @@ export function SourcesTab({
   // Backup delete confirmation modal state
   const [deleteBackupConfirm, setDeleteBackupConfirm] = useState<{ type: 'stalker' | 'xtream'; index: number } | null>(null);
 
+  // Bulk Stalker modal state
+  const [showBulkStalkerModal, setShowBulkStalkerModal] = useState(false);
+  const [bulkStalkerText, setBulkStalkerText] = useState('');
+  const [parsedPortals, setParsedPortals] = useState<ParsedStalkerPortal[]>([]);
+  const [isBulkSaving, setIsBulkSaving] = useState(false);
+  const [bulkSaveError, setBulkSaveError] = useState<string | null>(null);
+
   // Sub-tab state: 'source' | 'epg' | 'refresh' | 'global_ua'
   const [activeSubTab, setActiveSubTab] = useState<SourcesSubTabId>('source');
 
@@ -902,25 +929,6 @@ export function SourcesTab({
     if (!window.storage) return;
     if (isSaving) return;
 
-    // Helper to detect LAN URLs (RFC 1918 private IPs, localhost, etc)
-    function isLanUrl(urlString: string): boolean {
-      try {
-        const url = new URL(urlString);
-        const host = url.hostname;
-        if (host === 'localhost' || host === '127.0.0.1') return true;
-        if (host.startsWith('10.')) return true;
-        if (host.startsWith('192.168.')) return true;
-        if (host.startsWith('172.')) {
-          const octet = parseInt(host.split('.')[1], 10);
-          if (octet >= 16 && octet <= 31) return true;
-        }
-        if (host.endsWith('.local') || host.endsWith('.lan')) return true;
-        return false;
-      } catch (e) {
-        return false;
-      }
-    }
-
     // Validation
     if (!formData.name.trim()) {
       setError(i18n.t('settings:sources.errNameRequired'));
@@ -1097,6 +1105,82 @@ export function SourcesTab({
       setError(err?.message || i18n.t('settings:sources.errSaveSource'));
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function handleSaveBulkStalker() {
+    if (!window.storage || isBulkSaving || parsedPortals.length === 0) return;
+
+    // Security check for LAN sources
+    const allowLan = useSettingsStore.getState().allowLanSources === true;
+    if (!allowLan) {
+      for (const portal of parsedPortals) {
+        if (isLanUrl(portal.url)) {
+          setBulkSaveError(`${i18n.t('settings:sources.errLanSources')} (${portal.url})`);
+          return;
+        }
+      }
+    }
+
+    setIsBulkSaving(true);
+    setBulkSaveError(null);
+
+    let savedCount = 0;
+    try {
+      for (const portal of parsedPortals) {
+        const sourceId = crypto.randomUUID();
+        const sourceName = portal.name.trim() || portal.url.trim();
+
+        const source: Source = {
+          id: sourceId,
+          name: sourceName,
+          type: 'stalker',
+          url: portal.url.trim(),
+          enabled: true,
+          mac: portal.mac.trim(),
+          auto_load_epg: true,
+          live_tv_only: false,
+          vod_only: false,
+          backup_macs: portal.backupMacs.length > 0 ? portal.backupMacs : undefined,
+        };
+
+        StalkerClient.clearTokenCache(sourceId);
+
+        const result = await window.storage.saveSource(source);
+        if (result.error) {
+          setBulkSaveError(translateNativeError(result.error) || result.error);
+          if (savedCount > 0) {
+            setParsedPortals(prev => prev.slice(savedCount));
+            onSourcesChange();
+            incrementVersion();
+          }
+          return;
+        }
+        savedCount++;
+      }
+
+      setShowBulkStalkerModal(false);
+      setShowAddForm(false);
+      setFormData(emptyForm);
+      setBulkStalkerText('');
+      setParsedPortals([]);
+      onSourcesChange();
+      incrementVersion();
+
+      useToastStore.getState().addToast(
+        i18n.t('settings:sources.bulkStalkerSuccess', { count: savedCount }),
+        'success'
+      );
+    } catch (err: any) {
+      console.error('[SourcesTab] Error bulk saving Stalker portals:', err);
+      setBulkSaveError(err?.message || i18n.t('settings:sources.errSaveSource'));
+      if (savedCount > 0) {
+        setParsedPortals(prev => prev.slice(savedCount));
+        onSourcesChange();
+        incrementVersion();
+      }
+    } finally {
+      setIsBulkSaving(false);
     }
   }
 
@@ -2083,6 +2167,24 @@ export function SourcesTab({
                     </button>
                   )}
                 </div>
+
+                {!editingId && (
+                  <div className="form-group stalker-bulk-action">
+                    <div className="or-divider">
+                      <span>{i18n.t('settings:sources.or')}</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="import-btn"
+                      onClick={() => {
+                        setBulkSaveError(null);
+                        setShowBulkStalkerModal(true);
+                      }}
+                    >
+                      {i18n.t('settings:sources.bulkStalkerTitle')}
+                    </button>
+                  </div>
+                )}
               </>
             )}
 
@@ -2656,7 +2758,7 @@ export function SourcesTab({
 
       {/* Delete Backup Confirmation Modal */}
       {deleteBackupConfirm && createPortal(
-        <div className="source-form-overlay" style={{ zIndex: 1002 }}>
+        <div className="source-form-overlay" style={{ zIndex: 10250 }}>
           <div className="source-form" style={{ maxWidth: '400px', height: 'auto' }}>
             <h3>{i18n.t('settings:sources.deleteBackupTitle')}</h3>
             <p style={{ color: 'var(--text-primary)', marginBottom: '24px', lineHeight: '1.5' }}>
@@ -2677,6 +2779,124 @@ export function SourcesTab({
                 style={{ borderColor: '#ff4444', color: '#ff4444', background: 'rgba(255, 68, 68, 0.1)' }}
               >
                 {i18n.t('common:yesDelete')}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Bulk Add Stalker Portals Modal */}
+      {showBulkStalkerModal && createPortal(
+        <div className="source-form-overlay" style={{ zIndex: 10250 }}>
+          <div className="source-form bulk-stalker-modal">
+            <h3>{i18n.t('settings:sources.bulkStalkerTitle')}</h3>
+            <p className="bulk-stalker-desc">
+              {i18n.t('settings:sources.bulkStalkerDesc')}
+            </p>
+
+            {bulkSaveError && <div className="form-error">{bulkSaveError}</div>}
+
+            <div className="form-group" style={{ marginBottom: '12px' }}>
+              <textarea
+                className="bulk-stalker-textarea"
+                rows={6}
+                value={bulkStalkerText}
+                onChange={(e) => {
+                  const text = e.target.value;
+                  setBulkStalkerText(text);
+                  setParsedPortals(parseBulkStalkerInput(text));
+                  setBulkSaveError(null);
+                }}
+                placeholder={i18n.t('settings:sources.bulkStalkerPlaceholder')}
+              />
+            </div>
+
+            <div className="bulk-stalker-preview-section">
+              <div className="bulk-stalker-preview-header">
+                <span className="bulk-stalker-preview-title">
+                  {i18n.t('settings:sources.bulkStalkerDetected', { count: parsedPortals.length })}
+                </span>
+              </div>
+
+              {parsedPortals.length === 0 ? (
+                <div className="bulk-stalker-empty">
+                  {i18n.t('settings:sources.bulkStalkerNoEntries')}
+                </div>
+              ) : (
+                <div className="bulk-stalker-list">
+                  {parsedPortals.map((portal, idx) => (
+                    <div key={idx} className="bulk-stalker-item">
+                      <div className="bulk-stalker-item-top">
+                        <input
+                          type="text"
+                          className="bulk-stalker-item-name"
+                          value={portal.name}
+                          onChange={(e) => {
+                            const updated = [...parsedPortals];
+                            updated[idx] = { ...updated[idx], name: e.target.value };
+                            setParsedPortals(updated);
+                          }}
+                          placeholder={i18n.t('settings:sources.name')}
+                        />
+                        <button
+                          type="button"
+                          className="bulk-stalker-remove-btn"
+                          onClick={() => {
+                            setParsedPortals(parsedPortals.filter((_, i) => i !== idx));
+                          }}
+                          title={i18n.t('common:delete')}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                      <div className="bulk-stalker-item-info">
+                        <div className="bulk-stalker-field">
+                          <span className="bulk-stalker-label">URL:</span>
+                          <span className="bulk-stalker-value" title={portal.url}>{portal.url}</span>
+                        </div>
+                        <div className="bulk-stalker-field">
+                          <span className="bulk-stalker-label">MAC:</span>
+                          <span className="bulk-stalker-value mac-value">{portal.mac}</span>
+                        </div>
+                        {portal.backupMacs.length > 0 && (
+                          <div className="bulk-stalker-field">
+                            <span className="bulk-stalker-label">
+                              {i18n.t('settings:sources.bulkStalkerBackupsCount', { count: portal.backupMacs.length })}:
+                            </span>
+                            <span className="bulk-stalker-value mac-value" title={portal.backupMacs.join(', ')}>
+                              {portal.backupMacs.join(', ')}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="form-actions" style={{ marginTop: '16px' }}>
+              <button
+                type="button"
+                className="cancel-btn"
+                onClick={() => {
+                  setShowBulkStalkerModal(false);
+                  setBulkSaveError(null);
+                }}
+                disabled={isBulkSaving}
+              >
+                {i18n.t('common:cancel')}
+              </button>
+              <button
+                type="button"
+                className="save-btn"
+                onClick={handleSaveBulkStalker}
+                disabled={parsedPortals.length === 0 || isBulkSaving}
+              >
+                {isBulkSaving
+                  ? i18n.t('common:saving')
+                  : i18n.t('settings:sources.bulkStalkerAddBtn', { count: parsedPortals.length })}
               </button>
             </div>
           </div>

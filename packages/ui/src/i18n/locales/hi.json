@@ -1279,7 +1279,16 @@
       "usernamePlaceholder": "उपयोगकर्ता नाम",
       "passwordPlaceholder": "पासवर्ड",
       "uaPlaceholderEx": "उदा: VLC/3.0.18 LibVLC/3.0.18",
-      "uaPlaceholderEg": "जैसे VLC/3.0.18 LibVLC/3.0.18"
+      "uaPlaceholderEg": "जैसे VLC/3.0.18 LibVLC/3.0.18",
+      "bulkAddStalker": "पोर्टल थोक में जोड़ें",
+      "bulkStalkerTitle": "स्टॉकर पोर्टल बल्क में जोड़ें",
+      "bulkStalkerDesc": "कई Stalker पोर्टल URL और MAC पते चिपकाएँ। हर URL एक नया स्रोत शुरू करता है। हर URL के नीचे पहला MAC पता प्राथमिक MAC बनता है, और अतिरिक्त MAC पते बैकअप बन जाते हैं।",
+      "bulkStalkerPlaceholder": "http://vod.url1.com/c/\n11:22:33:44:55:66\n22:33:44:55:66:77\n\nhttp://tv.url2.com:80/c/\n11:22:33:44:55:66",
+      "bulkStalkerDetected": "{{count}} पोर्टल मिले:",
+      "bulkStalkerAddBtn": "{{count}} स्रोत जोड़ें",
+      "bulkStalkerNoEntries": "अभी तक कोई मान्य पोर्टल प्रविष्टि नहीं मिली। सुनिश्चित करें कि हर प्रविष्टि में एक URL और कम से कम एक MAC पता हो।",
+      "bulkStalkerBackupsCount": "+{{count}} बैकअप",
+      "bulkStalkerSuccess": "{{count}} Stalker पोर्टल जोड़े गए"
     },
     "scrobbling": {
       "title": "Trakt",
@@ -1637,7 +1646,23 @@
       "usernamePlaceholder": "प्रॉक्सी उपयोगकर्ता नाम",
       "passwordPlaceholder": "प्रॉक्सी पासवर्ड",
       "serverPlaceholder": "जैसे 127.0.0.1:1080 या socks5h://127.0.0.1:1080",
-      "notEnabled": "प्रॉक्सी सक्षम नहीं है या प्रॉक्सी सर्वर फ़ील्ड खाली है"
+      "notEnabled": "प्रॉक्सी सक्षम नहीं है या प्रॉक्सी सर्वर फ़ील्ड खाली है",
+      "savedProxies": "सहेजे गए प्रॉक्सी",
+      "savedProxiesHint": "एक क्लिक से कई प्रॉक्सी सर्वर कॉन्फ़िगरेशन सहेजें और उनके बीच स्विच करें।",
+      "selectProxy": "सहेजा गया प्रॉक्सी चुनें...",
+      "customOrUnsaved": "कस्टम / सहेजा नहीं गया",
+      "noSavedProxies": "कोई सहेजा गया प्रॉक्सी नहीं",
+      "saveAsNew": "नए रूप में सहेजें",
+      "updateProfile": "प्रोफ़ाइल अपडेट करें",
+      "deleteProfile": "हटाएँ",
+      "profileNamePrompt": "इस प्रॉक्सी कॉन्फ़िगरेशन के लिए एक वर्णनात्मक नाम दर्ज करें:",
+      "profileNamePlaceholder": "जैसे होम SOCKS5 या नीदरलैंड VPN",
+      "newProfileModalTitle": "प्रॉक्सी प्रोफ़ाइल सहेजें",
+      "deleteProfileModalTitle": "प्रॉक्सी प्रोफ़ाइल हटाएँ",
+      "deleteProfileConfirm": "क्या आप वाकई \"{{name}}\" प्रॉक्सी प्रोफ़ाइल हटाना चाहते हैं?",
+      "profileSaved": "प्रोफ़ाइल सहेजी गई",
+      "profileUpdated": "प्रोफ़ाइल अपडेट की गई",
+      "profileDeleted": "प्रोफ़ाइल हटा दी गई"
     },
     "optimization": {
       "title": "हार्डवेयर त्वरण",

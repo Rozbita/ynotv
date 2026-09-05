@@ -1279,7 +1279,16 @@
       "usernamePlaceholder": "korisničko ime",
       "passwordPlaceholder": "lozinka",
       "uaPlaceholderEx": "Primer: VLC/3.0.18 LibVLC/3.0.18",
-      "uaPlaceholderEg": "npr. VLC/3.0.18 LibVLC/3.0.18"
+      "uaPlaceholderEg": "npr. VLC/3.0.18 LibVLC/3.0.18",
+      "bulkAddStalker": "Grupno dodavanje portala",
+      "bulkStalkerTitle": "Masovno dodavanje Stalker portala",
+      "bulkStalkerDesc": "Zalijepite više Stalker URL-ova i MAC adresa. Svaki URL pokreće novi izvor. Prva MAC adresa ispod svakog URL-a postaje primarna MAC, a dodatne MAC adrese postaju sigurnosne kopije.",
+      "bulkStalkerPlaceholder": "http://vod.url1.com/c/\n11:22:33:44:55:66\n22:33:44:55:66:77\n\nhttp://tv.url2.com:80/c/\n11:22:33:44:55:66",
+      "bulkStalkerDetected": "Otkriveno {{count}} portala:",
+      "bulkStalkerAddBtn": "Dodaj {{count}} izvora",
+      "bulkStalkerNoEntries": "Još nije otkriven nijedan važeći unos portala. Provjerite ima li svaki unos URL nakon kojeg slijedi barem jedna MAC adresa.",
+      "bulkStalkerBackupsCount": "+{{count}} sigurnosna kopija",
+      "bulkStalkerSuccess": "Dodano {{count}} Stalker portala"
     },
     "scrobbling": {
       "title": "Trakt",
@@ -1637,7 +1646,23 @@
       "usernamePlaceholder": "Proxy korisnik",
       "passwordPlaceholder": "Proxy lozinka",
       "serverPlaceholder": "npr. 127.0.0.1:1080 ili socks5h://127.0.0.1:1080",
-      "notEnabled": "Proxy nije omogućen ili je polje proxy servera prazno"
+      "notEnabled": "Proxy nije omogućen ili je polje proxy servera prazno",
+      "savedProxies": "Spremljeni proxyji",
+      "savedProxiesHint": "Spremite i prebacujte se između više proxy konfiguracija jednim klikom.",
+      "selectProxy": "Odaberite spremljeni proxy...",
+      "customOrUnsaved": "Prilagođeno / Nespremljeno",
+      "noSavedProxies": "Nema spremljenih proxyja",
+      "saveAsNew": "Spremi kao novo",
+      "updateProfile": "Ažuriraj profil",
+      "deleteProfile": "Obriši",
+      "profileNamePrompt": "Unesite opisni naziv za ovu proxy konfiguraciju:",
+      "profileNamePlaceholder": "npr. Kućni SOCKS5 ili Nizozemski VPN",
+      "newProfileModalTitle": "Spremi proxy profil",
+      "deleteProfileModalTitle": "Obriši proxy profil",
+      "deleteProfileConfirm": "Jeste li sigurni da želite obrisati proxy profil \"{{name}}\"?",
+      "profileSaved": "Profil spremljen",
+      "profileUpdated": "Profil ažuriran",
+      "profileDeleted": "Profil obrisan"
     },
     "optimization": {
       "title": "Hardversko ubrzanje",

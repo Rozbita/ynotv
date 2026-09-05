@@ -1279,7 +1279,16 @@
       "usernamePlaceholder": "用户名",
       "passwordPlaceholder": "密码",
       "uaPlaceholderEx": "例：VLC/3.0.18 LibVLC/3.0.18",
-      "uaPlaceholderEg": "例如 VLC/3.0.18 LibVLC/3.0.18"
+      "uaPlaceholderEg": "例如 VLC/3.0.18 LibVLC/3.0.18",
+      "bulkAddStalker": "批量添加门户",
+      "bulkStalkerTitle": "批量添加 Stalker 门户",
+      "bulkStalkerDesc": "粘贴多个 Stalker 门户 URL 和 MAC 地址。每个 URL 都会开启一个新源。每个 URL 下方的第一个 MAC 地址成为主 MAC，其他 MAC 地址成为备用。",
+      "bulkStalkerPlaceholder": "http://vod.url1.com/c/\n11:22:33:44:55:66\n22:33:44:55:66:77\n\nhttp://tv.url2.com:80/c/\n11:22:33:44:55:66",
+      "bulkStalkerDetected": "检测到 {{count}} 个门户：",
+      "bulkStalkerAddBtn": "添加 {{count}} 个来源",
+      "bulkStalkerNoEntries": "尚未检测到有效的门户条目。请确保每个条目包含一个 URL 和至少一个 MAC 地址。",
+      "bulkStalkerBackupsCount": "+{{count}} 个备份",
+      "bulkStalkerSuccess": "已添加 {{count}} 个 Stalker 门户"
     },
     "scrobbling": {
       "title": "Trakt",
@@ -1637,7 +1646,23 @@
       "usernamePlaceholder": "代理用户名",
       "passwordPlaceholder": "代理密码",
       "serverPlaceholder": "例如 127.0.0.1:1080 或 socks5h://127.0.0.1:1080",
-      "notEnabled": "代理未启用或代理服务器字段为空"
+      "notEnabled": "代理未启用或代理服务器字段为空",
+      "savedProxies": "已保存的代理",
+      "savedProxiesHint": "一键保存并在多个代理服务器配置之间切换。",
+      "selectProxy": "选择已保存的代理...",
+      "customOrUnsaved": "自定义 / 未保存",
+      "noSavedProxies": "没有已保存的代理",
+      "saveAsNew": "另存为新配置",
+      "updateProfile": "更新配置",
+      "deleteProfile": "删除",
+      "profileNamePrompt": "为此代理配置输入描述性名称：",
+      "profileNamePlaceholder": "例如家庭 SOCKS5 或荷兰 VPN",
+      "newProfileModalTitle": "保存代理配置",
+      "deleteProfileModalTitle": "删除代理配置",
+      "deleteProfileConfirm": "确定要删除代理配置“{{name}}”吗？",
+      "profileSaved": "配置已保存",
+      "profileUpdated": "配置已更新",
+      "profileDeleted": "配置已删除"
     },
     "optimization": {
       "title": "硬件加速",

@@ -1279,7 +1279,16 @@
       "usernamePlaceholder": "emri i përdoruesit",
       "passwordPlaceholder": "fjalëkalimi",
       "uaPlaceholderEx": "Shembull: VLC/3.0.18 LibVLC/3.0.18",
-      "uaPlaceholderEg": "p.sh. VLC/3.0.18 LibVLC/3.0.18"
+      "uaPlaceholderEg": "p.sh. VLC/3.0.18 LibVLC/3.0.18",
+      "bulkAddStalker": "Shto portale në grup",
+      "bulkStalkerTitle": "Shto portale Stalker në masë",
+      "bulkStalkerDesc": "Ngjitni disa URL portalesh Stalker dhe adresa MAC. Çdo URL nis një burim të ri. Adresa e parë MAC nën çdo URL bëhet MAC-ja kryesore, dhe adresat shtesë MAC bëhen rezervë.",
+      "bulkStalkerPlaceholder": "http://vod.url1.com/c/\n11:22:33:44:55:66\n22:33:44:55:66:77\n\nhttp://tv.url2.com:80/c/\n11:22:33:44:55:66",
+      "bulkStalkerDetected": "U zbuluan {{count}} portale:",
+      "bulkStalkerAddBtn": "Shto {{count}} burime",
+      "bulkStalkerNoEntries": "Ende nuk u zbuluan hyrje të vlefshme portalesh. Sigurohuni që çdo hyrje të ketë një URL të ndjekur nga të paktën një adresë MAC.",
+      "bulkStalkerBackupsCount": "+{{count}} rezerva",
+      "bulkStalkerSuccess": "U shtuan {{count}} portale Stalker"
     },
     "scrobbling": {
       "title": "Trakt",
@@ -1637,7 +1646,23 @@
       "usernamePlaceholder": "Përdoruesi i proxy-së",
       "passwordPlaceholder": "Fjalëkalimi i proxy-së",
       "serverPlaceholder": "p.sh. 127.0.0.1:1080 ose socks5h://127.0.0.1:1080",
-      "notEnabled": "Proxy nuk është i aktivizuar ose fusha e serverit proxy është bosh"
+      "notEnabled": "Proxy nuk është i aktivizuar ose fusha e serverit proxy është bosh",
+      "savedProxies": "Proxitë e ruajtura",
+      "savedProxiesHint": "Ruani dhe kaloni midis disa konfigurimeve të serverit proxy me një klik të vetëm.",
+      "selectProxy": "Zgjidh një proxy të ruajtur...",
+      "customOrUnsaved": "Personalizuar / I paruajtur",
+      "noSavedProxies": "Asnjë proxy i ruajtur",
+      "saveAsNew": "Ruaj si të ri",
+      "updateProfile": "Përditëso profilin",
+      "deleteProfile": "Fshi",
+      "profileNamePrompt": "Fut një emër përshkrues për këtë konfigurim proxy:",
+      "profileNamePlaceholder": "p.sh. SOCKS5 shtëpie ose VPN Holandë",
+      "newProfileModalTitle": "Ruaj profilin e proxy",
+      "deleteProfileModalTitle": "Fshi profilin e proxy",
+      "deleteProfileConfirm": "A je i sigurt se dëshiron të fshish profilin e proxy \"{{name}}\"?",
+      "profileSaved": "Profili u ruajt",
+      "profileUpdated": "Profili u përditësua",
+      "profileDeleted": "Profili u fshi"
     },
     "optimization": {
       "title": "Përshpejtimi hardware",

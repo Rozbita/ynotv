@@ -116,6 +116,7 @@ const UNTRANSLATED_ALLOWLIST = new Set([
   // user agents + placeholders
   'settings.sources.uaTivimate', 'settings.sources.uaGse', 'settings.sources.uaIptvSmarters',
   'settings.sources.uaFallbackHintCode', 'settings.sources.uaFallbackHintPost', 'settings.sources.uaPlaceholderEx',
+  'settings.sources.bulkStalkerPlaceholder',
   'settings.sources.xtreamCodes', 'settings.sources.stalkerPortal', 'settings.sources.epgUrl',
   'settings.sources.epgIdColon', 'settings.sources.epgIdTvg', 'settings.sources.confirmDeleteName',
   'settings.sources.deleteConfirmPost', 'settings.nuvio.tmdbTokenPlaceholder', 'epg.logoUrlPlaceholder',

@@ -1279,7 +1279,16 @@
       "usernamePlaceholder": "ім'я користувача",
       "passwordPlaceholder": "пароль",
       "uaPlaceholderEx": "Наприклад: VLC/3.0.18 LibVLC/3.0.18",
-      "uaPlaceholderEg": "наприклад, VLC/3.0.18 LibVLC/3.0.18"
+      "uaPlaceholderEg": "наприклад, VLC/3.0.18 LibVLC/3.0.18",
+      "bulkAddStalker": "Масове додавання порталів",
+      "bulkStalkerTitle": "Масове додавання порталів Stalker",
+      "bulkStalkerDesc": "Вставте кілька URL-адрес порталів Stalker та MAC-адрес. Кожен URL створює нове джерело. Перша MAC-адреса під кожним URL стає основною, а додаткові MAC-адреси стають резервними.",
+      "bulkStalkerPlaceholder": "http://vod.url1.com/c/\n11:22:33:44:55:66\n22:33:44:55:66:77\n\nhttp://tv.url2.com:80/c/\n11:22:33:44:55:66",
+      "bulkStalkerDetected": "Виявлено {{count}} порталів:",
+      "bulkStalkerAddBtn": "Додати {{count}} джерела",
+      "bulkStalkerNoEntries": "Дійсних записів порталів ще не виявлено. Переконайтеся, що кожен запис містить URL-адресу та принаймні одну MAC-адресу.",
+      "bulkStalkerBackupsCount": "+{{count}} резервних",
+      "bulkStalkerSuccess": "Додано {{count}} порталів Stalker"
     },
     "scrobbling": {
       "title": "Trakt",
@@ -1637,7 +1646,23 @@
       "usernamePlaceholder": "Ім'я користувача проксі",
       "passwordPlaceholder": "Пароль проксі",
       "serverPlaceholder": "наприклад, 127.0.0.1:1080 або socks5h://127.0.0.1:1080",
-      "notEnabled": "Проксі не увімкнено або поле сервера порожньо"
+      "notEnabled": "Проксі не увімкнено або поле сервера порожньо",
+      "savedProxies": "Збережені проксі",
+      "savedProxiesHint": "Зберігайте кілька конфігурацій проксі-сервера та перемикайтеся між ними одним кліком.",
+      "selectProxy": "Виберіть збережений проксі...",
+      "customOrUnsaved": "Власний / Не збережений",
+      "noSavedProxies": "Немає збережених проксі",
+      "saveAsNew": "Зберегти як новий",
+      "updateProfile": "Оновити профіль",
+      "deleteProfile": "Видалити",
+      "profileNamePrompt": "Введіть описову назву для цієї конфігурації проксі:",
+      "profileNamePlaceholder": "напр., домашній SOCKS5 або VPN Нідерландів",
+      "newProfileModalTitle": "Зберегти профіль проксі",
+      "deleteProfileModalTitle": "Видалити профіль проксі",
+      "deleteProfileConfirm": "Ви впевнені, що хочете видалити профіль проксі \"{{name}}\"?",
+      "profileSaved": "Профіль збережено",
+      "profileUpdated": "Профіль оновлено",
+      "profileDeleted": "Профіль видалено"
     },
     "optimization": {
       "title": "Апаратне прискорення",

@@ -2088,65 +2088,14 @@ export function ChannelPanel({
     return Math.min(100, Math.max(0, ((now - start) / total) * 100));
   }, [selectedProgram, currentTime, isCatchup, catchupInfo, selectedChannel, position, duration]);
 
-  // "Catch-up Programs" toggle for the 3-column schedule list — catchup
-  // channels can look further back than the default 1-hour window.
-  const [altScheduleShowOlder, setAltScheduleShowOlder] = useState(false);
   // "View All Programs" modal for the 3-column toolbar — shows every program
   // the DB has for the selected channel across per-day tabs.
   const [viewAllProgramsOpen, setViewAllProgramsOpen] = useState(false);
-  // Full catch-up history for the selected channel, fetched on demand while
-  // the toggle is active so the schedule shows ALL past programs instead of
-  // only the ones inside the loaded EPG window.
-  const [altScheduleHistory, setAltScheduleHistory] = useState<StoredProgram[] | null>(null);
-  // How many past programs to load for a channel's full catch-up history and
-  // how many total rows the schedule can render. The list is virtualized, so
-  // hundreds/thousands of rows only mount a visible window and stay smooth.
+  // How many total rows the schedule can render. The list is virtualized, so
+  // hundreds of rows only mount a visible window and stay smooth.
   const ALT_SCHEDULE_MAX_ROWS = 1000;
-  // Catch-up history window: 90 days back covers any realistic archive
-  // retention; the +14h forward margin prevents offset-formatted timestamps
-  // (utils/epgTime.ts) from failing the `end < now` string comparison. The JS
-  // side filters to genuinely ended rows and sorts by parsed time.
-  const CATCHUP_WINDOW_BACK_MS = 90 * 24 * 60 * 60 * 1000;
-  const CATCHUP_WINDOW_FWD_MS = 14 * 60 * 60 * 1000;
-  // SQL safety cap — far above what a single channel holds within the window.
-  const CATCHUP_SQL_LIMIT = 4000;
 
-  useEffect(() => {
-    if (!altScheduleShowOlder || !selectedChannel) {
-      setAltScheduleHistory(null);
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const dbInstance = await (db as any).dbPromise;
-        const nowMs = currentTime.getTime();
-        const rows = await dbInstance.select(
-          `SELECT * FROM programs_effective
-           WHERE stream_id = ?
-             AND end < ?
-             AND end > ?
-           LIMIT ${CATCHUP_SQL_LIMIT}`,
-          [
-            selectedChannel.stream_id,
-            new Date(nowMs + CATCHUP_WINDOW_FWD_MS).toISOString(),
-            new Date(nowMs - CATCHUP_WINDOW_BACK_MS).toISOString(),
-          ]
-        ) as StoredProgram[];
-        if (cancelled) return;
-        setAltScheduleHistory(rows.map((p) => ({
-          ...p,
-          description: decompressEpgDescription(p.description) ?? p.description,
-        })));
-      } catch (err) {
-        console.error('[ChannelPanel] Failed to load catch-up history:', err);
-        if (!cancelled) setAltScheduleHistory([]);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [altScheduleShowOlder, selectedChannel?.stream_id, currentTime]);
-
-  // Short date label for schedule rows so catch-up entries spanning multiple
+  // Short date label for schedule rows so entries spanning multiple
   // days are easy to identify.
   const formatScheduleDate = useCallback((date: Date) => {
     const d = new Date(date);
@@ -2223,30 +2172,8 @@ export function ChannelPanel({
       .map(toEntry)
       .filter((x) => Number.isFinite(x.startMs) && Number.isFinite(x.endMs));
 
-    let past: ReturnType<typeof toEntry>[];
-    if (altScheduleShowOlder && altScheduleHistory) {
-      // Catch-up mode: ALL past programs from the DB, not just the loaded window.
-      // The SQL fetch used a forward margin to survive mixed timestamp formats;
-      // drop anything that hasn't actually ended yet.
-      past = altScheduleHistory
-        .map(toEntry)
-        .filter(
-          (x) =>
-            Number.isFinite(x.startMs) &&
-            Number.isFinite(x.endMs) &&
-            x.endMs <= now
-        );
-    } else {
-      // Default view: no previously-aired programs — the list starts at the
-      // running show and only shows it plus everything coming up.
-      past = [];
-    }
-
     // Anchor the schedule on the currently airing program: the running show is
-    // the first row and upcoming programs follow chronologically. In Catch-up
-    // Programs mode the past programs are included directly beneath the current
-    // one (most recent first) — keeping them next to the current program also
-    // keeps the per-day group headers in `altScheduleDisplay` monotonic.
+    // the first row and upcoming programs follow chronologically.
     // Prefer the running program from the loaded window; fall back to the one
     // fetched directly from the DB when it isn't inside the lazy-loaded window
     // (e.g. a long movie that started before loadStart). Only honored while it
@@ -2263,17 +2190,11 @@ export function ChannelPanel({
     const upcoming = entries
       .filter((x) => x.startMs > now)
       .sort((a, b) => a.startMs - b.startMs);
-    const pastSorted = past.sort((a, b) => b.startMs - a.startMs);
-    // Reserve room so a huge catch-up history can never starve the upcoming
-    // programs — past rows are capped to whatever space remains after the
-    // current show and all upcoming programs.
-    const roomForPast = Math.max(0, ALT_SCHEDULE_MAX_ROWS - 1 - upcoming.length);
     return [
       ...(current ? [current] : []),
-      ...pastSorted.slice(0, roomForPast),
       ...upcoming,
     ].slice(0, ALT_SCHEDULE_MAX_ROWS);
-  }, [selectedChannel, programs, currentTime, altScheduleShowOlder, altScheduleHistory, altScheduleRunning]);
+  }, [selectedChannel, programs, currentTime, altScheduleRunning]);
 
   type AltScheduleRowEntry = {
     program: StoredProgram;
@@ -2355,8 +2276,7 @@ export function ChannelPanel({
       if (retries-- > 0) setTimeout(tryScroll, 150);
     };
     tryScroll();
-    return () => { cancelled = true; };
-  }, [selectedChannel?.stream_id, altScheduleShowOlder, altScheduleHistory]);
+  }, [selectedChannel?.stream_id]);
 
   // Ref for the video preview container (now points to video sub-container)
   const previewRef = useRef<HTMLDivElement>(null);
@@ -3265,24 +3185,6 @@ export function ChannelPanel({
             </svg>
             <span className="btn-label">
               {i18n.t('live:viewAllPrograms', { defaultValue: 'View All Programs' })}
-            </span>
-          </button>
-        )}
-        {/* Catchup: expand the schedule history beyond the default lookback
-            for channels with tv_archive (moved into the toolbar row). */}
-        {selectedChannel && (Boolean(selectedChannel.tv_archive) || selectedChannel.tv_archive === 1) && (
-          <button
-            className={`guide-alt-schedule-toggle ${altScheduleShowOlder ? 'active' : ''}`}
-            onClick={() => setAltScheduleShowOlder((v) => !v)}
-            title={i18n.t('live:catchupPrograms', { defaultValue: 'Catch-up Programs' })}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0 }}>
-              <circle cx="12" cy="12" r="9" />
-              <polyline points="12 7 12 12 15 14" />
-              <path d="M3.5 12a8.5 8.5 0 1 0 8.5-8.5" />
-            </svg>
-            <span className="btn-label">
-              {i18n.t('live:catchupPrograms', { defaultValue: 'Catch-up Programs' })}
             </span>
           </button>
         )}

@@ -1279,7 +1279,16 @@
       "usernamePlaceholder": "صارف نام",
       "passwordPlaceholder": "پاس ورڈ",
       "uaPlaceholderEx": "مثال: VLC/3.0.18 LibVLC/3.0.18",
-      "uaPlaceholderEg": "مثلاً VLC/3.0.18 LibVLC/3.0.18"
+      "uaPlaceholderEg": "مثلاً VLC/3.0.18 LibVLC/3.0.18",
+      "bulkAddStalker": "پورٹلز کو بلک میں شامل کریں",
+      "bulkStalkerTitle": "اسٹالکر پورٹلز بڑی تعداد میں شامل کریں",
+      "bulkStalkerDesc": "ایک سے زیادہ اسٹالکر پورٹل URLs اور MAC ایڈریس چسپاں کریں۔ ہر URL ایک نیا ذریعہ شروع کرتا ہے۔ ہر URL کے نیچے پہلا MAC ایڈریس بنیادی MAC بن جاتا ہے، اور اضافی MAC ایڈریس بیک اپ بن جاتے ہیں۔",
+      "bulkStalkerPlaceholder": "http://vod.url1.com/c/\n11:22:33:44:55:66\n22:33:44:55:66:77\n\nhttp://tv.url2.com:80/c/\n11:22:33:44:55:66",
+      "bulkStalkerDetected": "{{count}} پورٹل ملے:",
+      "bulkStalkerAddBtn": "{{count}} ذرائع شامل کریں",
+      "bulkStalkerNoEntries": "ابھی تک کوئی درست پورٹل اندراج نہیں ملا۔ یقینی بنائیں کہ ہر اندراج میں ایک URL اور کم از کم ایک MAC ایڈریس ہو۔",
+      "bulkStalkerBackupsCount": "+{{count}} بیک اپ",
+      "bulkStalkerSuccess": "{{count}} اسٹالکر پورٹل شامل کیے گئے"
     },
     "scrobbling": {
       "title": "ٹریکٹ",
@@ -1637,7 +1646,23 @@
       "usernamePlaceholder": "پروکسی صارف نام",
       "passwordPlaceholder": "پروکسی پاس ورڈ",
       "serverPlaceholder": "مثلاً 127.0.0.1:1080 یا socks5h://127.0.0.1:1080",
-      "notEnabled": "پروکسی فعال نہیں ہے یا پروکسی سرور فیلڈ خالی ہے"
+      "notEnabled": "پروکسی فعال نہیں ہے یا پروکسی سرور فیلڈ خالی ہے",
+      "savedProxies": "محفوظ شدہ پراکسیز",
+      "savedProxiesHint": "ایک کلک میں متعدد پراکسی سرور کنفیگریشنز محفوظ کریں اور ان کے درمیان سوئچ کریں۔",
+      "selectProxy": "محفوظ شدہ پراکسی منتخب کریں...",
+      "customOrUnsaved": "اپنی مرضی / غیر محفوظ شدہ",
+      "noSavedProxies": "کوئی محفوظ شدہ پراکسی نہیں",
+      "saveAsNew": "بطور نیا محفوظ کریں",
+      "updateProfile": "پروفائل اپڈیٹ کریں",
+      "deleteProfile": "حذف کریں",
+      "profileNamePrompt": "اس پراکسی کنفیگریشن کے لیے ایک وضاحتی نام درج کریں:",
+      "profileNamePlaceholder": "مثلاً ہوم SOCKS5 یا نیدرلینڈز VPN",
+      "newProfileModalTitle": "پراکسی پروفائل محفوظ کریں",
+      "deleteProfileModalTitle": "پراکسی پروفائل حذف کریں",
+      "deleteProfileConfirm": "کیا آپ واقعی \"{{name}}\" پراکسی پروفائل حذف کرنا چاہتے ہیں؟",
+      "profileSaved": "پروفائل محفوظ ہو گیا",
+      "profileUpdated": "پروفائل اپڈیٹ ہو گیا",
+      "profileDeleted": "پروفائل حذف ہو گیا"
     },
     "optimization": {
       "title": "ہارڈویئر ایکسلریشن",

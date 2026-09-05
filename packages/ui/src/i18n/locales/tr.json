@@ -1279,7 +1279,16 @@
       "usernamePlaceholder": "kullanıcı adı",
       "passwordPlaceholder": "şifre",
       "uaPlaceholderEx": "Örn: VLC/3.0.18 LibVLC/3.0.18",
-      "uaPlaceholderEg": "örn. VLC/3.0.18 LibVLC/3.0.18"
+      "uaPlaceholderEg": "örn. VLC/3.0.18 LibVLC/3.0.18",
+      "bulkAddStalker": "Toplu Portal Ekle",
+      "bulkStalkerTitle": "Toplu Stalker Portalı Ekle",
+      "bulkStalkerDesc": "Birden fazla Stalker portal URL'si ve MAC adresi yapıştırın. Her URL yeni bir kaynak başlatır. Her URL'nin altındaki ilk MAC adresi birincil MAC olur, ek MAC adresleri ise yedek olur.",
+      "bulkStalkerPlaceholder": "http://vod.url1.com/c/\n11:22:33:44:55:66\n22:33:44:55:66:77\n\nhttp://tv.url2.com:80/c/\n11:22:33:44:55:66",
+      "bulkStalkerDetected": "{{count}} portal algılandı:",
+      "bulkStalkerAddBtn": "{{count}} kaynak ekle",
+      "bulkStalkerNoEntries": "Henüz geçerli portal girişi algılanmadı. Her girişin bir URL ve en az bir MAC adresi içerdiğinden emin olun.",
+      "bulkStalkerBackupsCount": "+{{count}} yedek",
+      "bulkStalkerSuccess": "{{count}} Stalker portalı eklendi"
     },
     "scrobbling": {
       "title": "Trakt",
@@ -1637,7 +1646,23 @@
       "usernamePlaceholder": "Proxy kullanıcı adı",
       "passwordPlaceholder": "Proxy şifresi",
       "serverPlaceholder": "örn. 127.0.0.1:1080 veya socks5h://127.0.0.1:1080",
-      "notEnabled": "Proxy etkin değil veya proxy sunucu alanı boş"
+      "notEnabled": "Proxy etkin değil veya proxy sunucu alanı boş",
+      "savedProxies": "Kayıtlı Proxyler",
+      "savedProxiesHint": "Birden fazla Proxy sunucu yapılandırmasını tek tıkla kaydedin ve aralarında geçiş yapın.",
+      "selectProxy": "Kayıtlı bir Proxy seç...",
+      "customOrUnsaved": "Özel / Kaydedilmemiş",
+      "noSavedProxies": "Kayıtlı Proxy yok",
+      "saveAsNew": "Yeni olarak kaydet",
+      "updateProfile": "Profili güncelle",
+      "deleteProfile": "Sil",
+      "profileNamePrompt": "Bu Proxy yapılandırması için açıklayıcı bir ad girin:",
+      "profileNamePlaceholder": "örn. Ev SOCKS5 veya Hollanda VPN",
+      "newProfileModalTitle": "Proxy profilini kaydet",
+      "deleteProfileModalTitle": "Proxy profilini sil",
+      "deleteProfileConfirm": "\"{{name}}\" Proxy profilini silmek istediğinizden emin misiniz?",
+      "profileSaved": "Profil kaydedildi",
+      "profileUpdated": "Profil güncellendi",
+      "profileDeleted": "Profil silindi"
     },
     "optimization": {
       "title": "Donanım Hızlandırma",

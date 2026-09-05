@@ -7,12 +7,14 @@
   z-index: 5000;
 }
 
-.view-all-programs-modal {
+.view-all-programs-modal,
+.modal-container.view-all-programs-modal {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  width: min(760px, 94vw);
-  height: min(680px, 88vh);
+  width: min(920px, 94vw);
+  max-width: min(920px, 94vw) !important;
+  height: min(720px, 88vh);
 }
 
 .view-all-programs-modal .modal-header {
@@ -41,7 +43,12 @@
   gap: 6px;
   padding: 2px 18px 10px;
   overflow-x: auto;
-  scrollbar-width: thin;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.view-all-day-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .view-all-day-tab {
@@ -78,6 +85,56 @@
   flex-direction: column;
   gap: 6px;
   padding: 4px 18px 14px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--surface-hover, rgba(255, 255, 255, 0.15)) transparent;
+}
+
+.view-all-list:hover {
+  scrollbar-color: var(--scrollbar-hover-color, var(--accent-primary, rgba(0, 212, 255, 0.5))) transparent;
+}
+
+.view-all-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.view-all-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.view-all-list::-webkit-scrollbar-thumb {
+  background: var(--surface-hover, rgba(255, 255, 255, 0.15));
+  border-radius: 3px;
+  transition: background 0.15s ease;
+}
+
+.view-all-list:hover::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-hover-color, var(--accent-primary, rgba(0, 212, 255, 0.5)));
+}
+
+.view-all-list::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-hover-color, var(--accent-primary, rgba(0, 212, 255, 0.8)));
+}
+
+/* Ensure consistent look when data-custom-scrollbar="true" is present */
+html[data-custom-scrollbar="true"] .view-all-list::-webkit-scrollbar {
+  width: 6px !important;
+}
+
+html[data-custom-scrollbar="true"] .view-all-list::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+html[data-custom-scrollbar="true"] .view-all-list::-webkit-scrollbar-thumb {
+  background: var(--surface-hover, rgba(255, 255, 255, 0.15)) !important;
+  border-radius: 3px !important;
+}
+
+html[data-custom-scrollbar="true"] .view-all-list:hover::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-hover-color, var(--accent-primary, rgba(0, 212, 255, 0.5))) !important;
+}
+
+html[data-custom-scrollbar="true"] .view-all-list::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-hover-color, var(--accent-primary, rgba(0, 212, 255, 0.8))) !important;
 }
 
 .view-all-empty {

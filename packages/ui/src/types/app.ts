@@ -238,7 +238,17 @@ export interface AppSettings {
     useScrollwheelSeekInvert?: boolean;
     failoverGroupShowSource?: boolean;
     failoverAlwaysPlayPrimary?: boolean;
+    socks5ProxyProfiles?: SavedProxyProfile[];
+    socks5ProxyActiveProfileId?: string | null;
     [key: string]: any;
+}
+
+export interface SavedProxyProfile {
+    id: string;
+    name: string;
+    server: string;
+    username: string;
+    password?: string;
 }
 
 export interface MpvStatus {

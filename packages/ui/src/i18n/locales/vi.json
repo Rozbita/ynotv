@@ -2860,7 +2860,16 @@
       "usernamePlaceholder": "tên đăng nhập",
       "passwordPlaceholder": "mật khẩu",
       "uaPlaceholderEx": "VD: VLC/3.0.18 LibVLC/3.0.18",
-      "uaPlaceholderEg": "ví dụ: VLC/3.0.18 LibVLC/3.0.18"
+      "uaPlaceholderEg": "ví dụ: VLC/3.0.18 LibVLC/3.0.18",
+      "bulkAddStalker": "Thêm hàng loạt cổng",
+      "bulkStalkerTitle": "Thêm hàng loạt cổng Stalker",
+      "bulkStalkerDesc": "Dán nhiều URL cổng Stalker và địa chỉ MAC. Mỗi URL bắt đầu một nguồn mới. Địa chỉ MAC đầu tiên bên dưới mỗi URL trở thành MAC chính và các địa chỉ MAC bổ sung trở thành bản sao lưu.",
+      "bulkStalkerPlaceholder": "http://vod.url1.com/c/\n11:22:33:44:55:66\n22:33:44:55:66:77\n\nhttp://tv.url2.com:80/c/\n11:22:33:44:55:66",
+      "bulkStalkerDetected": "Đã phát hiện {{count}} cổng:",
+      "bulkStalkerAddBtn": "Thêm {{count}} nguồn",
+      "bulkStalkerNoEntries": "Chưa phát hiện mục cổng hợp lệ nào. Đảm bảo mỗi mục có một URL theo sau bởi ít nhất một địa chỉ MAC.",
+      "bulkStalkerBackupsCount": "+{{count}} bản sao lưu",
+      "bulkStalkerSuccess": "Đã thêm {{count}} cổng Stalker"
     },
     "scrobbling": {
       "title": "Trakt",
@@ -3218,7 +3227,23 @@
       "usernamePlaceholder": "Tên đăng nhập proxy",
       "passwordPlaceholder": "Mật khẩu proxy",
       "serverPlaceholder": "ví dụ: 127.0.0.1:1080 hoặc socks5h://127.0.0.1:1080",
-      "notEnabled": "Proxy chưa được bật hoặc trường máy chủ proxy trống"
+      "notEnabled": "Proxy chưa được bật hoặc trường máy chủ proxy trống",
+      "savedProxies": "Proxy đã lưu",
+      "savedProxiesHint": "Lưu và chuyển đổi giữa nhiều cấu hình máy chủ proxy chỉ bằng một cú nhấp chuột.",
+      "selectProxy": "Chọn proxy đã lưu...",
+      "customOrUnsaved": "Tùy chỉnh / Chưa lưu",
+      "noSavedProxies": "Không có proxy nào được lưu",
+      "saveAsNew": "Lưu dưới dạng mới",
+      "updateProfile": "Cập nhật hồ sơ",
+      "deleteProfile": "Xóa",
+      "profileNamePrompt": "Nhập tên mô tả cho cấu hình proxy này:",
+      "profileNamePlaceholder": "ví dụ: SOCKS5 tại nhà hoặc VPN Hà Lan",
+      "newProfileModalTitle": "Lưu hồ sơ proxy",
+      "deleteProfileModalTitle": "Xóa hồ sơ proxy",
+      "deleteProfileConfirm": "Bạn có chắc chắn muốn xóa hồ sơ proxy \"{{name}}\" không?",
+      "profileSaved": "Đã lưu hồ sơ",
+      "profileUpdated": "Đã cập nhật hồ sơ",
+      "profileDeleted": "Đã xóa hồ sơ"
     },
     "security": {
       "title": "Bảo Mật Mạng",

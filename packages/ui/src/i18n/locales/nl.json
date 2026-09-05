@@ -1279,7 +1279,16 @@
       "usernamePlaceholder": "gebruikersnaam",
       "passwordPlaceholder": "wachtwoord",
       "uaPlaceholderEx": "Bijv.: VLC/3.0.18 LibVLC/3.0.18",
-      "uaPlaceholderEg": "bijv. VLC/3.0.18 LibVLC/3.0.18"
+      "uaPlaceholderEg": "bijv. VLC/3.0.18 LibVLC/3.0.18",
+      "bulkAddStalker": "Portalen in bulk toevoegen",
+      "bulkStalkerTitle": "Stalker-portalen in bulk toevoegen",
+      "bulkStalkerDesc": "Plak meerdere Stalker-portaal-URL's en MAC-adressen. Elke URL start een nieuwe bron. Het eerste MAC-adres onder elke URL wordt de primaire MAC en extra MAC-adressen worden back-ups.",
+      "bulkStalkerPlaceholder": "http://vod.url1.com/c/\n11:22:33:44:55:66\n22:33:44:55:66:77\n\nhttp://tv.url2.com:80/c/\n11:22:33:44:55:66",
+      "bulkStalkerDetected": "{{count}} portal(en) gedetecteerd:",
+      "bulkStalkerAddBtn": "{{count}} bron(nen) toevoegen",
+      "bulkStalkerNoEntries": "Nog geen geldige portalvermeldingen gedetecteerd. Zorg ervoor dat elke vermelding een URL bevat, gevolgd door ten minste één MAC-adres.",
+      "bulkStalkerBackupsCount": "+{{count}} back-up(s)",
+      "bulkStalkerSuccess": "{{count}} Stalker-portal(s) toegevoegd"
     },
     "scrobbling": {
       "title": "Trakt",
@@ -1637,7 +1646,23 @@
       "usernamePlaceholder": "Proxygebruikersnaam",
       "passwordPlaceholder": "Proxywachtwoord",
       "serverPlaceholder": "bijv. 127.0.0.1:1080 of socks5h://127.0.0.1:1080",
-      "notEnabled": "Proxy is niet ingeschakeld of het proxyserverveld is leeg"
+      "notEnabled": "Proxy is niet ingeschakeld of het proxyserverveld is leeg",
+      "savedProxies": "Opgeslagen proxy's",
+      "savedProxiesHint": "Sla meerdere proxy-serverconfiguraties op en schakel er met één klik tussen.",
+      "selectProxy": "Selecteer een opgeslagen proxy...",
+      "customOrUnsaved": "Aangepast / Niet opgeslagen",
+      "noSavedProxies": "Geen opgeslagen proxy's",
+      "saveAsNew": "Opslaan als nieuw",
+      "updateProfile": "Profiel bijwerken",
+      "deleteProfile": "Verwijderen",
+      "profileNamePrompt": "Voer een beschrijvende naam in voor deze proxyconfiguratie:",
+      "profileNamePlaceholder": "bijv. Thuis-SOCKS5 of Nederland-VPN",
+      "newProfileModalTitle": "Proxyprofiel opslaan",
+      "deleteProfileModalTitle": "Proxyprofiel verwijderen",
+      "deleteProfileConfirm": "Weet u zeker dat u het proxyprofiel \"{{name}}\" wilt verwijderen?",
+      "profileSaved": "Profiel opgeslagen",
+      "profileUpdated": "Profiel bijgewerkt",
+      "profileDeleted": "Profiel verwijderd"
     },
     "optimization": {
       "title": "Hardwareversnelling",
