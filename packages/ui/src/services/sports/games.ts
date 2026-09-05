@@ -130,9 +130,11 @@ export async function getGameSummary(eventId: string, leagueId: string): Promise
       text: string;
       homeScore: number;
       awayScore: number;
-      scoringPlay: boolean;
-      type?: { text: string };
+      scoringPlay?: boolean;
+      type?: { id?: string; text?: string; type?: string };
       team?: { id: string };
+      scoringType?: { displayName?: string; abbreviation?: string };
+      scoreValue?: number;
     }>;
     keyEvents?: Array<{
       id: string;
@@ -238,21 +240,21 @@ function extractTeamStats(teamId: string, boxscore?: any): TeamStatistics[] {
   return stats;
 }
 
-function extractPlayerStats(teamId: string, boxscore?: any, rosters?: any): PlayerStatCategory[] {
-  // Try boxscore.players first (NFL/NBA/MLB/NHL)
-  const teamPlayers = boxscore?.players?.find((p: any) => p.team.id === teamId);
+export function extractPlayerStats(teamId: string, boxscore?: any, rosters?: any): PlayerStatCategory[] {
+  // Try boxscore.players first (NFL/NBA/MLB/NHL/AFL)
+  const teamPlayers = boxscore?.players?.find((p: any) => p.team?.id === teamId);
   if (teamPlayers?.statistics) {
     return teamPlayers.statistics.map((stat: any) => ({
-      name: stat.name,
-      text: stat.text,
-      labels: stat.labels,
+      name: stat.name || 'playerStats',
+      text: stat.text || 'Player Stats',
+      labels: stat.labels || [],
       descriptions: stat.descriptions,
-      athletes: stat.athletes.map((a: any) => ({
-        athleteId: a.athlete.id,
-        name: a.athlete.displayName,
-        headshot: a.athlete.headshot?.href,
-        jersey: a.athlete.jersey,
-        stats: a.stats,
+      athletes: (stat.athletes || []).map((a: any) => ({
+        athleteId: a.athlete?.id || '',
+        name: a.athlete?.displayName || a.athlete?.name || 'Unknown',
+        headshot: a.athlete?.headshot?.href,
+        jersey: a.athlete?.jersey,
+        stats: a.stats || [],
       })),
     }));
   }
@@ -391,7 +393,7 @@ function extractPlayerStats(teamId: string, boxscore?: any, rosters?: any): Play
   return [];
 }
 
-function extractScoringPlays(data: any, homeTeamId: string): ScoringPlay[] {
+export function extractScoringPlays(data: any, homeTeamId: string): ScoringPlay[] {
   const scoringPlays: ScoringPlay[] = [];
 
   const formatPeriod = (period: any): string => {
@@ -426,18 +428,26 @@ function extractScoringPlays(data: any, homeTeamId: string): ScoringPlay[] {
     return scoringPlays;
   }
 
-  // 2. Plays array (NBA, MLB, NHL, etc.)
+  // 2. Plays array (NBA, MLB, NHL, AFL, etc.)
   if (Array.isArray(data.plays) && data.plays.length > 0) {
     for (const p of data.plays) {
-      if (p.scoringPlay) {
+      const typeText = (p.type?.text || p.type?.type || '').toLowerCase();
+      const isKnownScoringType = ['goal', 'behind', 'rushed', 'try', 'conversion', 'penalty'].some(t => typeText.includes(t));
+      const isScoring = p.scoringPlay || (p.scoringPlay === undefined && (isKnownScoringType || (p.homeScore !== undefined && p.awayScore !== undefined && p.type?.text)));
+
+      if (isScoring) {
+        const isRushed = typeText === 'rushed' || p.text === 'Rushed';
+        const scoringType = p.scoringType?.displayName || (isRushed ? 'Behind' : p.type?.text) || (p.scoreValue ? `+${p.scoreValue} pts` : '');
+        const playText = isRushed ? 'Rushed Behind' : (p.text || '');
+
         scoringPlays.push({
           id: p.id || '',
           period: formatPeriod(p.period),
           clock: formatClock(p.clock),
-          text: p.text || '',
+          text: playText,
           homeScore: typeof p.homeScore === 'number' ? p.homeScore : parseInt(p.homeScore || '0', 10),
           awayScore: typeof p.awayScore === 'number' ? p.awayScore : parseInt(p.awayScore || '0', 10),
-          scoringType: p.scoringType?.displayName || p.type?.text || (p.scoreValue ? `+${p.scoreValue} pts` : ''),
+          scoringType,
           teamId: p.team?.id,
         });
       }

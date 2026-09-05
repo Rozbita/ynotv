@@ -10006,15 +10006,10 @@
 
 .sports-leagues-top-rail {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
-  overflow-x: auto;
-  padding: 6px 8px 12px 6px;
-  scrollbar-width: none;
-}
-
-.sports-leagues-top-rail::-webkit-scrollbar {
-  display: none;
+  gap: 10px 12px;
+  padding: 6px 4px 12px 4px;
 }
 
 .sports-sport-rail-btn {

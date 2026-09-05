@@ -105,5 +105,18 @@ describe('teamChannelMatcher search improvements', () => {
       const matches = queries.some((q) => matchesSearch(epgTitle, q));
       expect(matches).toBe(true);
     });
+
+    it('matches AFL team matchups and search queries', () => {
+      const gc = extractTeamSearchTerms('Gold Coast Suns');
+      expect(gc.city).toBe('Gold Coast');
+      expect(gc.nickname).toBe('Suns');
+
+      const wc = extractTeamSearchTerms('West Coast Eagles');
+      expect(wc.city).toBe('West Coast');
+      expect(wc.nickname).toBe('Eagles');
+
+      const queries = buildTeamSearchQueries('Collingwood', 'Western Bulldogs', 'afl');
+      expect(queries.some((q) => q.includes('Collingwood') && q.includes('Bulldogs'))).toBe(true);
+    });
   });
 });

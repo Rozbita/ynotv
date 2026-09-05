@@ -58,6 +58,7 @@ export const ALL_LEAGUES: LeagueConfig[] = [
   { id: 'rugby-270559', name: 'Top 14', sport: 'rugby', category: 'rugby' },
 
   { id: 'rugby-league-3', name: 'NRL', sport: 'rugby-league', category: 'rugby-league' },
+  { id: 'afl', name: 'AFL', sport: 'australian-football', category: 'australian-football' },
 ];
 
 export const DEFAULT_ENABLED_LEAGUES = [

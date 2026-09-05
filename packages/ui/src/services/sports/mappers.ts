@@ -52,10 +52,24 @@ function buildESPNLogoUrl(teamId: string, sportKey: string): string | undefined 
     'rugby-242041': 'rugby/teams',
     'rugby-270559': 'rugby/teams',
     'rugby-league-3': 'rugby/teams',
+    'afl': 'afl',
   };
 
   const sportPath = sportPathMap[sportKey];
   if (!sportPath) return undefined;
+
+  // AFL logos on the ESPN CDN are keyed by the team's abbreviation slug, not numeric id
+  // (https://a.espncdn.com/i/teamlogos/afl/500/coll.png), so the numeric-id template below
+  // would 404. Map the ESPN team id to the CDN slug for the 18 AFL clubs.
+  if (sportKey === 'afl') {
+    const AFL_LOGO_SLUGS: Record<string, string> = {
+      '1': 'fre', '2': 'melb', '3': 'wce', '4': 'syd', '5': 'nmfc', '6': 'wb',
+      '7': 'port', '8': 'gws', '9': 'carl', '10': 'suns', '11': 'bl', '12': 'rich',
+      '13': 'haw', '14': 'geel', '15': 'adel', '16': 'ess', '17': 'coll', '18': 'stk',
+    };
+    const slug = AFL_LOGO_SLUGS[teamId];
+    return slug ? `https://a.espncdn.com/i/teamlogos/afl/500/${slug}.png` : undefined;
+  }
 
   return `https://a.espncdn.com/i/teamlogos/${sportPath}/500/${teamId}.png`;
 }
@@ -530,6 +544,7 @@ export function getCategoryDisplayName(categoryId: string): string {
     racing: 'Racing',
     rugby: 'Rugby Union',
     'rugby-league': 'Rugby League',
+    'australian-football': 'Australian Football',
   };
   return categoryNames[categoryId] || categoryId;
 }

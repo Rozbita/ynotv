@@ -292,6 +292,7 @@ export function getAvailableCategories(): { id: string; name: string; leagues: s
     racing: 'Racing',
     rugby: 'Rugby Union',
     'rugby-league': 'Rugby League',
+    'australian-football': 'Australian Football',
   };
 
   return Object.entries(categories).map(([id, leagues]) => ({
@@ -341,6 +342,9 @@ export async function getLeaguesBySport(sport: string): Promise<SportsLeague[]> 
     'american football': ['nfl', 'college-football'],
     'rugby union': ['rugby-180659', 'rugby-164205', 'rugby-267979', 'rugby-242041', 'rugby-270559'],
     'rugby league': ['rugby-league-3'],
+    'australian football': ['afl'],
+    'aussie rules': ['afl'],
+    'afl': ['afl'],
   };
 
   const keys = mapping[sportLower] || [];

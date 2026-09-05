@@ -69,6 +69,9 @@ export const SPORT_CONFIG: Record<string, SportConfig> = {
 
   // Rugby League
   'rugby-league-3': { sport: 'rugby-league', league: '3', name: 'NRL', category: 'rugby-league' },
+
+  // Australian Football
+  'afl': { sport: 'australian-football', league: 'afl', name: 'AFL', category: 'australian-football' },
 };
 
 export const DEFAULT_LIVE_LEAGUES = [
@@ -87,6 +90,7 @@ export const DEFAULT_LIVE_LEAGUES = [
   'ufc',
   'rugby-180659',
   'rugby-league-3',
+  'afl',
 ];
 
 export const DEFAULT_UPCOMING_LEAGUES = [
@@ -113,6 +117,7 @@ export const DEFAULT_UPCOMING_LEAGUES = [
   'rugby-242041',
   'rugby-270559',
   'rugby-league-3',
+  'afl',
 ];
 
 export const CATEGORY_NAMES: Record<string, string> = {
@@ -127,6 +132,7 @@ export const CATEGORY_NAMES: Record<string, string> = {
   racing: 'Racing',
   rugby: 'Rugby Union',
   'rugby-league': 'Rugby League',
+  'australian-football': 'Australian Football',
 };
 
 export const LEADERS_LEAGUES = [

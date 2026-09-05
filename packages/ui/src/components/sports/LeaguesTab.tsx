@@ -48,6 +48,7 @@ const SPORT_DISPLAY_NAMES: Record<string, string> = {
   racing: 'Racing',
   rugby: 'Rugby Union',
   'rugby-league': 'Rugby League',
+  'australian-football': 'Australian Football',
 };
 
 const SPORT_GRADIENTS: Record<string, string> = {
@@ -62,6 +63,7 @@ const SPORT_GRADIENTS: Record<string, string> = {
   racing: 'linear-gradient(135deg, rgba(71, 85, 105, 0.95) 0%, rgba(30, 41, 59, 0.95) 100%)',
   rugby: 'linear-gradient(135deg, rgba(194, 65, 12, 0.95) 0%, rgba(124, 45, 18, 0.95) 100%)',
   'rugby-league': 'linear-gradient(135deg, rgba(234, 88, 12, 0.95) 0%, rgba(154, 52, 18, 0.95) 100%)',
+  'australian-football': 'linear-gradient(135deg, rgba(185, 28, 28, 0.95) 0%, rgba(30, 58, 138, 0.95) 100%)',
 };
 
 const LEAGUE_TEAM_ID_DIVISIONS: Record<string, Record<string, string>> = {
@@ -1457,7 +1459,7 @@ export function LeaguesTab({ onSearchChannels, onPlayChannel }: LeaguesTabProps)
                           <div className="sports-teams-stacked-list">
                             {divTeams.map((team) => {
                               const teamAny = team as any;
-                              const isFav = favorites.some((f) => f.id === team.id);
+                              const isFav = favorites.some((f) => f.id === team.id && (!f.leagueId || f.leagueId.toLowerCase() === selectedLeague.id.toLowerCase()));
                               const primaryColor = teamAny.color ? `#${teamAny.color.replace('#', '')}` : '#6366f1';
 
                               return (
@@ -1490,7 +1492,7 @@ export function LeaguesTab({ onSearchChannels, onPlayChannel }: LeaguesTabProps)
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         if (isFav) {
-                                          removeFavorite(team.id);
+                                          removeFavorite(team.id, selectedLeague.id);
                                         } else {
                                           addFavorite({
                                             id: team.id,
@@ -1531,7 +1533,7 @@ export function LeaguesTab({ onSearchChannels, onPlayChannel }: LeaguesTabProps)
                           <div className="league-division-column-teams">
                             {divTeams.map((team, idx) => {
                               const teamAny = team as any;
-                              const isFav = favorites.some((f) => f.id === team.id);
+                              const isFav = favorites.some((f) => f.id === team.id && (!f.leagueId || f.leagueId.toLowerCase() === selectedLeague.id.toLowerCase()));
                               const primaryColor = teamAny.color ? `#${teamAny.color.replace('#', '')}` : '#6366f1';
 
                               return (
@@ -1558,7 +1560,7 @@ export function LeaguesTab({ onSearchChannels, onPlayChannel }: LeaguesTabProps)
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       if (isFav) {
-                                        removeFavorite(team.id);
+                                        removeFavorite(team.id, selectedLeague.id);
                                       } else {
                                         addFavorite({
                                           id: team.id,
@@ -1595,7 +1597,7 @@ export function LeaguesTab({ onSearchChannels, onPlayChannel }: LeaguesTabProps)
                           <div className="sports-teams-grid-v2">
                             {divTeams.map((team) => {
                               const teamAny = team as any;
-                              const isFav = favorites.some((f) => f.id === team.id);
+                              const isFav = favorites.some((f) => f.id === team.id && (!f.leagueId || f.leagueId.toLowerCase() === selectedLeague.id.toLowerCase()));
                               const primaryColor = teamAny.color ? `#${teamAny.color.replace('#', '')}` : '#6366f1';
 
                               return (
@@ -1628,7 +1630,7 @@ export function LeaguesTab({ onSearchChannels, onPlayChannel }: LeaguesTabProps)
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       if (isFav) {
-                                        removeFavorite(team.id);
+                                        removeFavorite(team.id, selectedLeague.id);
                                       } else {
                                         addFavorite({
                                           id: team.id,

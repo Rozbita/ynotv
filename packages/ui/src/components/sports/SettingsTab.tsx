@@ -29,7 +29,7 @@ export function SettingsTab({}: SettingsTabProps) {
     }
   }, [loaded, loadSettings]);
 
-  const categoryOrder = ['football', 'basketball', 'baseball', 'hockey', 'soccer', 'mma', 'golf', 'tennis', 'racing', 'rugby', 'rugby-league'];
+  const categoryOrder = ['football', 'basketball', 'baseball', 'hockey', 'soccer', 'mma', 'golf', 'tennis', 'racing', 'rugby', 'rugby-league', 'australian-football'];
   const categoryLabels: Record<string, string> = {
     football: 'Football',
     basketball: 'Basketball',
@@ -42,6 +42,7 @@ export function SettingsTab({}: SettingsTabProps) {
     racing: 'Racing',
     rugby: 'Rugby Union',
     'rugby-league': 'Rugby League',
+    'australian-football': 'Australian Football',
   };
 
   const isAllInCategory = (category: string) => {

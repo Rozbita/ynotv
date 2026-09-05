@@ -210,21 +210,30 @@ export async function getTeamDetails(teamId: string, leagueId: string, includeRo
     record: parseTeamRecord(team.record),
     standingSummary: team.standingSummary,
     nextEvent: team.nextEvent?.[0] && new Date(team.nextEvent[0].date).getTime() > Date.now() && team.nextEvent[0].status?.type?.state === 'pre' ? mapESPNEvent(team.nextEvent[0], leagueId) : undefined,
-    athletes: (team.athletes || []).map(a => ({
-      id: a.id,
-      name: a.displayName,
-      firstName: a.firstName,
-      lastName: a.lastName,
-      jersey: a.jersey,
-      position: a.position?.displayName || '',
-      positionAbbrev: a.position?.abbreviation,
-      headshot: a.headshot?.href,
-      height: a.displayHeight,
-      weight: a.displayWeight,
-      age: a.age,
-      experience: a.experience?.displayValue,
-      college: a.college?.name,
-    })),
+    athletes: (() => {
+      const seenIds = new Set<string>();
+      const athletesList: TeamAthlete[] = [];
+      for (const a of team.athletes || []) {
+        if (!a.id || seenIds.has(a.id)) continue;
+        seenIds.add(a.id);
+        athletesList.push({
+          id: a.id,
+          name: a.displayName,
+          firstName: a.firstName,
+          lastName: a.lastName,
+          jersey: a.jersey,
+          position: a.position?.displayName || '',
+          positionAbbrev: a.position?.abbreviation,
+          headshot: a.headshot?.href,
+          height: a.displayHeight,
+          weight: a.displayWeight,
+          age: a.age,
+          experience: a.experience?.displayValue,
+          college: a.college?.name,
+        });
+      }
+      return athletesList;
+    })(),
   };
 }
 
@@ -266,6 +275,11 @@ function getCachedTeams(leagueId: string): SportsTeam[] | null {
         // Honour the 7-day TTL. Payloads written without a usable timestamp
         // (older versions) are treated as expired and re-fetched.
         const timestamp = typeof parsed.timestamp === 'number' ? parsed.timestamp : 0;
+        // Expire stale AFL cache if it contains ESPN ghost duplicate (id 19)
+        if (leagueId === 'afl' && (parsed.data.length > 18 || parsed.data.some((t: any) => t.id === '19'))) {
+          localStorage.removeItem(TEAMS_CACHE_KEY_PREFIX + leagueId);
+          return null;
+        }
         if (Date.now() - timestamp < TEAMS_CACHE_TTL_MS) {
           return parsed.data;
         }
@@ -317,6 +331,8 @@ export async function getLeagueTeams(leagueId: string): Promise<SportsTeam[]> {
         for (const teamWrapper of league.teams || []) {
           const team = teamWrapper.team;
           if (team) {
+            // ESPN AFL database includes an erroneous ghost duplicate (id 19) of Gold Coast FC mistakenly labeled Sydney Swans
+            if (leagueId === 'afl' && team.id === '19') continue;
             teams.push(mapESPNTeam(team, leagueId));
           }
         }
@@ -506,10 +522,11 @@ export async function getLeagueStandingsGrouped(leagueId: string): Promise<Stand
   if (!config) return [];
 
   const data = await fetchJson<{
+    name?: string;
     children?: Array<{
       name: string;
-      abbreviation: string;
-      isConference: boolean;
+      abbreviation?: string;
+      isConference?: boolean;
       standings?: {
         entries?: Array<{
           team: {
@@ -526,68 +543,90 @@ export async function getLeagueStandingsGrouped(leagueId: string): Promise<Stand
         }>;
       };
     }>;
+    standings?: {
+      entries?: Array<{
+        team: {
+          id: string;
+          displayName: string;
+          abbreviation: string;
+          logos?: Array<{ href: string }>;
+        };
+        stats?: Array<{
+          name: string;
+          value: number;
+          displayValue: string;
+        }>;
+      }>;
+    };
   }>(buildStandingsUrl(config.sport, config.league));
 
   const groups: StandingGroup[] = [];
   const divMap = DIVISION_MAP[leagueId];
 
-  if (data?.children) {
-    for (const conference of data.children) {
-      const entries = conference.standings?.entries || [];
-      const teams: StandingTeam[] = [];
+  const conferences = (data?.children && data.children.length > 0)
+    ? data.children
+    : (data?.standings?.entries ? [{ name: data.name || 'Ladder', isConference: false, standings: data.standings }] : []);
+
+  for (const conference of conferences) {
+    const entries = conference.standings?.entries || [];
+    const teams: StandingTeam[] = [];
+
+    for (const entry of entries) {
+      const team = entry.team;
+      const stats = entry.stats || [];
       
-      for (const entry of entries) {
-        const team = entry.team;
-        const stats = entry.stats || [];
-        
-        const getStat = (name: string) => stats.find(s => s.name === name)?.value ?? 0;
-        
-        const wins = getStat('wins');
-        const losses = getStat('losses');
-        const ties = getStat('ties');
-        const winPercent = getStat('winPercent');
-        const gamesBehind = getStat('gamesBehind');
-        const streak = getStat('streak');
-        
-        const total = wins + losses + ties;
-        const winPercentDisplay = winPercent > 0 
-          ? (winPercent * 100).toFixed(1) 
-          : total > 0 
-            ? ((wins / total) * 100).toFixed(1) 
-            : '0.0';
+      const getStat = (name: string) => stats.find(s => s.name === name)?.value ?? 0;
 
-        const mappedDivision = divMap 
-          ? (divMap[team.id] || (team.abbreviation ? divMap[team.abbreviation] : undefined))
-          : undefined;
+      const wins = getStat('wins');
+      const losses = getStat('losses');
+      const ties = getStat('ties');
+      const winPercent = getStat('winPercent');
+      const gamesBehind = getStat('gamesBehind');
+      const streak = getStat('streak');
+      const rank = getStat('rank');
 
-        teams.push({
-          id: team.id,
-          name: team.displayName,
-          shortName: team.abbreviation,
-          logo: team.logos?.[0]?.href,
-          wins,
-          losses,
-          ties,
-          winPercent: winPercentDisplay,
-          winPercentValue: winPercent || (total > 0 ? wins / total : 0),
-          gamesBehind: gamesBehind ? String(gamesBehind) : undefined,
-          streak: streak ? (streak > 0 ? `W${streak}` : `L${Math.abs(streak)}`) : undefined,
-          division: mappedDivision || (conference.isConference ? conference.name : undefined),
-          rank: 0,
-        });
-      }
+      const total = wins + losses + ties;
+      const winPercentDisplay = winPercent > 0
+        ? (winPercent * 100).toFixed(1)
+        : total > 0
+          ? ((wins / total) * 100).toFixed(1)
+          : '0.0';
 
-      // Sort by win percentage within each group
+      const mappedDivision = divMap
+        ? (divMap[team.id] || (team.abbreviation ? divMap[team.abbreviation] : undefined))
+        : undefined;
+
+      teams.push({
+        id: team.id,
+        name: team.displayName,
+        shortName: team.abbreviation,
+        logo: team.logos?.[0]?.href,
+        wins,
+        losses,
+        ties,
+        winPercent: winPercentDisplay,
+        winPercentValue: winPercent || (total > 0 ? wins / total : 0),
+        gamesBehind: gamesBehind ? String(gamesBehind) : undefined,
+        streak: streak ? (streak > 0 ? `W${streak}` : `L${Math.abs(streak)}`) : undefined,
+        division: mappedDivision || (conference.isConference ? conference.name : undefined),
+        rank: rank || 0,
+      });
+    }
+
+    // Sort by rank if available, otherwise by win percentage within each group
+    if (teams.some(t => t.rank > 0)) {
+      teams.sort((a, b) => (a.rank || 999) - (b.rank || 999));
+    } else {
       teams.sort((a, b) => b.winPercentValue - a.winPercentValue);
       teams.forEach((team, idx) => { team.rank = idx + 1; });
+    }
 
-      if (teams.length > 0) {
-        groups.push({
-          name: conference.name,
-          isConference: conference.isConference,
-          teams,
-        });
-      }
+    if (teams.length > 0) {
+      groups.push({
+        name: conference.name,
+        isConference: !!conference.isConference,
+        teams,
+      });
     }
   }
 
@@ -757,10 +796,15 @@ export async function getTeamInjuries(teamId: string, leagueId: string): Promise
     }>(`${buildTeamUrl(config.sport, config.league, teamId)}?enable=roster`);
 
     const injuries: TeamInjury[] = [];
+    const seenInjuryKeys = new Set<string>();
 
     for (const a of data?.team?.athletes || []) {
       if (a.injuries && a.injuries.length > 0) {
         for (const inj of a.injuries) {
+          const injuryKey = `${a.id}-${inj.id || inj.status || inj.date || 'inj'}`;
+          if (seenInjuryKeys.has(injuryKey)) continue;
+          seenInjuryKeys.add(injuryKey);
+
           injuries.push({
             id: inj.id || `${a.id}-inj`,
             athleteId: a.id,

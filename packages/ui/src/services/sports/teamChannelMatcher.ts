@@ -59,6 +59,8 @@ export const TEAM_CITY_PREFIXES: string[] = [
   'Barcelona', 'Sevilla', 'Valencia', 'Villarreal', 'Betis', 'Sociedad', 'Bilbao',
   'Monaco', 'Lyon', 'Marseille', 'Lille', 'Nice', 'Rennes', 'Lens',
   'Leipzig', 'Leverkusen', 'Frankfurt', 'Stuttgart', 'Wolfsburg', 'Freiburg', 'Hoffenheim',
+  'Gold Coast', 'Port Adelaide', 'West Coast', 'North Melbourne', 'Greater Western Sydney', 'St Kilda',
+  'Adelaide', 'Brisbane', 'Fremantle', 'Geelong', 'Hawthorn', 'Collingwood', 'Essendon', 'Richmond', 'Sydney', 'Carlton',
 ];
 
 TEAM_CITY_PREFIXES.sort((a, b) => b.length - a.length);

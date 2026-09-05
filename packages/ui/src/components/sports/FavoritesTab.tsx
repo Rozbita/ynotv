@@ -189,13 +189,16 @@ interface SortableFavoriteCardProps {
   streamsList: StoredChannel[] | null | undefined;
   epgClockFormat: string;
   onSelectTeam: (team: SportsTeam) => void;
-  onTogglePin: (teamId: string) => void;
-  onRemove: (teamId: string) => void;
+  onTogglePin: (teamId: string, leagueId?: string) => void;
+  onRemove: (teamId: string, leagueId?: string) => void;
   onSearchClick: (query: string) => void;
   onToggleInlineStreams: (cardKey: string, query: string | string[], leagueId?: string) => void;
   onStreamClick: (channel: StoredChannel) => void;
   dropIndicator?: 'above' | 'below' | null;
 }
+
+const getFavKey = (team: Pick<SportsTeam, 'id' | 'leagueId'>) =>
+  team.leagueId ? `${team.leagueId}-${team.id}` : team.id;
 
 const SortableFavoriteCard = memo(
   function SortableFavoriteCard(props: SortableFavoriteCardProps) {
@@ -219,6 +222,7 @@ const SortableFavoriteCard = memo(
     dropIndicator = null,
   } = props;
 
+  const sortableId = getFavKey(team);
   const {
     attributes,
     listeners,
@@ -226,7 +230,7 @@ const SortableFavoriteCard = memo(
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: team.id });
+  } = useSortable({ id: sortableId });
 
   useTranslation();
 
@@ -242,7 +246,7 @@ const SortableFavoriteCard = memo(
     '--team-alt-color': altColor,
   } as React.CSSProperties;
 
-  const cardKey = `fav-${team.id}`;
+  const cardKey = `fav-${sortableId}`;
 
   return (
     <div
@@ -261,7 +265,7 @@ const SortableFavoriteCard = memo(
           className={`favorite-card-pin-btn ${team.isPinned ? 'active' : ''}`}
           onClick={(e) => {
             e.stopPropagation();
-            onTogglePin(team.id);
+            onTogglePin(team.id, team.leagueId);
           }}            title={team.isPinned ? i18n.t('sports:unpinTeam') : i18n.t('sports:pinTeamToTop')}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill={team.isPinned ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
@@ -273,7 +277,7 @@ const SortableFavoriteCard = memo(
           className="favorite-card-remove-btn"
           onClick={(e) => {
             e.stopPropagation();
-            onRemove(team.id);
+            onRemove(team.id, team.leagueId);
           }}            title={i18n.t('sports:removeFromFavorites')}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -684,6 +688,7 @@ export function FavoritesTab({ onSearchChannels, onPlayChannel, onSetTab }: Favo
     const now = new Date();
 
     favorites.forEach((team) => {
+      const favKey = getFavKey(team);
       const liveEv = liveEvents.find(
         (e) => eventInvolvesTeam(e, team) && isEventLiveOrPastStart(e)
       );
@@ -695,7 +700,7 @@ export function FavoritesTab({ onSearchChannels, onPlayChannel, onSetTab }: Favo
           new Date(e.startTime).getTime() > now.getTime()
       );
 
-      const cachedDetails = teamCache[team.id];
+      const cachedDetails = teamCache[favKey] || teamCache[team.id];
       const fallbackNext =
         cachedDetails?.nextEvent &&
         cachedDetails.nextEvent.status === 'scheduled' &&
@@ -703,10 +708,11 @@ export function FavoritesTab({ onSearchChannels, onPlayChannel, onSetTab }: Favo
           ? cachedDetails.nextEvent
           : undefined;
 
-      map[team.id] = {
+      const info = {
         liveEvent: liveEv,
         nextEvent: upcomingEv || fallbackNext,
       };
+      map[favKey] = info;
     });
 
     return map;
@@ -720,10 +726,11 @@ export function FavoritesTab({ onSearchChannels, onPlayChannel, onSetTab }: Favo
 
     // Identify which teams actually require network fetching based on per-team cooldown
     const teamsToFetch = favorites.filter((fav) => {
-      const entry = winCache.get(fav.id);
+      const favKey = getFavKey(fav);
+      const entry = winCache.get(favKey) || winCache.get(fav.id);
       if (!entry) return true; // Never fetched
 
-      const isLive = Boolean(teamGameMap[fav.id]?.liveEvent);
+      const isLive = Boolean(teamGameMap[favKey]?.liveEvent || teamGameMap[fav.id]?.liveEvent);
       const cooldown = isLive ? COOLDOWN_LIVE_MS : COOLDOWN_IDLE_MS;
       const isExpired = now - entry.fetchedAt > cooldown;
       return isExpired;
@@ -747,23 +754,27 @@ export function FavoritesTab({ onSearchChannels, onPlayChannel, onSetTab }: Favo
           batch.map(async (fav) => {
             const leagueId = fav.leagueId || 'nfl';
             const details = await fetchSingleTeamData(fav.id, leagueId);
-            const isLive = Boolean(teamGameMap[fav.id]?.liveEvent);
-            return { id: fav.id, details, isLive };
+            const favKey = getFavKey(fav);
+            const isLive = Boolean(teamGameMap[favKey]?.liveEvent || teamGameMap[fav.id]?.liveEvent);
+            return { id: fav.id, favKey, details, isLive };
           })
         );
 
         if (isCancelled) break;
 
         // Update window cache & component state progressively after each batch
-        results.forEach(({ id, details, isLive }) => {
-          winCache.set(id, {
+        results.forEach(({ id, favKey, details, isLive }) => {
+          const entry = {
             details,
             fetchedAt: Date.now(),
             hasLive: isLive,
-          });
+          };
+          winCache.set(favKey, entry);
+          winCache.set(id, entry);
 
           setTeamCache((prev) => ({
             ...prev,
+            [favKey]: details,
             [id]: details,
           }));
         });
@@ -821,7 +832,7 @@ export function FavoritesTab({ onSearchChannels, onPlayChannel, onSetTab }: Favo
     const seenEventIds = new Set<string>();
 
     favorites.forEach((team) => {
-      const { liveEvent, nextEvent } = teamGameMap[team.id] || {};
+      const { liveEvent, nextEvent } = teamGameMap[getFavKey(team)] || {};
 
       if (liveEvent && !seenEventIds.has(liveEvent.id)) {
         seenEventIds.add(liveEvent.id);
@@ -848,8 +859,8 @@ export function FavoritesTab({ onSearchChannels, onPlayChannel, onSetTab }: Favo
       const bPinned = b.isPinned ? 1 : 0;
       if (aPinned !== bPinned) return bPinned - aPinned;
 
-      const aLive = teamGameMap[a.id]?.liveEvent ? 1 : 0;
-      const bLive = teamGameMap[b.id]?.liveEvent ? 1 : 0;
+      const aLive = teamGameMap[getFavKey(a)]?.liveEvent ? 1 : 0;
+      const bLive = teamGameMap[getFavKey(b)]?.liveEvent ? 1 : 0;
       if (aLive !== bLive) return bLive - aLive;
 
       return 0;
@@ -883,8 +894,8 @@ export function FavoritesTab({ onSearchChannels, onPlayChannel, onSetTab }: Favo
     setOverDragId(null);
 
     if (over && active.id !== over.id) {
-      const oldIndex = sortedFavorites.findIndex((t) => t.id === active.id);
-      const newIndex = sortedFavorites.findIndex((t) => t.id === over.id);
+      const oldIndex = sortedFavorites.findIndex((t) => getFavKey(t) === active.id || t.id === active.id);
+      const newIndex = sortedFavorites.findIndex((t) => getFavKey(t) === over.id || t.id === over.id);
 
       if (oldIndex !== -1 && newIndex !== -1) {
         const newOrder = arrayMove(sortedFavorites, oldIndex, newIndex);
@@ -1002,18 +1013,20 @@ export function FavoritesTab({ onSearchChannels, onPlayChannel, onSetTab }: Favo
           onDragEnd={handleDragEnd}
         >
           <SortableContext
-            items={sortedFavorites.map((t) => t.id)}
+            items={sortedFavorites.map((t) => getFavKey(t))}
             strategy={rectSortingStrategy}
           >
             <div className="favorites-scoreboards-grid">
               {sortedFavorites.map((team) => {
-                const details = teamCache[team.id];
-                const { liveEvent, nextEvent } = teamGameMap[team.id] || {};
+                const favKey = getFavKey(team);
+                const details = teamCache[favKey] || teamCache[team.id];
+                const { liveEvent, nextEvent } = teamGameMap[favKey] || teamGameMap[team.id] || {};
                 const isLive = Boolean(liveEvent);
-                const cardKey = `fav-${team.id}`;
-                const activeIndex = activeDragId ? sortedFavorites.findIndex((t) => t.id === activeDragId) : -1;
-                const overIndex = overDragId ? sortedFavorites.findIndex((t) => t.id === overDragId) : -1;
-                const dropIndicator = overDragId === team.id && activeDragId !== overDragId
+                const cardKey = `fav-${favKey}`;
+                const activeIndex = activeDragId ? sortedFavorites.findIndex((t) => getFavKey(t) === activeDragId || t.id === activeDragId) : -1;
+                const overIndex = overDragId ? sortedFavorites.findIndex((t) => getFavKey(t) === overDragId || t.id === overDragId) : -1;
+                const isCurrent = overDragId === favKey || overDragId === team.id;
+                const dropIndicator = isCurrent && activeDragId !== overDragId
                   ? (activeIndex < overIndex ? 'below' : 'above')
                   : null;
 
@@ -1031,7 +1044,7 @@ export function FavoritesTab({ onSearchChannels, onPlayChannel, onSetTab }: Favo
 
                 return (
                   <SortableFavoriteCard
-                    key={team.id}
+                    key={favKey}
                     team={team}
                     details={details}
                     liveEvent={liveEvent}

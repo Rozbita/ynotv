@@ -14,15 +14,22 @@ export interface FavoriteTeam extends SportsTeam {
   isPinned?: boolean;
 }
 
+export function matchesFavorite(f: FavoriteTeam, teamId: string, leagueId?: string): boolean {
+  if (f.id !== teamId) return false;
+  // If either has no leagueId (legacy favorite), fall back to matching by team id
+  if (!leagueId || !f.leagueId) return true;
+  return f.leagueId.toLowerCase() === leagueId.toLowerCase();
+}
+
 interface SportsFavoritesState {
   favorites: FavoriteTeam[];
   addFavorite: (team: SportsTeam) => void;
-  removeFavorite: (teamId: string) => void;
-  isFavorite: (teamId: string) => boolean;
+  removeFavorite: (teamId: string, leagueId?: string) => void;
+  isFavorite: (teamId: string, leagueId?: string) => boolean;
   clearFavorites: () => void;
   reorderFavorites: (newFavorites: FavoriteTeam[]) => void;
-  moveFavorite: (teamId: string, direction: 'up' | 'down') => void;
-  togglePinFavorite: (teamId: string) => void;
+  moveFavorite: (teamId: string, direction: 'up' | 'down', leagueId?: string) => void;
+  togglePinFavorite: (teamId: string, leagueId?: string) => void;
 }
 
 export const useSportsFavoritesStore = create<SportsFavoritesState>()(
@@ -31,7 +38,7 @@ export const useSportsFavoritesStore = create<SportsFavoritesState>()(
       favorites: [],
       
       addFavorite: (team) => set((state) => {
-        if (state.favorites.some(f => f.id === team.id)) {
+        if (state.favorites.some(f => matchesFavorite(f, team.id, team.leagueId))) {
           return state;
         }
         return {
@@ -39,18 +46,18 @@ export const useSportsFavoritesStore = create<SportsFavoritesState>()(
         };
       }),
       
-      removeFavorite: (teamId) => set((state) => ({
-        favorites: state.favorites.filter(f => f.id !== teamId)
+      removeFavorite: (teamId, leagueId) => set((state) => ({
+        favorites: state.favorites.filter(f => !matchesFavorite(f, teamId, leagueId))
       })),
       
-      isFavorite: (teamId) => get().favorites.some(f => f.id === teamId),
+      isFavorite: (teamId, leagueId) => get().favorites.some(f => matchesFavorite(f, teamId, leagueId)),
       
       clearFavorites: () => set({ favorites: [] }),
 
       reorderFavorites: (newFavorites) => set({ favorites: newFavorites }),
 
-      moveFavorite: (teamId, direction) => set((state) => {
-        const index = state.favorites.findIndex(f => f.id === teamId);
+      moveFavorite: (teamId, direction, leagueId) => set((state) => {
+        const index = state.favorites.findIndex(f => matchesFavorite(f, teamId, leagueId));
         if (index === -1) return state;
         const targetIndex = direction === 'up' ? index - 1 : index + 1;
         if (targetIndex < 0 || targetIndex >= state.favorites.length) return state;
@@ -61,9 +68,9 @@ export const useSportsFavoritesStore = create<SportsFavoritesState>()(
         return { favorites: updated };
       }),
 
-      togglePinFavorite: (teamId) => set((state) => ({
+      togglePinFavorite: (teamId, leagueId) => set((state) => ({
         favorites: state.favorites.map(f =>
-          f.id === teamId ? { ...f, isPinned: !f.isPinned } : f
+          matchesFavorite(f, teamId, leagueId) ? { ...f, isPinned: !f.isPinned } : f
         )
       })),
     }),
@@ -76,7 +83,7 @@ export const useSportsFavoritesStore = create<SportsFavoritesState>()(
 export const useFavoriteTeams = () => useSportsFavoritesStore((s) => s.favorites);
 export const useAddFavorite = () => useSportsFavoritesStore((s) => s.addFavorite);
 export const useRemoveFavorite = () => useSportsFavoritesStore((s) => s.removeFavorite);
-export const useIsFavorite = (teamId: string) => useSportsFavoritesStore((s) => s.isFavorite(teamId));
+export const useIsFavorite = (teamId: string, leagueId?: string) => useSportsFavoritesStore((s) => s.isFavorite(teamId, leagueId));
 export const useMoveFavorite = () => useSportsFavoritesStore((s) => s.moveFavorite);
 export const useTogglePinFavorite = () => useSportsFavoritesStore((s) => s.togglePinFavorite);
 export const useReorderFavorites = () => useSportsFavoritesStore((s) => s.reorderFavorites);

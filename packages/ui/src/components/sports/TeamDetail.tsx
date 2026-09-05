@@ -65,7 +65,11 @@ const LEAGUE_INFO_MAP: Record<string, { sportName: string; leagueName: string }>
   'uefa.europa.conf': { sportName: 'Soccer', leagueName: 'UEFA Conference League' },
   mls: { sportName: 'Soccer', leagueName: 'MLS' },
   'world-cup': { sportName: 'Soccer', leagueName: 'FIFA World Cup' },
+  afl: { sportName: 'Australian Football', leagueName: 'AFL' },
+  nrl: { sportName: 'Rugby League', leagueName: 'NRL' },
 };
+
+const LEAGUES_WITH_DEPTH_CHART = new Set(['nfl', 'nba', 'mlb']);
 
 type TabId = 'schedule' | 'roster' | 'depth' | 'injuries' | 'leaders' | 'news';
 
@@ -186,16 +190,24 @@ export function TeamDetail({ team, onClose, onChannelClick, onPlayChannel, bread
   const [showFullSchedule, setShowFullSchedule] = useState(false);
   const [chunkBySeries, setChunkBySeries] = useState(true);
 
-  const isFavorite = useIsFavorite(team.id);
+  const isFavorite = useIsFavorite(team.id, team.leagueId);
   const addFavorite = useAddFavorite();
   const removeFavorite = useRemoveFavorite();
 
   const [loadingTab, setLoadingTab] = useState(false);
 
+  const leagueId = (team.leagueId || 'nfl').toLowerCase();
+  const hasDepthChart = LEAGUES_WITH_DEPTH_CHART.has(leagueId);
+
+  useEffect(() => {
+    if (!hasDepthChart && activeTab === 'depth') {
+      setActiveTab('schedule');
+    }
+  }, [hasDepthChart, activeTab]);
+
   const activeBreadcrumbs = useMemo<BreadcrumbItem[]>(() => {
     if (breadcrumbs && breadcrumbs.length > 0) return breadcrumbs;
 
-    const leagueId = (team.leagueId || 'nfl').toLowerCase();
     const info = LEAGUE_INFO_MAP[leagueId] || { sportName: 'Sports', leagueName: leagueId.toUpperCase() };
     const rootLabel = fromTab || i18n.t('sports:tabs.leagues');
 
@@ -204,15 +216,15 @@ export function TeamDetail({ team, onClose, onChannelClick, onPlayChannel, bread
       { label: info.leagueName, onClick: onClose },
       { label: details?.name || team.name },
     ];
-  }, [breadcrumbs, team.leagueId, team.name, fromTab, details?.name, onClose, onRootClick]);
+  }, [breadcrumbs, leagueId, team.name, fromTab, details?.name, onClose, onRootClick]);
 
   useEffect(() => {
     setLoading(true);
-    const leagueId = team.leagueId || 'nfl';
+    const currentLeagueId = team.leagueId || 'nfl';
     
     Promise.all([
-      getTeamDetails(team.id, leagueId),
-      getTeamSchedule(team.id, leagueId),
+      getTeamDetails(team.id, currentLeagueId),
+      getTeamSchedule(team.id, currentLeagueId),
     ])
       .then(([detailsResult, scheduleResult]) => {
         setDetails(detailsResult);
@@ -223,33 +235,33 @@ export function TeamDetail({ team, onClose, onChannelClick, onPlayChannel, bread
   }, [team.id, team.leagueId]);
 
   useEffect(() => {
-    const leagueId = team.leagueId || 'nfl';
-    if (activeTab === 'depth' && depthChart.length === 0) {
+    const currentLeagueId = team.leagueId || 'nfl';
+    if (hasDepthChart && activeTab === 'depth' && depthChart.length === 0) {
       setLoadingTab(true);
-      getTeamDepthChart(team.id, leagueId)
+      getTeamDepthChart(team.id, currentLeagueId)
         .then(res => setDepthChart(res))
         .finally(() => setLoadingTab(false));
     } else if (activeTab === 'injuries' && injuries.length === 0) {
       setLoadingTab(true);
-      getTeamInjuries(team.id, leagueId)
+      getTeamInjuries(team.id, currentLeagueId)
         .then(res => setInjuries(res))
         .finally(() => setLoadingTab(false));
     } else if (activeTab === 'leaders' && leaders.length === 0) {
       setLoadingTab(true);
-      getTeamLeaders(team.id, leagueId)
+      getTeamLeaders(team.id, currentLeagueId)
         .then(res => setLeaders(res))
         .finally(() => setLoadingTab(false));
     } else if (activeTab === 'news' && news.length === 0) {
       setLoadingTab(true);
-      getTeamNews(team.id, leagueId)
+      getTeamNews(team.id, currentLeagueId)
         .then(res => setNews(res))
         .finally(() => setLoadingTab(false));
     }
-  }, [activeTab, team.id, team.leagueId, depthChart.length, injuries.length, leaders.length, news.length]);
+  }, [hasDepthChart, activeTab, team.id, team.leagueId, depthChart.length, injuries.length, leaders.length, news.length]);
 
   const handleToggleFavorite = useCallback(() => {
     if (isFavorite) {
-      removeFavorite(team.id);
+      removeFavorite(team.id, team.leagueId);
     } else {
       addFavorite(team);
     }
@@ -406,12 +418,14 @@ export function TeamDetail({ team, onClose, onChannelClick, onPlayChannel, bread
             >
               Roster ({details?.athletes.length || 0})
             </button>
-            <button 
-              className={`team-tab ${activeTab === 'depth' ? 'active' : ''}`}
-              onClick={() => setActiveTab('depth')}
-            >
-              Depth Chart
-            </button>
+            {hasDepthChart && (
+              <button
+                className={`team-tab ${activeTab === 'depth' ? 'active' : ''}`}
+                onClick={() => setActiveTab('depth')}
+              >
+                Depth Chart
+              </button>
+            )}
             <button 
               className={`team-tab ${activeTab === 'injuries' ? 'active' : ''}`}
               onClick={() => setActiveTab('injuries')}
@@ -575,7 +589,7 @@ export function TeamDetail({ team, onClose, onChannelClick, onPlayChannel, bread
               />
             )}
 
-            {activeTab === 'depth' && (
+            {hasDepthChart && activeTab === 'depth' && (
               <TeamDepthChart
                 depthChart={depthChart}
                 roster={details?.athletes}
@@ -875,17 +889,33 @@ interface TeamRosterProps {
 function TeamRoster({ athletes, onAthleteClick }: TeamRosterProps) {
   const [selectedPosition, setSelectedPosition] = useState<string>('all');
 
-  const positions = [...new Set(athletes.map(a => a.position))].sort();
-  
-  const filteredAthletes = selectedPosition === 'all' 
-    ? athletes 
-    : athletes.filter(a => a.position === selectedPosition);
+  const uniqueAthletes = useMemo(() => {
+    const seen = new Set<string>();
+    const result: TeamAthlete[] = [];
+    for (const a of athletes) {
+      if (!a.id || seen.has(a.id)) continue;
+      seen.add(a.id);
+      result.push(a);
+    }
+    return result;
+  }, [athletes]);
 
-  const groupedByPosition = filteredAthletes.reduce((acc, athlete) => {
-    if (!acc[athlete.position]) acc[athlete.position] = [];
-    acc[athlete.position].push(athlete);
-    return acc;
-  }, {} as Record<string, TeamAthlete[]>);
+  const positions = useMemo(() => [...new Set(uniqueAthletes.map(a => a.position))].filter(Boolean).sort(), [uniqueAthletes]);
+
+  const filteredAthletes = useMemo(() => {
+    return selectedPosition === 'all'
+      ? uniqueAthletes
+      : uniqueAthletes.filter(a => a.position === selectedPosition);
+  }, [uniqueAthletes, selectedPosition]);
+
+  const groupedByPosition = useMemo(() => {
+    return filteredAthletes.reduce((acc, athlete) => {
+      const pos = athlete.position || 'Other';
+      if (!acc[pos]) acc[pos] = [];
+      acc[pos].push(athlete);
+      return acc;
+    }, {} as Record<string, TeamAthlete[]>);
+  }, [filteredAthletes]);
 
   return (
     <div className="team-roster">
@@ -894,7 +924,7 @@ function TeamRoster({ athletes, onAthleteClick }: TeamRosterProps) {
           className={`team-roster-filter-btn ${selectedPosition === 'all' ? 'active' : ''}`}
           onClick={() => setSelectedPosition('all')}
         >
-          All ({athletes.length})
+          All ({uniqueAthletes.length})
         </button>
         {positions.map(pos => (
           <button 
@@ -957,6 +987,14 @@ function TeamDepthChart({ depthChart, roster, onAthleteClick }: TeamDepthChartPr
   const visibleGroups = selectedGroup === 'all'
     ? depthChart
     : depthChart.filter(g => g.name === selectedGroup);
+
+  if (depthChart.length === 0) {
+    return (
+      <div className="sports-no-data" style={{ padding: '32px 16px', textAlign: 'center' }}>
+        <span>{i18n.t('sports:noDepthChart', 'No depth chart available for this team.')}</span>
+      </div>
+    );
+  }
 
   return (
     <div className="team-depth-chart">
