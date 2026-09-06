@@ -211,6 +211,9 @@ fn start_status_monitor<R: Runtime>(app: AppHandle<R>) {
             duration: 0.0,
             paused_for_cache: false,
             core_idle: true,
+            eof_reached: false,
+            video_format: None,
+            video_track_id: None,
         };
 
         // Track the previous eof-reached value so we emit mpv-end-file exactly
@@ -234,6 +237,7 @@ fn start_status_monitor<R: Runtime>(app: AppHandle<R>) {
                     ("paused-for-cache", Ok(Value::Bool(p))) => last_status.paused_for_cache = p,
                     ("core-idle", Ok(Value::Bool(i))) => last_status.core_idle = i,
                     ("eof-reached", Ok(Value::Bool(e))) => {
+                        last_status.eof_reached = e;
                         if e && !last_eof_reached {
                             // Natural end of file — surface to the frontend so
                             // series auto-play can advance without relying on
@@ -275,6 +279,8 @@ struct MpvStatus {
     paused_for_cache: bool,
     #[serde(rename = "coreIdle")]
     core_idle: bool,
+    #[serde(rename = "eofReached")]
+    eof_reached: bool,
     #[serde(rename = "videoFormat")]
     video_format: Option<String>,
     #[serde(rename = "videoTrackId")]

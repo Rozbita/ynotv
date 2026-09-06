@@ -261,6 +261,7 @@ export interface MpvStatus {
     Idle?: boolean;
     pausedForCache?: boolean;
     coreIdle?: boolean;
+    eofReached?: boolean;
     videoFormat?: string | null;
     videoTrackId?: any;
 }

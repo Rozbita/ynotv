@@ -107,6 +107,8 @@ pub struct MpvStatus {
     pub paused_for_cache: bool,
     #[serde(rename = "coreIdle")]
     pub core_idle: bool,
+    #[serde(rename = "eofReached")]
+    pub eof_reached: bool,
     #[serde(rename = "videoFormat")]
     pub video_format: Option<String>,
     #[serde(rename = "videoTrackId")]
@@ -421,6 +423,7 @@ fn spawn_status_monitor<R: Runtime>(
                 duration,
                 paused_for_cache,
                 core_idle,
+                eof_reached,
                 video_format,
                 video_track_id: vid.map(Value::from),
             };

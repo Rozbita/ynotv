@@ -117,6 +117,8 @@ pub struct MpvStatus {
     pub paused_for_cache: bool,
     #[serde(rename = "coreIdle")]
     pub core_idle: bool,
+    #[serde(rename = "eofReached")]
+    pub eof_reached: bool,
     #[serde(rename = "videoFormat")]
     pub video_format: Option<String>,
     #[serde(rename = "videoTrackId")]
@@ -608,6 +610,7 @@ async fn connect_ipc<R: Runtime>(
             duration: 0.0,
             paused_for_cache: false,
             core_idle: true,
+            eof_reached: false,
             video_format: None,
             video_track_id: None,
         };
@@ -660,6 +663,7 @@ async fn connect_ipc<R: Runtime>(
                                             "core-idle" => status.core_idle = data.as_bool().unwrap_or(false),
                                             "eof-reached" => {
                                                 let eof = data.as_bool().unwrap_or(false);
+                                                status.eof_reached = eof;
                                                 if eof && !last_eof_reached {
                                                     // EOF while the file is still loaded (keep-open
                                                     // holds it) — the real end-file event is

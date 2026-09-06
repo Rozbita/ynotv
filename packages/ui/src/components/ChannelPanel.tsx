@@ -2631,9 +2631,22 @@ export function ChannelPanel({
   // (which re-run the positioning effect while visible=true) do NOT trigger a rect reset
   // that would cause App.tsx to reset video-zoom to 0 mid-transition.
   useEffect(() => {
-    if (!visible && onPreviewVideoRectChange) {
-      onPreviewVideoRectChange(null);
-    } else if (visible) {
+    if (!visible) {
+      if (onPreviewVideoRectChange) {
+        onPreviewVideoRectChange(null);
+      }
+      // While the Guide is open the MPV child window is physically pinned to
+      // the preview pane (see the positioning effect above). If the panel
+      // closes without restoring it — e.g. the user switches to the Jellyfin
+      // tab — the stream stays confined to the old preview rect and a later
+      // playback handoff can start out cut off until a resize event re-asserts
+      // it. Restore the full window the moment the panel closes (skipping
+      // multiview layouts, whose cell geometry the multiview layer owns via
+      // syncMpvGeometry).
+      if (currentLayout === 'main') {
+        invoke('mpv_set_geometry', { x: 0, y: 0, width: 0, height: 0 }).catch(() => { });
+      }
+    } else {
       Bridge.setProperties({
         'video-zoom': 0,
         'video-align-x': 0,
@@ -2641,7 +2654,7 @@ export function ChannelPanel({
         'keepaspect': true,
       }).catch(() => { });
     }
-  }, [visible, onPreviewVideoRectChange]);
+  }, [visible, onPreviewVideoRectChange, currentLayout]);
 
 
   // ── Virtualized search result row contexts ────────────────────────────────

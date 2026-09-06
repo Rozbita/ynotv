@@ -79,6 +79,11 @@ pub struct JellyfinEmbedState {
     last_hidden_at: Mutex<Option<Instant>>,
     status_listener_registered: AtomicBool,
     report: Mutex<Option<JellyfinReportSession>>,
+    /// Monotonic handoff counter: bumped on every `jellyfin_confirm_playback`
+    /// and on playback-ended notifications, so background tasks spawned by a
+    /// specific handoff (geometry re-asserts) can detect that playback was
+    /// stopped or handed off to a newer stream and bail out.
+    confirm_seq: Mutex<u64>,
     /// Reassembled chunks of the in-flight play payload (chunked title flush).
     chunk_parts: Mutex<Vec<String>>,
 }
@@ -358,6 +363,16 @@ fn ensure_status_listener<R: Runtime>(app: &AppHandle<R>) {
             .get("playing")
             .and_then(|v| v.as_bool())
             .unwrap_or(true);
+        // mpv reports `core-idle` as true BOTH when the user pauses and when a
+        // file reaches its end (--keep-open pauses on the last frame). Only the
+        // `eof-reached` property tells those apart, so it gates every "the
+        // stream ended" decision below — otherwise a plain pause looks like the
+        // playback finished, stops the Jellyfin reporting session and bounces
+        // the user back to the Jellyfin tab.
+        let eof_reached = value
+            .get("eofReached")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         let position = value
             .get("position")
             .and_then(|v| v.as_f64())
@@ -376,7 +391,7 @@ fn ensure_status_listener<R: Runtime>(app: &AppHandle<R>) {
                 if session.stopped {
                     // Stop already sent — drop the session.
                     *guard = None;
-                } else if idle && !playing {
+                } else if idle && !playing && eof_reached {
                     session.stopped = true;
                     let snap = session.clone();
                     drop(guard);
@@ -406,7 +421,8 @@ fn ensure_status_listener<R: Runtime>(app: &AppHandle<R>) {
         }
 
         // ---- 2. Idle -> playback-ended signal (existing re-show gating) ----
-        if !idle || playing {
+        // A paused stream (no EOF) must not be treated as finished.
+        if !idle || playing || !eof_reached {
             return;
         }
         let state = listener_app.state::<JellyfinEmbedState>();
@@ -680,6 +696,18 @@ pub async fn jellyfin_confirm_playback<R: Runtime>(
         .lock()
         .unwrap_or_else(|e| e.into_inner()) = Some(Instant::now());
 
+    // Each handoff gets a fresh sequence number so the geometry re-asserts
+    // below can tell when playback was stopped or replaced by a newer stream.
+    // Bumped unconditionally (before URL parsing) — the geometry retries must
+    // not depend on whether the URL parses for server progress reporting, or
+    // streams with unparseable URLs (Jellyfin Live TV, some proxies) would
+    // silently lose the retries.
+    let seq = {
+        let mut guard = state.confirm_seq.lock().unwrap_or_else(|e| e.into_inner());
+        *guard = guard.wrapping_add(1);
+        *guard
+    };
+
     match parse_play_url(&url) {
         Some((server_base, api_key, item_id, media_source_id, start_ticks)) => {
             let now_ms = std::time::SystemTime::now()
@@ -720,7 +748,34 @@ pub async fn jellyfin_confirm_playback<R: Runtime>(
         }
     }
 
+    // The embedded mpv window is physically resized (SetWindowPos) to the pane
+    // that was showing video last — e.g. the EPG 3-column preview box — and mpv
+    // re-fits that child window asynchronously once the new stream's first
+    // frame lands. A single reset here can race that re-fit (or run before the
+    // mpv window exists on a cold start), leaving the freshly handed-off video
+    // confined to the old pane until some later resize event re-asserts it
+    // (the user dragging the window). Re-assert full-window geometry on delayed
+    // passes that outlast mpv's async re-fit, mirroring the multiview swap
+    // flow. Each pass bails once the Jellyfin playback session is gone
+    // (stopped / replaced), so late passes can't resize unrelated playback.
     let _ = crate::mpv_set_geometry(app.clone(), 0, 0, 0, 0).await;
+    let retry_app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        // Sleep *deltas*, so the passes fire at ~0.2s / 0.6s / 1.4s / 3.0s
+        // after the handoff (a cumulative loop would drift to 5.2s and keep
+        // asserting geometry long after the stream settled). Each pass bails
+        // the moment the confirm sequence moves — playback stopped, or a newer
+        // stream (next episode / different video) took over.
+        for delay_ms in [200u64, 400, 800, 1600] {
+            tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+            let state = retry_app.state::<JellyfinEmbedState>();
+            let seq_now = *state.confirm_seq.lock().unwrap_or_else(|e| e.into_inner());
+            if seq_now != seq {
+                return;
+            }
+            let _ = crate::mpv_set_geometry(retry_app.clone(), 0, 0, 0, 0).await;
+        }
+    });
     Ok(())
 }
 
@@ -744,6 +799,17 @@ pub async fn jellyfin_embed_notify_playback_ended<R: Runtime>(
     position_ticks: Option<u64>,
 ) -> Result<(), String> {
     let state = app.state::<JellyfinEmbedState>();
+    // Cancel any in-flight geometry re-asserts spawned by this handoff, and
+    // clear the re-show gate timestamp so a stale value can't later re-trigger
+    // the "playback ended" signal.
+    {
+        let mut seq = state.confirm_seq.lock().unwrap_or_else(|e| e.into_inner());
+        *seq = seq.wrapping_add(1);
+    }
+    *state
+        .last_hidden_at
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = None;
     let session_to_stop = {
         let mut guard = state.report.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(session) = guard.as_mut() {
