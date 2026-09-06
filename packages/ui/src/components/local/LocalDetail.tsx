@@ -101,7 +101,7 @@ function LocalEpisodeCard({
 
   return (
     <div
-      className="local-detail__episode-card"
+      className={`local-detail__episode-card ${episode.unavailable ? 'local-detail__episode-card--unavailable' : ''}`}
       onClick={() => onPlay(episode)}
       onContextMenu={(e) => onContextMenu(e, episode)}
       title={`${displayTitle} (${episode.filename})`}
@@ -132,6 +132,22 @@ function LocalEpisodeCard({
               <polyline points="17 2 12 7 7 2" />
             </svg>
           </div>
+        )}
+
+        {/* Unavailable Badge */}
+        {episode.unavailable && (
+          <span
+            className="local-unavailable-badge"
+            style={{ position: 'absolute', top: '8px', right: '8px', zIndex: 3 }}
+            title={t('fileNotFound', 'File/folder not found')}
+          >
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            {t('unavailable', 'Unavailable')}
+          </span>
         )}
 
         {/* Episode Number Pill */}
@@ -241,6 +257,7 @@ export const LocalDetail = memo(function LocalDetail({
   const head = isMovie ? group.entry : group.head;
   const episodes = isMovie ? [] : group.episodes;
   const allEntries = isMovie ? [group.entry] : episodes;
+  const isUnavailable = isMovie ? !!head.unavailable : episodes.length > 0 && episodes.every((e) => e.unavailable);
 
   const favoriteId = group.kind === 'movie' ? `local_${group.entry.id}` : `local_${group.key}`;
   const isFavorite = useVodFavoritesStore((s) =>
@@ -485,6 +502,19 @@ export const LocalDetail = memo(function LocalDetail({
               {head.resolution && (
                 <span className="local-detail__badge">{head.resolution}</span>
               )}
+              {isUnavailable && (
+                <span
+                  className="local-detail__badge"
+                  style={{
+                    background: 'rgba(239, 68, 68, 0.2)',
+                    color: '#f87171',
+                    border: '1px solid rgba(239, 68, 68, 0.4)',
+                    fontWeight: 600,
+                  }}
+                >
+                  ⚠️ {t('unavailable', 'Unavailable')}
+                </span>
+              )}
               <span className="local-detail__badge">
                 {isMovie ? t('movie', 'Movie') : `${episodes.length} ${t('episodes', 'Episodes')}`}
               </span>
@@ -499,15 +529,28 @@ export const LocalDetail = memo(function LocalDetail({
             <div className="local-detail__actions">
               <button
                 type="button"
-                className="local-detail__play-btn"
+                className={`local-detail__play-btn ${isUnavailable ? 'local-detail__play-btn--unavailable' : ''}`}
                 onClick={handlePrimaryPlay}
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                  <polygon points="5 3 19 12 5 21 5 3" />
-                </svg>
-                {isMovie && movieWatchStatus.progressPercent > 0 && !movieWatchStatus.completed
-                  ? t('resume', 'Resume')
-                  : t('play', 'Play')}
+                {isUnavailable ? (
+                  <>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="8" x2="12" y2="12" />
+                      <line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                    {t('fileNotFoundBtn', 'File Not Found')}
+                  </>
+                ) : (
+                  <>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                      <polygon points="5 3 19 12 5 21 5 3" />
+                    </svg>
+                    {isMovie && movieWatchStatus.progressPercent > 0 && !movieWatchStatus.completed
+                      ? t('resume', 'Resume')
+                      : t('play', 'Play')}
+                  </>
+                )}
               </button>
 
               {isMovie && (

@@ -106,7 +106,7 @@ export const LocalMovieCard = memo(function LocalMovieCard({
 
   return (
     <div
-      className="local-card"
+      className={`local-card ${entry.unavailable ? 'local-card--unavailable' : ''}`}
       onMouseLeave={() => setConfirmDelete(false)}
     >
       <div
@@ -136,6 +136,18 @@ export const LocalMovieCard = memo(function LocalMovieCard({
         <span className="local-badge">
           {entry.resolution || 'Local'}
         </span>
+
+        {/* Unavailable / File Not Found Badge */}
+        {entry.unavailable && !selectMode && (
+          <span className="local-unavailable-badge" title={t('fileNotFound', 'File/folder not found')}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            {t('unavailable', 'Unavailable')}
+          </span>
+        )}
 
         {/* Watched Badge */}
         {watchStatus.completed && !selectMode && (

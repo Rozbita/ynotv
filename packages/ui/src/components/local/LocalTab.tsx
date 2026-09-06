@@ -9,6 +9,7 @@ import {
   parseFilename,
   readLocalLibrary,
   readScannedFolders,
+  useScannedFolders,
   extractEpisodeNumber,
   removeLocalEntries,
   sortGroups,
@@ -26,6 +27,7 @@ import {
   hasUndo,
   onUndoChange,
   undoLocalChange,
+  markEntriesAvailability,
 } from '../../services/local-library/local-library';
 import { countNfoFor, clearSidecarCache } from '../../services/local-library/sidecars';
 import {
@@ -58,6 +60,8 @@ import { LocalShowGroupCard } from './LocalShowGroupCard';
 import { LocalEpisodesModal } from './LocalEpisodesModal';
 import { LocalDetail } from './LocalDetail';
 import { LocalFoldersModal } from './LocalFoldersModal';
+import { FileNotFoundModal } from './FileNotFoundModal';
+import { CleanUnavailableModal } from './CleanUnavailableModal';
 import { IdentifyModal } from './IdentifyModal';
 import { ReviewUnmatchedModal } from './ReviewUnmatchedModal';
 import { ScanModeModal, type ScanMode } from './ScanModeModal';
@@ -307,6 +311,12 @@ export function LocalTab({
   const [episodesModalTarget, setEpisodesModalTarget] = useState<{ key?: string; head: LocalEntry; episodes: LocalEntry[] } | null>(null);
   const [selectedDetailGroup, setSelectedDetailGroup] = useState<LocalGroup | null>(null);
   const [addToPlaylistTarget, setAddToPlaylistTarget] = useState<AddToPlaylistTarget | null>(null);
+  const [fileNotFoundTarget, setFileNotFoundTarget] = useState<LocalEntry | null>(null);
+  const [hideUnavailable, setHideUnavailable] = useState<boolean>(
+    () => localStorage.getItem('ynotv.local.hide_unavailable') === 'true',
+  );
+  const [cleanModalOpen, setCleanModalOpen] = useState(false);
+  const scannedFolders = useScannedFolders();
 
   // Toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -323,7 +333,7 @@ export function LocalTab({
   const handleUndoChange = useCallback(() => {
     setUndoVisible(true);
     if (undoHideTimerRef.current) clearTimeout(undoHideTimerRef.current);
-    undoHideTimerRef.current = setTimeout(() => setUndoVisible(false), 7000);
+    undoHideTimerRef.current = setTimeout(() => setUndoVisible(false), 5000);
   }, []);
   useEffect(() => {
     const off = onUndoChange(handleUndoChange);
@@ -342,13 +352,22 @@ export function LocalTab({
   useAutoLocalSync(
     tmdbToken,
     useCallback(
-      (res: { added: number; removed: number }) => {
-        if (res.added > 0 && res.removed > 0) {
-          showToast(t('syncResult', { added: res.added, removed: res.removed }));
-        } else if (res.added > 0) {
-          showToast(t('addedNewItems', { count: res.added }));
-        } else if (res.removed > 0) {
-          showToast(t('cleanedMissingItems', { count: res.removed }));
+      (res: { added: number; removed: number; unavailable?: number; restored?: number }) => {
+        // showToast replaces the current message, so combine all sync results
+        // into one toast instead of calling it repeatedly (later calls would
+        // overwrite earlier ones in the same tick).
+        const parts: string[] = [];
+        if (res.added > 0) {
+          parts.push(t('addedNewItems', { count: res.added }));
+        }
+        if ((res.unavailable ?? 0) > 0) {
+          parts.push(t('unavailableFoundToast', '{{count}} items unavailable (files or drive missing)', { count: res.unavailable }));
+        }
+        if ((res.restored ?? 0) > 0) {
+          parts.push(t('restoredItemsToast', '{{count}} items restored', { count: res.restored }));
+        }
+        if (parts.length > 0) {
+          showToast(parts.join(' · '));
         }
       },
       [showToast, t],
@@ -444,6 +463,18 @@ export function LocalTab({
     }).length;
   }, [groups, effFilter, groupMissingMetadata]);
 
+  const unavailableGroupsCount = useMemo(() => {
+    return groups.filter((g) => {
+      if (effFilter === 'movies' && g.kind !== 'movie') return false;
+      if (effFilter === 'series' && g.kind !== 'show') return false;
+      return g.kind === 'movie' ? !!g.entry.unavailable : g.episodes.length > 0 && g.episodes.every((e) => e.unavailable);
+    }).length;
+  }, [groups, effFilter]);
+
+  const handleCleanUnavailable = useCallback(() => {
+    setCleanModalOpen(true);
+  }, []);
+
   // Review is per SERIES FOLDER, never per file: a show group is one review
   // unit (all its episodes share the same folder-derived title and one TMDB
   // lookup), so a 500-episode unmatched folder counts as a single item.
@@ -480,6 +511,12 @@ export function LocalTab({
   const filteredGroups = useMemo(() => {
     let list = groups;
 
+    if (hideUnavailable) {
+      list = list.filter((g) =>
+        g.kind === 'movie' ? !g.entry.unavailable : !g.episodes.every((e) => e.unavailable),
+      );
+    }
+
     if (effFilter === 'movies') {
       list = list.filter((g) => g.kind === 'movie');
     } else if (effFilter === 'series') {
@@ -503,7 +540,7 @@ export function LocalTab({
     }
 
     return sortGroups(list, sortKey, sortDir);
-  }, [groups, lockFilter, initialFilter, activeFilter, searchQuery, sortKey, sortDir, isGroupFavorited, groupMissingMetadata]);
+  }, [groups, lockFilter, initialFilter, activeFilter, searchQuery, sortKey, sortDir, isGroupFavorited, groupMissingMetadata, hideUnavailable]);
 
   // Alphabet #-Z quick jump rail (only meaningful in name order).
   const groupNames = useMemo(
@@ -524,15 +561,29 @@ export function LocalTab({
   );
 
   // Play handler
-  const handlePlayEntry = useCallback((entry: LocalEntry, seriesGroup?: { key: string; head: LocalEntry }) => {
-    const playInfo = localEntryToVodPlayInfo(entry, seriesGroup);
-    if (onPlayVod) {
-      onPlayVod(playInfo);
-    } else {
-      // Dispatch global playback event
-      window.dispatchEvent(new CustomEvent('ynotv:stremio-play', { detail: playInfo }));
-    }
-  }, [onPlayVod]);
+  const handlePlayEntry = useCallback(
+    async (entry: LocalEntry, seriesGroup?: { key: string; head: LocalEntry }) => {
+      if (entry.unavailable) {
+        setFileNotFoundTarget(entry);
+        return;
+      }
+      const exists = await invoke<boolean>('check_path_exists', { path: entry.path }).catch(() => true);
+      if (!exists) {
+        markEntriesAvailability([entry.id], []);
+        setFileNotFoundTarget(entry);
+        return;
+      }
+
+      const playInfo = localEntryToVodPlayInfo(entry, seriesGroup);
+      if (onPlayVod) {
+        onPlayVod(playInfo);
+      } else {
+        // Dispatch global playback event
+        window.dispatchEvent(new CustomEvent('ynotv:stremio-play', { detail: playInfo }));
+      }
+    },
+    [onPlayVod],
+  );
 
   // Detail handler: cross-link matched items to an external detail view when provided
   const handleOpenDetail = useCallback((group: LocalGroup) => {
@@ -1340,6 +1391,28 @@ export function LocalTab({
             <span className="local-type-pill__count">{unmatchedCount}</span>
           </button>
 
+          {/* Unavailable toggle */}
+          {unavailableGroupsCount > 0 && (
+            <button
+              type="button"
+              className={`local-type-pill ${hideUnavailable ? 'active' : ''}`}
+              onClick={() => {
+                const next = !hideUnavailable;
+                setHideUnavailable(next);
+                localStorage.setItem('ynotv.local.hide_unavailable', String(next));
+              }}
+              title={hideUnavailable ? t('showUnavailableTooltip', 'Unavailable files are hidden — click to show') : t('hideUnavailableTooltip', 'Click to hide unavailable files')}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              {hideUnavailable ? t('unavailableHidden', 'Unavailable Hidden') : t('unavailableShowing', 'Unavailable')}
+              <span className="local-type-pill__count">{unavailableGroupsCount}</span>
+            </button>
+          )}
+
           {/* Sort Dropdown */}
           <select
             className="local-select-dropdown"
@@ -1488,6 +1561,46 @@ export function LocalTab({
               }}
             >
               {t('review', 'Review')}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Unavailable Items Alert Banner */}
+      {unavailableGroupsCount > 0 && !selectMode && (
+        <div className="local-unavailable-banner">
+          <div className="local-unavailable-banner__left">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            <span className="local-unavailable-banner__text">
+              {t('unavailableBannerText', '{{count}} items are unavailable because their files or storage drives are not accessible.', {
+                count: unavailableGroupsCount,
+              })}
+            </span>
+          </div>
+
+          <div className="local-unavailable-banner__actions">
+            <button
+              type="button"
+              className="local-unavailable-banner__btn"
+              onClick={() => {
+                const next = !hideUnavailable;
+                setHideUnavailable(next);
+                localStorage.setItem('ynotv.local.hide_unavailable', String(next));
+              }}
+            >
+              {hideUnavailable ? t('showItems', 'Show Items') : t('hideItems', 'Hide Items')}
+            </button>
+            <button
+              type="button"
+              className="local-unavailable-banner__btn local-unavailable-banner__btn--clean"
+              onClick={handleCleanUnavailable}
+              title={t('cleanUnavailableTitle', 'Remove permanently missing items from library')}
+            >
+              {t('cleanUnavailable', 'Clean Up')}
             </button>
           </div>
         </div>
@@ -1891,6 +2004,33 @@ export function LocalTab({
         onAddNewFolder={async (type) => {
           setFoldersModalOpen(false);
           await handleAddFolder(type);
+        }}
+      />
+
+      {/* File Not Found Modal */}
+      <FileNotFoundModal
+        isOpen={!!fileNotFoundTarget}
+        entry={fileNotFoundTarget}
+        onClose={() => setFileNotFoundTarget(null)}
+        onRelocated={(_entry, _newPath) => {
+          showToast(t('fileRelocated', 'File path updated.'));
+          setFileNotFoundTarget(null);
+        }}
+        onRemoved={() => {
+          showToast(t('itemRemoved', 'Item removed from library.'));
+          setFileNotFoundTarget(null);
+        }}
+      />
+
+      {/* Clean Unavailable Modal */}
+      <CleanUnavailableModal
+        isOpen={cleanModalOpen}
+        onClose={() => setCleanModalOpen(false)}
+        items={items}
+        folders={scannedFolders}
+        activeFilter={effFilter}
+        onCleaned={(count) => {
+          showToast(t('cleanedMissingItems', { count }));
         }}
       />
 

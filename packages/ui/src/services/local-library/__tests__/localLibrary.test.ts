@@ -724,7 +724,7 @@ describe('Local Library - Auto Sync', () => {
     // store — clear it so this test exercises the "no folders" path.
     removeScannedFolder('T:/Media/Movies');
     const res = await syncLocalFolders(null, true);
-    expect(res).toEqual({ added: 0, removed: 0 });
+    expect(res).toMatchObject({ added: 0, removed: 0 });
   });
 });
 
@@ -1304,5 +1304,121 @@ describe('Local Library - lowConfidence', () => {
       matchedYear: 2010,
     };
     expect(lowConfidence(parsed, tmdb)).toBe(true);
+  });
+});
+
+describe('Local Library - Missing, Moved, and Renamed Media Handling', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('batch marks missing entries as unavailable and restored entries as available', async () => {
+    const { addLocalEntries, markEntriesAvailability, readLocalLibrary } = await import('../local-library');
+
+    addLocalEntries([
+      {
+        id: 'item-1',
+        path: 'D:/Movies/Movie1.mp4',
+        filename: 'Movie1.mp4',
+        title: 'Movie 1',
+        year: 2021,
+        type: 'movie',
+        addedAt: 1000,
+      },
+      {
+        id: 'item-2',
+        path: 'D:/Movies/Movie2.mp4',
+        filename: 'Movie2.mp4',
+        title: 'Movie 2',
+        year: 2022,
+        type: 'movie',
+        addedAt: 2000,
+      },
+    ]);
+
+    // Mark item-1 as missing/unavailable
+    markEntriesAvailability(['item-1'], []);
+    let library = readLocalLibrary();
+    expect(library.find((e) => e.id === 'item-1')?.unavailable).toBe(true);
+    expect(library.find((e) => e.id === 'item-2')?.unavailable).toBeUndefined();
+
+    // Reconnect / restore item-1
+    markEntriesAvailability([], ['item-1']);
+    library = readLocalLibrary();
+    expect(library.find((e) => e.id === 'item-1')?.unavailable).toBe(false);
+  });
+
+  it('updates entry path and filename when a file is relocated or renamed, clearing unavailable', async () => {
+    const { addLocalEntries, updateLocalEntryPath, readLocalLibrary } = await import('../local-library');
+
+    addLocalEntries([
+      {
+        id: 'movie-x',
+        path: 'D:/Movies/OldName.mkv',
+        filename: 'OldName.mkv',
+        title: 'My Movie',
+        year: 2023,
+        type: 'movie',
+        addedAt: 3000,
+        unavailable: true,
+      },
+    ]);
+
+    updateLocalEntryPath('movie-x', 'D:/Movies/NewName.1080p.mkv', 'NewName.1080p.mkv');
+    const updated = readLocalLibrary().find((e) => e.id === 'movie-x');
+    expect(updated?.path).toBe('D:/Movies/NewName.1080p.mkv');
+    expect(updated?.filename).toBe('NewName.1080p.mkv');
+    expect(updated?.title).toBe('My Movie');
+    expect(updated?.unavailable).toBe(false);
+  });
+
+  it('relocates an entire scanned folder and updates child entry paths in bulk', async () => {
+    const {
+      addScannedFolder,
+      readScannedFolders,
+      addLocalEntries,
+      relocateScannedFolder,
+      readLocalLibrary,
+    } = await import('../local-library');
+
+    addScannedFolder('D:/Media/Movies', 'movie');
+    addLocalEntries([
+      {
+        id: 'm-1',
+        path: 'D:/Media/Movies/MovieA.mp4',
+        filename: 'MovieA.mp4',
+        title: 'Movie A',
+        year: 2020,
+        type: 'movie',
+        addedAt: 4000,
+        unavailable: true,
+      },
+      {
+        id: 'm-2',
+        path: 'D:/Media/Movies/Subfolder/MovieB.mp4',
+        filename: 'MovieB.mp4',
+        title: 'Movie B',
+        year: 2021,
+        type: 'movie',
+        addedAt: 5000,
+        unavailable: true,
+      },
+    ]);
+
+    relocateScannedFolder('D:/Media/Movies', 'E:/Media/Movies');
+
+    const folders = readScannedFolders();
+    expect(folders.some((f) => f.path === 'E:/Media/Movies')).toBe(true);
+    expect(folders.some((f) => f.path === 'D:/Media/Movies')).toBe(false);
+
+    const library = readLocalLibrary();
+    const entry1 = library.find((e) => e.id === 'm-1');
+    const entry2 = library.find((e) => e.id === 'm-2');
+
+    expect(entry1?.path.replace(/\\/g, '/')).toBe('E:/Media/Movies/MovieA.mp4');
+    expect(entry1?.unavailable).toBe(false);
+
+    expect(entry2?.path.replace(/\\/g, '/')).toBe('E:/Media/Movies/Subfolder/MovieB.mp4');
+    expect(entry2?.unavailable).toBe(false);
   });
 });

@@ -54,6 +54,7 @@ export const LocalShowGroupCard = memo(function LocalShowGroupCard({
 
   const episodeIds = episodes.map((e) => e.id);
   const needsReview = episodes.some((e) => e.needsReview);
+  const isUnavailable = episodes.length > 0 && episodes.every((e) => e.unavailable);
 
   // Rating - only show if it's a meaningful value (not 0, not NaN)
   const rating = head.rating != null && head.rating > 0 ? head.rating : null;
@@ -106,7 +107,7 @@ export const LocalShowGroupCard = memo(function LocalShowGroupCard({
 
   return (
     <div
-      className="local-card"
+      className={`local-card ${isUnavailable ? 'local-card--unavailable' : ''}`}
       onMouseLeave={() => setConfirmDelete(false)}
     >
       <div
@@ -136,6 +137,18 @@ export const LocalShowGroupCard = memo(function LocalShowGroupCard({
         <span className="local-badge">
           Local
         </span>
+
+        {/* Unavailable / File Not Found Badge */}
+        {isUnavailable && !selectMode && (
+          <span className="local-unavailable-badge" title={t('fileNotFound', 'File/folder not found')}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            {t('unavailable', 'Unavailable')}
+          </span>
+        )}
 
         {/* Rating Badge */}
         {rating && !selectMode && (

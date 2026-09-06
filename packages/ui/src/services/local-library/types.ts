@@ -40,6 +40,11 @@ export type LocalEntry = {
    * rebuilds them, so overrides survive re-scans.
    */
   metadataLocked?: boolean;
+  /**
+   * True when the underlying file or its parent folder is not accessible on
+   * disk (e.g. deleted, renamed, or drive unplugged).
+   */
+  unavailable?: boolean;
 };
 
 export type ParsedFilename = {

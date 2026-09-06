@@ -5523,8 +5523,9 @@ pub fn run() {
             prune_logo_cache,
             // Database health / recovery
             db_health,
-            // Local folder scanner
+            // Local folder scanner & path checks
             local_lib::scan_local_folder,
+            local_lib::check_path_exists,
             // Gamepad commands
             get_connected_gamepads,
             gamepad_debug_enabled,

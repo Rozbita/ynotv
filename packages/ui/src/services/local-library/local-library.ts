@@ -75,6 +75,7 @@ function entryToRow(e: LocalEntry): LocalEntryRow {
     localArt: e.localArt ?? null,
     metadataLocked: e.metadataLocked ?? null,
     reviewSkipped: e.reviewSkipped ?? null,
+    unavailable: e.unavailable === true ? true : null,
   };
 }
 
@@ -103,6 +104,7 @@ function rowToEntry(r: LocalEntryRow): LocalEntry {
     localArt: r.localArt ?? undefined,
     metadataLocked: r.metadataLocked === true ? true : undefined,
     reviewSkipped: r.reviewSkipped === true ? true : undefined,
+    unavailable: r.unavailable === true ? true : undefined,
   };
 }
 
@@ -350,6 +352,102 @@ export function removeScannedFolder(folder: string): void {
     if (p.startsWith(prefix) || p === norm) removedIds.push(e.id);
   }
   removeLocalEntries(removedIds, { noUndo: true });
+}
+
+/**
+ * Relocates a configured folder to a new path (e.g. if the folder was renamed
+ * or moved to a different drive letter), and updates all child entries' paths
+ * in bulk so their metadata, locks, watch history, and favorites are preserved.
+ */
+export function relocateScannedFolder(oldPath: string, newPath: string): void {
+  const normOld = oldPath.replace(/\\/g, '/').toLowerCase();
+  const normOldPrefix = normOld.endsWith('/') ? normOld : `${normOld}/`;
+  const existingFolders = readFolders();
+  const nextFolders = existingFolders.map((f) => {
+    if (f.path.replace(/\\/g, '/').toLowerCase() === normOld) {
+      return { ...f, path: newPath };
+    }
+    return f;
+  });
+  writeFolders(nextFolders);
+
+  const updatedEntries: LocalEntry[] = [];
+  entriesCache = entriesCache.map((e) => {
+    const normPath = e.path.replace(/\\/g, '/').toLowerCase();
+    if (normPath.startsWith(normOldPrefix) || normPath === normOld) {
+      const relPath = e.path.slice(oldPath.length).replace(/^[\\/]+/, '');
+      const sep = newPath.includes('/') ? '/' : '\\';
+      const updatedPath = `${newPath}${newPath.endsWith('/') || newPath.endsWith('\\') ? '' : sep}${relPath}`;
+      const updated: LocalEntry = {
+        ...e,
+        path: updatedPath,
+        unavailable: false,
+      };
+      updatedEntries.push(updated);
+      return updated;
+    }
+    return e;
+  });
+
+  if (updatedEntries.length > 0) {
+    persistRows(updatedEntries.map(entryToRow));
+    for (const s of subs) s();
+  }
+}
+
+/**
+ * Updates a single entry's path and optional filename (e.g. if the file was
+ * renamed or relocated individually), clearing any unavailable flag.
+ */
+export function updateLocalEntryPath(id: string, newPath: string, newFilename?: string): void {
+  let updatedEntry: LocalEntry | undefined;
+  entriesCache = entriesCache.map((e) => {
+    if (e.id === id) {
+      const updated: LocalEntry = {
+        ...e,
+        path: newPath,
+        filename: newFilename ?? e.filename,
+        unavailable: false,
+      };
+      updatedEntry = updated;
+      return updated;
+    }
+    return e;
+  });
+
+  if (updatedEntry) {
+    persistRows([entryToRow(updatedEntry)]);
+    for (const s of subs) s();
+  }
+}
+
+/**
+ * Batch marks entries as unavailable or available in cache and SQLite.
+ */
+export function markEntriesAvailability(missingIds: string[], availableIds: string[]): void {
+  const missingSet = new Set(missingIds);
+  const availableSet = new Set(availableIds);
+  if (missingSet.size === 0 && availableSet.size === 0) return;
+
+  const modified: LocalEntry[] = [];
+  entriesCache = entriesCache.map((e) => {
+    if (missingSet.has(e.id) && !e.unavailable) {
+      const updated: LocalEntry = { ...e, unavailable: true };
+      modified.push(updated);
+      return updated;
+    }
+    if (availableSet.has(e.id) && e.unavailable) {
+      const updated: LocalEntry = { ...e, unavailable: false };
+      modified.push(updated);
+      return updated;
+    }
+    return e;
+  });
+
+  if (modified.length > 0) {
+    persistRows(modified.map(entryToRow));
+    for (const s of subs) s();
+  }
 }
 
 export function useScannedFolders(): LibraryFolder[] {

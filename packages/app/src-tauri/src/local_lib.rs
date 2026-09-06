@@ -66,3 +66,13 @@ pub async fn scan_local_folder(
     .await
     .map_err(|e| e.to_string())?
 }
+
+#[tauri::command]
+pub async fn check_path_exists(path: String) -> Result<bool, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let p = PathBuf::from(&path);
+        Ok(p.exists())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}

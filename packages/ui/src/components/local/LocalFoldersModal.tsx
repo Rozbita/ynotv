@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, memo } from 'react';
+import { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { invoke } from '@tauri-apps/api/core';
 import type { FolderType, LibraryFolder } from '../../services/local-library/types';
@@ -6,6 +6,7 @@ import {
   useScannedFolders,
   useLocalLibrary,
   removeScannedFolder,
+  relocateScannedFolder,
 } from '../../services/local-library/local-library';
 
 interface LocalFoldersModalProps {
@@ -28,6 +29,24 @@ export const LocalFoldersModal = memo(function LocalFoldersModal({
   const library = useLocalLibrary();
   const [confirmDeleteFolder, setConfirmDeleteFolder] = useState<string | null>(null);
   const [rescanningFolder, setRescanningFolder] = useState<string | null>(null);
+  const [missingFolders, setMissingFolders] = useState<Set<string>>(new Set());
+
+  const checkFolders = useCallback(async () => {
+    const missing = new Set<string>();
+    for (const folder of configuredFolders) {
+      const exists = await invoke<boolean>('check_path_exists', { path: folder.path }).catch(() => false);
+      if (!exists) {
+        missing.add(folder.path);
+      }
+    }
+    setMissingFolders(missing);
+  }, [configuredFolders]);
+
+  useEffect(() => {
+    if (isOpen) {
+      void checkFolders();
+    }
+  }, [isOpen, checkFolders]);
 
   const filteredConfiguredFolders = useMemo(() => {
     if (!folderFilter) return configuredFolders;
@@ -84,6 +103,25 @@ export const LocalFoldersModal = memo(function LocalFoldersModal({
       setConfirmDeleteFolder(folder);
     }
   }, [confirmDeleteFolder]);
+
+  const handleRelocate = useCallback(
+    async (oldPath: string) => {
+      try {
+        const { open } = await import('@tauri-apps/plugin-dialog');
+        const selected = await open({
+          directory: true,
+          multiple: false,
+          title: t('relocateFolderTitle', 'Select New Location for Folder'),
+        });
+        if (!selected || typeof selected !== 'string') return;
+        relocateScannedFolder(oldPath, selected);
+        await checkFolders();
+      } catch (e) {
+        console.error('[LocalFoldersModal] Failed to relocate folder:', e);
+      }
+    },
+    [checkFolders, t],
+  );
 
   const typeLabel = useCallback(
     (type: FolderType): string => {
@@ -199,10 +237,42 @@ export const LocalFoldersModal = memo(function LocalFoldersModal({
                           </span>
                           {stats.total} {t('items', 'items')} ({stats.movies} {t('movies', 'movies')}, {stats.episodes} {t('episodes', 'episodes')})
                         </span>
+                        {missingFolders.has(folder.path) && (
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              padding: '2px 8px',
+                              borderRadius: '999px',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              color: '#f87171',
+                              background: 'rgba(239, 68, 68, 0.15)',
+                              border: '1px solid rgba(239, 68, 68, 0.3)',
+                              width: 'fit-content',
+                              marginTop: '2px',
+                            }}
+                          >
+                            ⚠️ {t('folderNotFoundOrOffline', 'Folder not found or drive disconnected')}
+                          </span>
+                        )}
                       </div>
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                      {missingFolders.has(folder.path) && (
+                        <button
+                          type="button"
+                          className="local-btn local-btn--primary"
+                          style={{ height: '30px', padding: '0 10px', fontSize: '12px' }}
+                          onClick={() => handleRelocate(folder.path)}
+                          title={t('relocateFolder', 'Select new location for this folder')}
+                        >
+                          {t('relocate', 'Relocate')}
+                        </button>
+                      )}
+
                       <button
                         type="button"
                         className="local-btn local-btn--secondary"
