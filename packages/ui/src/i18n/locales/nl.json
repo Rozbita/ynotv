@@ -3461,7 +3461,10 @@
     "cleanCancelBtn": "Annuleren",
     "cleanSafeConnectedOnlyBtn": "Alleen ontbrekende bestanden opschonen ({{count}})",
     "cleanAllIncludingOfflineBtn": "Alles opschonen ({{count}})",
-    "cleanAllUnavailableBtn": "{{count}} ontbrekende items verwijderen"
+    "cleanAllUnavailableBtn": "{{count}} ontbrekende items verwijderen",
+    "episodeAlreadyInPlaylistMsg": "{{title}} staat al in {{name}}. Toch toevoegen?",
+    "allEpisodesAlreadyInPlaylistMsg": "Alle {{count}} geselecteerde afleveringen staan al in {{name}}. Toch toevoegen?",
+    "someEpisodesAlreadyInPlaylistMsg": "{{count}} van de {{total}} geselecteerde afleveringen staan al in {{name}}. Toch toevoegen?"
   },
   "dvr": {
     "title": "DVR en downloads",

@@ -3461,7 +3461,10 @@
     "cleanCancelBtn": "منسوخ کریں",
     "cleanSafeConnectedOnlyBtn": "صرف غائب فائلیں صاف کریں ({{count}})",
     "cleanAllIncludingOfflineBtn": "سب صاف کریں ({{count}})",
-    "cleanAllUnavailableBtn": "{{count}} غائب آئٹمز ہٹائیں"
+    "cleanAllUnavailableBtn": "{{count}} غائب آئٹمز ہٹائیں",
+    "episodeAlreadyInPlaylistMsg": "{{title}} پہلے سے {{name}} میں موجود ہے۔ پھر بھی شامل کریں؟",
+    "allEpisodesAlreadyInPlaylistMsg": "تمام {{count}} منتخب اقساط پہلے سے {{name}} میں موجود ہیں۔ پھر بھی شامل کریں؟",
+    "someEpisodesAlreadyInPlaylistMsg": "{{total}} منتخب اقساط میں سے {{count}} پہلے سے {{name}} میں موجود ہیں۔ پھر بھی شامل کریں؟"
   },
   "dvr": {
     "title": "ڈی وی آر اور ڈاؤن لوڈز",

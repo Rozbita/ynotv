@@ -3461,7 +3461,10 @@
     "cleanCancelBtn": "إلغاء",
     "cleanSafeConnectedOnlyBtn": "تنظيف الملفات المفقودة فقط ({{count}})",
     "cleanAllIncludingOfflineBtn": "تنظيف الكل ({{count}})",
-    "cleanAllUnavailableBtn": "إزالة {{count}} عنصر مفقود"
+    "cleanAllUnavailableBtn": "إزالة {{count}} عنصر مفقود",
+    "episodeAlreadyInPlaylistMsg": "{{title}} موجود بالفعل في {{name}}. هل تريد إضافته على أي حال؟",
+    "allEpisodesAlreadyInPlaylistMsg": "جميع الحلقات {{count}} المحددة موجودة بالفعل في {{name}}. هل تريد إضافتها على أي حال؟",
+    "someEpisodesAlreadyInPlaylistMsg": "{{count}} من أصل {{total}} حلقة محددة موجودة بالفعل في {{name}}. هل تريد الإضافة على أي حال؟"
   },
   "dvr": {
     "title": "التسجيل والتنزيلات",

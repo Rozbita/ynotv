@@ -3461,7 +3461,10 @@
     "cleanCancelBtn": "Abbrechen",
     "cleanSafeConnectedOnlyBtn": "Nur fehlende Dateien bereinigen ({{count}})",
     "cleanAllIncludingOfflineBtn": "Alles bereinigen ({{count}})",
-    "cleanAllUnavailableBtn": "{{count}} fehlende Elemente entfernen"
+    "cleanAllUnavailableBtn": "{{count}} fehlende Elemente entfernen",
+    "episodeAlreadyInPlaylistMsg": "{{title}} ist bereits in {{name}}. Trotzdem hinzufügen?",
+    "allEpisodesAlreadyInPlaylistMsg": "Alle {{count}} ausgewählten Folgen sind bereits in {{name}}. Trotzdem hinzufügen?",
+    "someEpisodesAlreadyInPlaylistMsg": "{{count}} von {{total}} ausgewählten Folgen sind bereits in {{name}}. Trotzdem hinzufügen?"
   },
   "dvr": {
     "title": "DVR und Downloads",

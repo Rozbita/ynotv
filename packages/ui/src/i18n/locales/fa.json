@@ -3461,7 +3461,10 @@
     "cleanCancelBtn": "انصراف",
     "cleanSafeConnectedOnlyBtn": "فقط فایل‌های گمشده را پاک‌سازی کنید ({{count}})",
     "cleanAllIncludingOfflineBtn": "پاک‌سازی همه ({{count}})",
-    "cleanAllUnavailableBtn": "حذف {{count}} مورد گمشده"
+    "cleanAllUnavailableBtn": "حذف {{count}} مورد گمشده",
+    "episodeAlreadyInPlaylistMsg": "{{title}} از قبل در {{name}} وجود دارد. به هر حال اضافه شود؟",
+    "allEpisodesAlreadyInPlaylistMsg": "تمام {{count}} قسمت انتخابی از قبل در {{name}} وجود دارند. به هر حال اضافه شوند؟",
+    "someEpisodesAlreadyInPlaylistMsg": "{{count}} از {{total}} قسمت انتخابی از قبل در {{name}} وجود دارند. به هر حال اضافه شوند؟"
   },
   "dvr": {
     "title": "DVR و دانلودها",

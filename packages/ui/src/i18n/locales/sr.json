@@ -3461,7 +3461,10 @@
     "cleanCancelBtn": "Откажи",
     "cleanSafeConnectedOnlyBtn": "Очисти само недостајуће датотеке ({{count}})",
     "cleanAllIncludingOfflineBtn": "Очисти све ({{count}})",
-    "cleanAllUnavailableBtn": "Уклони {{count}} недостајуће ставке"
+    "cleanAllUnavailableBtn": "Уклони {{count}} недостајуће ставке",
+    "episodeAlreadyInPlaylistMsg": "{{title}} је већ у листи {{name}}. Додај свеједно?",
+    "allEpisodesAlreadyInPlaylistMsg": "Свих {{count}} изабраних епизода је већ у листи {{name}}. Додати их свеједно?",
+    "someEpisodesAlreadyInPlaylistMsg": "{{count}} од {{total}} изабраних епизода је већ у листи {{name}}. Додати свеједно?"
   },
   "dvr": {
     "title": "DVR и преузимање",

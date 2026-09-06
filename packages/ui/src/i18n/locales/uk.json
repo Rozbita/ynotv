@@ -3461,7 +3461,10 @@
     "cleanCancelBtn": "Скасувати",
     "cleanSafeConnectedOnlyBtn": "Очистити лише відсутні файли ({{count}})",
     "cleanAllIncludingOfflineBtn": "Очистити все ({{count}})",
-    "cleanAllUnavailableBtn": "Видалити {{count}} відсутніх елементів"
+    "cleanAllUnavailableBtn": "Видалити {{count}} відсутніх елементів",
+    "episodeAlreadyInPlaylistMsg": "{{title}} вже є в {{name}}. Все одно додати?",
+    "allEpisodesAlreadyInPlaylistMsg": "Усі {{count}} вибраних серій вже є в {{name}}. Все одно додати?",
+    "someEpisodesAlreadyInPlaylistMsg": "{{count}} з {{total}} вибраних серій вже є в {{name}}. Все одно додати?"
   },
   "dvr": {
     "title": "DVR і завантаження",

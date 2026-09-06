@@ -3461,7 +3461,10 @@
     "cleanCancelBtn": "Ακύρωση",
     "cleanSafeConnectedOnlyBtn": "Εκκαθάριση μόνο αρχείων που λείπουν ({{count}})",
     "cleanAllIncludingOfflineBtn": "Εκκαθάριση όλων ({{count}})",
-    "cleanAllUnavailableBtn": "Αφαίρεση {{count}} στοιχείων που λείπουν"
+    "cleanAllUnavailableBtn": "Αφαίρεση {{count}} στοιχείων που λείπουν",
+    "episodeAlreadyInPlaylistMsg": "Το {{title}} υπάρχει ήδη στη {{name}}. Να προστεθεί ούτως ή άλλως;",
+    "allEpisodesAlreadyInPlaylistMsg": "Όλα τα {{count}} επιλεγμένα επεισόδια υπάρχουν ήδη στη {{name}}. Να προστεθούν ούτως ή άλλως;",
+    "someEpisodesAlreadyInPlaylistMsg": "{{count}} από τα {{total}} επιλεγμένα επεισόδια υπάρχουν ήδη στη {{name}}. Να προστεθούν ούτως ή άλλως;"
   },
   "dvr": {
     "title": "DVR & Λήψεις",

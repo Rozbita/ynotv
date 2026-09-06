@@ -3461,7 +3461,10 @@
     "cleanCancelBtn": "Mégse",
     "cleanSafeConnectedOnlyBtn": "Csak a hiányzó fájlok tisztítása ({{count}})",
     "cleanAllIncludingOfflineBtn": "Az összes tisztítása ({{count}})",
-    "cleanAllUnavailableBtn": "{{count}} hiányzó elem eltávolítása"
+    "cleanAllUnavailableBtn": "{{count}} hiányzó elem eltávolítása",
+    "episodeAlreadyInPlaylistMsg": "A(z) {{title}} már szerepel ebben: {{name}}. Hozzáadja így is?",
+    "allEpisodesAlreadyInPlaylistMsg": "Mind a {{count}} kijelölt epizód már szerepel ebben: {{name}}. Hozzáadja így is?",
+    "someEpisodesAlreadyInPlaylistMsg": "A kijelölt {{total}} epizódból {{count}} már szerepel ebben: {{name}}. Hozzáadja így is?"
   },
   "dvr": {
     "title": "DVR és letöltések",

@@ -3461,7 +3461,10 @@
     "cleanCancelBtn": "रद्द करें",
     "cleanSafeConnectedOnlyBtn": "केवल गुम फ़ाइलें साफ़ करें ({{count}})",
     "cleanAllIncludingOfflineBtn": "सभी साफ़ करें ({{count}})",
-    "cleanAllUnavailableBtn": "{{count}} गुम आइटम हटाएँ"
+    "cleanAllUnavailableBtn": "{{count}} गुम आइटम हटाएँ",
+    "episodeAlreadyInPlaylistMsg": "{{title}} पहले से {{name}} में मौजूद है। फिर भी जोड़ें?",
+    "allEpisodesAlreadyInPlaylistMsg": "सभी {{count}} चयनित एपिसोड पहले से {{name}} में मौजूद हैं। फिर भी जोड़ें?",
+    "someEpisodesAlreadyInPlaylistMsg": "{{total}} चयनित एपिसोड में से {{count}} पहले से {{name}} में मौजूद हैं। फिर भी जोड़ें?"
   },
   "dvr": {
     "title": "DVR और डाउनलोड",

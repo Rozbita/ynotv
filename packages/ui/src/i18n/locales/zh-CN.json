@@ -3461,7 +3461,10 @@
     "cleanCancelBtn": "取消",
     "cleanSafeConnectedOnlyBtn": "仅清理缺失的文件（{{count}}）",
     "cleanAllIncludingOfflineBtn": "全部清理（{{count}}）",
-    "cleanAllUnavailableBtn": "移除 {{count}} 个缺失项目"
+    "cleanAllUnavailableBtn": "移除 {{count}} 个缺失项目",
+    "episodeAlreadyInPlaylistMsg": "{{title}} 已在 {{name}} 中。仍然添加？",
+    "allEpisodesAlreadyInPlaylistMsg": "所有选中的 {{count}} 集已在 {{name}} 中。仍然添加？",
+    "someEpisodesAlreadyInPlaylistMsg": "选中的 {{total}} 集中有 {{count}} 集已在 {{name}} 中。仍然添加？"
   },
   "dvr": {
     "title": "DVR 与下载",

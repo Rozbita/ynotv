@@ -4898,7 +4898,10 @@
     "cleanCancelBtn": "Hủy",
     "cleanSafeConnectedOnlyBtn": "Chỉ dọn các tệp bị thiếu ({{count}})",
     "cleanAllIncludingOfflineBtn": "Dọn tất cả ({{count}})",
-    "cleanAllUnavailableBtn": "Xóa {{count}} mục bị thiếu"
+    "cleanAllUnavailableBtn": "Xóa {{count}} mục bị thiếu",
+    "episodeAlreadyInPlaylistMsg": "{{title}} đã có trong {{name}}. Vẫn thêm?",
+    "allEpisodesAlreadyInPlaylistMsg": "Tất cả {{count}} tập đã chọn đều đã có trong {{name}}. Vẫn thêm?",
+    "someEpisodesAlreadyInPlaylistMsg": "{{count}} trong {{total}} tập đã chọn đã có trong {{name}}. Vẫn thêm?"
   },
   "probe": {
     "title": "Kiểm tra luồng phát kênh và trình kiểm tra IPTV",

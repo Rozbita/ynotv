@@ -18,6 +18,38 @@ export interface AddToPlaylistModalProps {
   posterUrl?: string | null;
 }
 
+export function normalizePathOrId(val?: string | null): string {
+  if (!val) return '';
+  return val.replace(/\\/g, '/').toLowerCase().trim();
+}
+
+export function isSameItemOrFile(
+  playlistItem: PlaylistItem,
+  candidate: { directUrl?: string; mediaId?: string; sourceId?: string }
+): boolean {
+  // 1. Direct file path match (case-insensitive & slash-normalized)
+  if (
+    playlistItem.directUrl &&
+    candidate.directUrl &&
+    normalizePathOrId(playlistItem.directUrl) === normalizePathOrId(candidate.directUrl)
+  ) {
+    return true;
+  }
+  // 2. Media / Stream ID match (slash-normalized for local IDs)
+  if (
+    playlistItem.mediaId &&
+    candidate.mediaId &&
+    normalizePathOrId(playlistItem.mediaId) === normalizePathOrId(candidate.mediaId)
+  ) {
+    const pSource = playlistItem.sourceId || 'local';
+    const cSource = candidate.sourceId || 'local';
+    if (pSource === cSource) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function AddToPlaylistModal({
   isOpen,
   onClose,
@@ -149,11 +181,46 @@ export function AddToPlaylistModal({
     }, 1200);
   };
 
+  const doAddEpisodes = (playlistId: string, playlistName: string, episodesToAdd: StoredEpisode[]) => {
+    if (!series) return;
+    const items: Array<Omit<PlaylistItem, 'id' | 'playlistId' | 'addedAt'>> = episodesToAdd.map((ep) => ({
+      itemType: 'episode',
+      mediaId: ep.id,
+      seriesId: series.series_id,
+      seriesTitle: series.title || series.name,
+      seasonNum: ep.season_num,
+      episodeNum: ep.episode_num,
+      episodeTitle: ep.title || `Episode ${ep.episode_num}`,
+      title: `${series.title || series.name} - S${ep.season_num}E${ep.episode_num}${ep.title ? `: ${ep.title}` : ''}`,
+      poster: posterUrl || series.cover,
+      backdropUrl: series.backdrop_path
+        ? (getTmdbImageUrl(series.backdrop_path, TMDB_BACKDROP_SIZES.large) || series.cover)
+        : (series.cover || undefined),
+      directUrl: ep.direct_url,
+      sourceId: series.source_id,
+      sourceName: sourceName,
+      duration: ep.duration ? ep.duration * 60 : undefined,
+    }));
+
+    addItemsToPlaylist(playlistId, items);
+    setAddedToast(i18n.t('vod:addedToPlaylist', { name: playlistName }));
+    setTimeout(() => {
+      setAddedToast(null);
+      onClose();
+    }, 1200);
+  };
+
   const handleAddToPlaylist = (playlistId: string, playlistName: string) => {
     if (movie) {
       const playlist = playlists.find((p) => p.id === playlistId);
       const alreadyInPlaylist = playlist?.items.some(
-        (it) => it.itemType === 'movie' && it.mediaId === movie.stream_id && it.sourceId === movie.source_id
+        (it) =>
+          it.itemType === 'movie' &&
+          isSameItemOrFile(it, {
+            directUrl: movie.direct_url,
+            mediaId: movie.stream_id,
+            sourceId: movie.source_id,
+          })
       );
       if (alreadyInPlaylist) {
         showConfirm(
@@ -183,31 +250,57 @@ export function AddToPlaylistModal({
         return;
       }
 
-      const items: Array<Omit<PlaylistItem, 'id' | 'playlistId' | 'addedAt'>> = episodesToAdd.map((ep) => ({
-        itemType: 'episode',
-        mediaId: ep.id,
-        seriesId: series.series_id,
-        seriesTitle: series.title || series.name,
-        seasonNum: ep.season_num,
-        episodeNum: ep.episode_num,
-        episodeTitle: ep.title || `Episode ${ep.episode_num}`,
-        title: `${series.title || series.name} - S${ep.season_num}E${ep.episode_num}${ep.title ? `: ${ep.title}` : ''}`,
-        poster: posterUrl || series.cover,
-        backdropUrl: series.backdrop_path
-          ? (getTmdbImageUrl(series.backdrop_path, TMDB_BACKDROP_SIZES.large) || series.cover)
-          : (series.cover || undefined),
-        directUrl: ep.direct_url,
-        sourceId: series.source_id,
-        sourceName: sourceName,
-        duration: ep.duration ? ep.duration * 60 : undefined,
-      }));
+      const playlist = playlists.find((p) => p.id === playlistId);
+      const existingEpisodes = episodesToAdd.filter((ep) =>
+        playlist?.items.some(
+          (it) =>
+            it.itemType === 'episode' &&
+            (isSameItemOrFile(it, {
+              directUrl: ep.direct_url,
+              mediaId: ep.id,
+              sourceId: series.source_id,
+            }) ||
+              (it.seriesId &&
+                series.series_id &&
+                normalizePathOrId(it.seriesId) === normalizePathOrId(series.series_id) &&
+                it.seasonNum === ep.season_num &&
+                it.episodeNum === ep.episode_num))
+        )
+      );
 
-      addItemsToPlaylist(playlistId, items);
-      setAddedToast(i18n.t('vod:addedToPlaylist', { name: playlistName }));
-      setTimeout(() => {
-        setAddedToast(null);
-        onClose();
-      }, 1200);
+      if (existingEpisodes.length > 0) {
+        let msg = '';
+        if (episodesToAdd.length === 1) {
+          const singleTitle = existingEpisodes[0].title || `Episode ${existingEpisodes[0].episode_num}`;
+          msg = i18n.t('vod:episodeAlreadyInPlaylistMsg', '{{title}} is already in {{name}}. Add it anyway?', {
+            title: singleTitle,
+            name: playlistName,
+          });
+        } else if (existingEpisodes.length === episodesToAdd.length) {
+          msg = i18n.t('vod:allEpisodesAlreadyInPlaylistMsg', 'All {{count}} selected episodes are already in {{name}}. Add them anyway?', {
+            count: existingEpisodes.length,
+            name: playlistName,
+          });
+        } else {
+          msg = i18n.t('vod:someEpisodesAlreadyInPlaylistMsg', '{{count}} of {{total}} selected episodes are already in {{name}}. Add anyway?', {
+            count: existingEpisodes.length,
+            total: episodesToAdd.length,
+            name: playlistName,
+          });
+        }
+
+        showConfirm(
+          i18n.t('vod:movieAlreadyInPlaylistTitle'),
+          msg,
+          () => doAddEpisodes(playlistId, playlistName, episodesToAdd),
+          undefined,
+          i18n.t('vod:addAnyway'),
+          i18n.t('common:cancel')
+        );
+        return;
+      }
+
+      doAddEpisodes(playlistId, playlistName, episodesToAdd);
     }
   };
 

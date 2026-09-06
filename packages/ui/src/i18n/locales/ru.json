@@ -3461,7 +3461,10 @@
     "cleanCancelBtn": "Отмена",
     "cleanSafeConnectedOnlyBtn": "Очистить только отсутствующие файлы ({{count}})",
     "cleanAllIncludingOfflineBtn": "Очистить все ({{count}})",
-    "cleanAllUnavailableBtn": "Удалить {{count}} отсутствующих элементов"
+    "cleanAllUnavailableBtn": "Удалить {{count}} отсутствующих элементов",
+    "episodeAlreadyInPlaylistMsg": "{{title}} уже есть в {{name}}. Всё равно добавить?",
+    "allEpisodesAlreadyInPlaylistMsg": "Все {{count}} выбранных серий уже есть в {{name}}. Всё равно добавить?",
+    "someEpisodesAlreadyInPlaylistMsg": "{{count}} из {{total}} выбранных серий уже есть в {{name}}. Всё равно добавить?"
   },
   "dvr": {
     "title": "DVR и загрузки",

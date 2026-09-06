@@ -3461,7 +3461,10 @@
     "cleanCancelBtn": "İptal",
     "cleanSafeConnectedOnlyBtn": "Yalnızca Eksik Dosyaları Temizle ({{count}})",
     "cleanAllIncludingOfflineBtn": "Tümünü Temizle ({{count}})",
-    "cleanAllUnavailableBtn": "{{count}} Eksik Öğeyi Kaldır"
+    "cleanAllUnavailableBtn": "{{count}} Eksik Öğeyi Kaldır",
+    "episodeAlreadyInPlaylistMsg": "{{title}} zaten {{name}} listesinde. Yine de eklensin mi?",
+    "allEpisodesAlreadyInPlaylistMsg": "Seçilen {{count}} bölümün tamamı zaten {{name}} listesinde. Yine de eklensin mi?",
+    "someEpisodesAlreadyInPlaylistMsg": "Seçilen {{total}} bölümden {{count}} tanesi zaten {{name}} listesinde. Yine de eklensin mi?"
   },
   "dvr": {
     "title": "DVR ve İndirmeler",

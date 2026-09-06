@@ -3461,7 +3461,10 @@
     "cleanCancelBtn": "Anulo",
     "cleanSafeConnectedOnlyBtn": "Pastro vetëm skedarët që mungojnë ({{count}})",
     "cleanAllIncludingOfflineBtn": "Pastro të gjitha ({{count}})",
-    "cleanAllUnavailableBtn": "Hiq {{count}} artikuj që mungojnë"
+    "cleanAllUnavailableBtn": "Hiq {{count}} artikuj që mungojnë",
+    "episodeAlreadyInPlaylistMsg": "{{title}} është tashmë në {{name}}. Ta shtosh gjithsesi?",
+    "allEpisodesAlreadyInPlaylistMsg": "Të gjitha {{count}} episodet e zgjedhura janë tashmë në {{name}}. T'i shtosh gjithsesi?",
+    "someEpisodesAlreadyInPlaylistMsg": "{{count}} nga {{total}} episodet e zgjedhura janë tashmë në {{name}}. T'i shtosh gjithsesi?"
   },
   "dvr": {
     "title": "DVR dhe shkarkimet",
