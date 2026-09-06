@@ -8,6 +8,7 @@ import {
   readNfo,
 } from './sidecars';
 import { rateLimitedFetch } from '../../services/tmdbRateLimit';
+import { useSettingsStore } from '../../stores/settingsStore';
 
 export type TmdbLookup = {
   tmdbId?: number;
@@ -15,6 +16,7 @@ export type TmdbLookup = {
   poster?: string;
   backdrop?: string;
   matchedTitle?: string;
+  originalTitle?: string;
   matchedYear?: number | null;
   overview?: string;
   rating?: number;
@@ -71,21 +73,26 @@ export function tmdbMatchCacheKey(
   title: string,
   year: number | null,
   type: 'movie' | 'show',
+  language?: string,
 ): string {
-  return `${type}|${title.toLowerCase().trim()}|${year ?? ''}`;
+  const lang = language ?? useSettingsStore.getState().tmdbLanguage ?? 'en-US';
+  return `${type}|${title.toLowerCase().trim()}|${year ?? ''}|${lang}`;
 }
 
 export function tmdbMatchIdCacheKey(
   tmdbId: number,
   type: 'movie' | 'show',
+  language?: string,
 ): string {
-  return `id|${type}|${tmdbId}`;
+  const lang = language ?? useSettingsStore.getState().tmdbLanguage ?? 'en-US';
+  return `id|${type}|${tmdbId}|${lang}`;
 }
 
-function getCachedMatch(key: string): TmdbLookup | null {
-  const memory = tmdbMatchMemory.get(key);
+function getCachedMatch(key: string, legacyKey?: string): TmdbLookup | null {
+  const memory = tmdbMatchMemory.get(key) ?? (legacyKey ? tmdbMatchMemory.get(legacyKey) : undefined);
   if (memory) return memory;
-  const stored = loadTmdbMatchStorage()[key];
+  const storage = loadTmdbMatchStorage();
+  const stored = storage[key] ?? (legacyKey ? storage[legacyKey] : undefined);
   if (stored && Date.now() - stored.ts < TMDB_MATCH_TTL_MS) {
     tmdbMatchMemory.set(key, stored.value);
     return stored.value;
@@ -120,13 +127,19 @@ export function invalidateTmdbMatchCache(
   year: number | null,
   type: 'movie' | 'show',
 ): void {
-  const key = tmdbMatchCacheKey(title, year, type);
-  tmdbMatchMemory.delete(key);
-  const stored = loadTmdbMatchStorage();
-  if (stored[key]) {
-    delete stored[key];
-    persistTmdbMatchStorage();
+  const prefix = `${type}|${title.toLowerCase().trim()}|${year ?? ''}`;
+  for (const k of Array.from(tmdbMatchMemory.keys())) {
+    if (k.startsWith(prefix)) tmdbMatchMemory.delete(k);
   }
+  const stored = loadTmdbMatchStorage();
+  let changed = false;
+  for (const k of Object.keys(stored)) {
+    if (k.startsWith(prefix)) {
+      delete stored[k];
+      changed = true;
+    }
+  }
+  if (changed) persistTmdbMatchStorage();
 }
 
 /**
@@ -136,13 +149,19 @@ export function invalidateTmdbIdMatchCache(
   tmdbId: number,
   type: 'movie' | 'show',
 ): void {
-  const key = tmdbMatchIdCacheKey(tmdbId, type);
-  tmdbMatchMemory.delete(key);
-  const stored = loadTmdbMatchStorage();
-  if (stored[key]) {
-    delete stored[key];
-    persistTmdbMatchStorage();
+  const prefix = `id|${type}|${tmdbId}`;
+  for (const k of Array.from(tmdbMatchMemory.keys())) {
+    if (k.startsWith(prefix)) tmdbMatchMemory.delete(k);
   }
+  const stored = loadTmdbMatchStorage();
+  let changed = false;
+  for (const k of Object.keys(stored)) {
+    if (k.startsWith(prefix)) {
+      delete stored[k];
+      changed = true;
+    }
+  }
+  if (changed) persistTmdbMatchStorage();
 }
 
 /**
@@ -159,7 +178,9 @@ async function tmdbLookupCached(
   signal?: AbortSignal,
 ): Promise<TmdbLookup> {
   const key = tmdbMatchCacheKey(title, year, type);
-  const cached = getCachedMatch(key);
+  const lang = useSettingsStore.getState().tmdbLanguage || 'en-US';
+  const legacyKey = lang === 'en-US' ? `${type}|${title.toLowerCase().trim()}|${year ?? ''}` : undefined;
+  const cached = getCachedMatch(key, legacyKey);
   if (cached) return cached;
 
   const result = await tmdbLookup(token, title, year, type, signal);
@@ -179,7 +200,9 @@ async function tmdbLookupByIdCached(
   signal?: AbortSignal,
 ): Promise<TmdbLookup> {
   const key = tmdbMatchIdCacheKey(tmdbId, type);
-  const cached = getCachedMatch(key);
+  const lang = useSettingsStore.getState().tmdbLanguage || 'en-US';
+  const legacyKey = lang === 'en-US' ? `id|${type}|${tmdbId}` : undefined;
+  const cached = getCachedMatch(key, legacyKey);
   if (cached) return cached;
 
   const result = await tmdbLookupById(token, tmdbId, type, signal);
@@ -717,7 +740,7 @@ export async function buildNfoEntryForFolder(
   return buildNfoEntry(file, info, tmdbToken, signal);
 }
 
-function lowConfidence(parsed: ParsedFilename, tmdb: TmdbLookup): boolean {
+export function lowConfidence(parsed: ParsedFilename, tmdb: TmdbLookup): boolean {
   if (!tmdb.tmdbId) return true;
   if (
     parsed.year != null &&
@@ -726,10 +749,17 @@ function lowConfidence(parsed: ParsedFilename, tmdb: TmdbLookup): boolean {
   ) {
     return true;
   }
-  if (tmdb.matchedTitle) {
+  if (tmdb.matchedTitle || tmdb.originalTitle) {
     const a = tokenize(parsed.title);
-    const b = tokenize(tmdb.matchedTitle);
-    if (a.length && b.length && !a.some((w) => b.includes(w))) return true;
+    // If the filename tokenizes to nothing (non-Latin script, 1-char titles),
+    // there is nothing to compare against — never penalize the match for that
+    // (matches the legacy guard where an empty token set short-circuited).
+    if (a.length === 0) return false;
+    const b = tmdb.matchedTitle ? tokenize(tmdb.matchedTitle) : [];
+    const c = tmdb.originalTitle ? tokenize(tmdb.originalTitle) : [];
+    const matchTitle = a.length && b.length && a.some((w) => b.includes(w));
+    const matchOrig = a.length && c.length && a.some((w) => c.includes(w));
+    if (!matchTitle && !matchOrig) return true;
   }
   return false;
 }
@@ -737,7 +767,9 @@ function lowConfidence(parsed: ParsedFilename, tmdb: TmdbLookup): boolean {
 function tokenize(s: string): string[] {
   return s
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\u3400-\u9fff]+/g, ' ')
     .split(' ')
     .filter((w) => w.length > 1);
 }
@@ -746,6 +778,8 @@ interface TmdbSearchResult {
   id: number;
   title?: string;
   name?: string;
+  original_title?: string;
+  original_name?: string;
   release_date?: string;
   first_air_date?: string;
   poster_path?: string | null;
@@ -786,11 +820,16 @@ function pickBestTmdbResult(results: TmdbSearchResult[], queryTitle: string, yea
   for (let i = 0; i < results.length; i++) {
     const r = results[i];
     const name = normalizeForMatch(String(r.title ?? r.name ?? ''));
+    const origName = normalizeForMatch(String(r.original_title ?? r.original_name ?? ''));
     const nameTokens = name ? name.split(' ').filter(Boolean) : [];
+    const origTokens = origName ? origName.split(' ').filter(Boolean) : [];
     let score = 0;
-    if (q && name === q) {
+    if (q && (name === q || origName === q)) {
       score += 100;
-    } else if (qTokens.length && nameTokens.length && qTokens.every((t) => nameTokens.includes(t))) {
+    } else if (
+      (qTokens.length && nameTokens.length && qTokens.every((t) => nameTokens.includes(t))) ||
+      (qTokens.length && origTokens.length && qTokens.every((t) => origTokens.includes(t)))
+    ) {
       score += 40;
     }
     const rYear = yearFromDate(r.release_date ?? r.first_air_date);
@@ -834,9 +873,10 @@ export async function tmdbLookup(
 ): Promise<TmdbLookup> {
   const path = type === 'movie' ? 'movie' : 'tv';
   const { headers, queryParam } = getTmdbHeadersAndParams(token);
+  const language = useSettingsStore.getState().tmdbLanguage || 'en-US';
 
   const search = async (queryTitle: string, y: number | null): Promise<TmdbSearchResult[]> => {
-    const params = new URLSearchParams({ query: queryTitle, include_adult: 'false' });
+    const params = new URLSearchParams({ query: queryTitle, include_adult: 'false', language });
     if (queryParam) params.set(queryParam.key, queryParam.value);
     if (y && type === 'movie') params.set('year', String(y));
     if (y && type === 'show') params.set('first_air_date_year', String(y));
@@ -867,7 +907,7 @@ export async function tmdbLookup(
   }
 
   try {
-    const dparams = new URLSearchParams({ append_to_response: 'external_ids' });
+    const dparams = new URLSearchParams({ append_to_response: 'external_ids', language });
     if (queryParam) dparams.set(queryParam.key, queryParam.value);
     const dr = await rateLimitedFetch(`https://api.themoviedb.org/3/${path}/${top.id}?${dparams}`, { headers, signal });
     if (dr.ok) {
@@ -899,6 +939,7 @@ export async function tmdbLookup(
     poster: top.poster_path ? `https://image.tmdb.org/t/p/w342${top.poster_path}` : undefined,
     backdrop,
     matchedTitle: top.title ?? top.name,
+    originalTitle: top.original_title ?? top.original_name,
     matchedYear: date ? parseInt(date.slice(0, 4), 10) : null,
     overview: top.overview ?? undefined,
     rating,
@@ -914,6 +955,7 @@ export async function tmdbLookupById(
 ): Promise<TmdbLookup> {
   const path = type === 'movie' ? 'movie' : 'tv';
   const { headers, queryParam } = getTmdbHeadersAndParams(token);
+  const language = useSettingsStore.getState().tmdbLanguage || 'en-US';
 
   let imdbId: string | undefined;
   let rating: number | undefined;
@@ -921,11 +963,12 @@ export async function tmdbLookupById(
   let backdrop: string | undefined;
   let poster: string | undefined;
   let matchedTitle: string | undefined;
+  let originalTitle: string | undefined;
   let matchedYear: number | null = null;
   let overview: string | undefined;
 
   try {
-    const dparams = new URLSearchParams({ append_to_response: 'external_ids' });
+    const dparams = new URLSearchParams({ append_to_response: 'external_ids', language });
     if (queryParam) dparams.set(queryParam.key, queryParam.value);
     const dr = await rateLimitedFetch(`https://api.themoviedb.org/3/${path}/${tmdbId}?${dparams}`, { headers, signal });
     if (dr.ok) {
@@ -944,6 +987,7 @@ export async function tmdbLookupById(
         poster = `https://image.tmdb.org/t/p/w342${dj.poster_path}`;
       }
       matchedTitle = dj.title ?? dj.name;
+      originalTitle = dj.original_title ?? dj.original_name;
       const date: string | undefined = dj.release_date ?? dj.first_air_date;
       if (date) matchedYear = parseInt(date.slice(0, 4), 10);
       overview = dj.overview ?? undefined;
@@ -959,6 +1003,7 @@ export async function tmdbLookupById(
     poster,
     backdrop,
     matchedTitle,
+    originalTitle,
     matchedYear,
     overview,
     rating,

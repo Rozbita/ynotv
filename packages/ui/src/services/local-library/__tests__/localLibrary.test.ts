@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { parseFilename, groupLocal, sortGroups, getLocalEpisodeList, addLocalEntries } from '../local-library';
-import { movieFileInfo, isGenericMovieName, refreshTmdbEntry, invalidateTmdbIdMatchCache } from '../scan';
+import { movieFileInfo, isGenericMovieName, refreshTmdbEntry, invalidateTmdbIdMatchCache, lowConfidence } from '../scan';
 import { parseNfo } from '../sidecars';
 import type { LocalEntry } from '../types';
 
@@ -1188,11 +1188,121 @@ describe('Local Library - Refresh Metadata by TMDB ID', () => {
     expect(refreshed.tmdbId).toBe(5000);
     expect(refreshed.title).toBe('Stranger Things');
   });
+
+  it('uses configured tmdbLanguage in search and detail lookups', async () => {
+    const { useSettingsStore } = await import('../../../stores/settingsStore');
+    const { tmdbLookup, tmdbLookupById } = await import('../scan');
+
+    useSettingsStore.setState({ tmdbLanguage: 'hu-HU' });
+
+    const fetchedUrls: string[] = [];
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      fetchedUrls.push(url);
+      if (url.includes('/search/movie')) {
+        return {
+          ok: true,
+          json: async () => ({
+            results: [
+              {
+                id: 100,
+                title: 'Éjszakai vadász',
+                original_title: 'Hunter in the Dark',
+                release_date: '2020-01-01',
+                overview: 'Magyar leírás...',
+              },
+            ],
+          }),
+        } as unknown as Response;
+      }
+      if (url.includes('/3/movie/100')) {
+        return {
+          ok: true,
+          json: async () => ({
+            id: 100,
+            title: 'Éjszakai vadász',
+            original_title: 'Hunter in the Dark',
+            release_date: '2020-01-01',
+            overview: 'Magyar leírás...',
+          }),
+        } as unknown as Response;
+      }
+      return { ok: false, json: async () => ({}) } as unknown as Response;
+    });
+
+    const searchRes = await tmdbLookup('mock-token', 'Hunter in the Dark', 2020, 'movie');
+    expect(fetchedUrls.some((u) => u.includes('language=hu-HU'))).toBe(true);
+    expect(searchRes.matchedTitle).toBe('Éjszakai vadász');
+    expect(searchRes.originalTitle).toBe('Hunter in the Dark');
+
+    const idRes = await tmdbLookupById('mock-token', 100, 'movie');
+    expect(fetchedUrls.some((u) => u.includes('/3/movie/100') && u.includes('language=hu-HU'))).toBe(true);
+    expect(idRes.matchedTitle).toBe('Éjszakai vadász');
+
+    useSettingsStore.setState({ tmdbLanguage: 'en-US' });
+  });
+
+  it('isolates season episode cache when tmdbLanguage changes', async () => {
+    const { useSettingsStore } = await import('../../../stores/settingsStore');
+    const { getCachedSeasonEpisodes } = await import('../metadata-cache');
+
+    useSettingsStore.setState({ tmdbLanguage: 'en-US' });
+    localStorage.setItem('ynotv.local.cache.season.888_s1_en-US', JSON.stringify([
+      { episode_number: 1, name: 'Pilot (EN)', overview: 'English overview', still_path: null },
+    ]));
+    localStorage.setItem('ynotv.local.cache.season.888_s1_hu-HU', JSON.stringify([
+      { episode_number: 1, name: 'Bevezető rész (HU)', overview: 'Magyar összefoglaló', still_path: null },
+    ]));
+
+    const enEpisodes = await getCachedSeasonEpisodes(888, 1, null);
+    expect(enEpisodes[0].name).toBe('Pilot (EN)');
+
+    useSettingsStore.setState({ tmdbLanguage: 'hu-HU' });
+    const huEpisodes = await getCachedSeasonEpisodes(888, 1, null);
+    expect(huEpisodes[0].name).toBe('Bevezető rész (HU)');
+
+    useSettingsStore.setState({ tmdbLanguage: 'en-US' });
+  });
 });
 
+describe('Local Library - lowConfidence', () => {
+  it('does not flag non-Latin script filenames when tokenization yields nothing', () => {
+    const parsed = { title: 'Охотник в темноте', year: 2020, type: 'movie' as const, season: null, episode: null, resolution: null };
+    const tmdb = {
+      tmdbId: 100,
+      matchedTitle: 'Hunter in the Dark',
+      originalTitle: 'Hunter in the Dark',
+      matchedYear: 2020,
+    };
+    // Regression: the rewritten overlap check must not flag a match merely
+    // because the Cyrillic filename tokenizes to zero words.
+    expect(lowConfidence(parsed, tmdb)).toBe(false);
+  });
 
+  it('does not flag one-character or symbol-only filenames', () => {
+    const parsed = { title: 'A', year: 2020, type: 'movie' as const, season: null, episode: null, resolution: null };
+    expect(lowConfidence(parsed, { tmdbId: 100, matchedTitle: 'A', originalTitle: 'A', matchedYear: 2020 })).toBe(false);
+  });
 
+  it('accepts a localized matchedTitle when the filename matches the original title', () => {
+    const parsed = { title: 'Hunter in the Dark', year: 2020, type: 'movie' as const, season: null, episode: null, resolution: null };
+    const tmdb = {
+      tmdbId: 100,
+      matchedTitle: 'Éjszakai vadász',
+      originalTitle: 'Hunter in the Dark',
+      matchedYear: 2020,
+    };
+    expect(lowConfidence(parsed, tmdb)).toBe(false);
+  });
 
-
-
-
+  it('still flags a clearly wrong match with no token overlap', () => {
+    const parsed = { title: 'Inception', year: 2010, type: 'movie' as const, season: null, episode: null, resolution: null };
+    const tmdb = {
+      tmdbId: 200,
+      matchedTitle: 'The Shawshank Redemption',
+      originalTitle: 'The Shawshank Redemption',
+      matchedYear: 2010,
+    };
+    expect(lowConfidence(parsed, tmdb)).toBe(true);
+  });
+});

@@ -41,16 +41,23 @@ export async function getCachedCast(
 ): Promise<CachedCastMember[]> {
   if (!tmdbId) return [];
 
-  const key = `${mediaType}_${tmdbId}`;
+  const language = useSettingsStore.getState().tmdbLanguage || 'en-US';
+  const key = `${mediaType}_${tmdbId}_${language}`;
+  const legacyKey = `${mediaType}_${tmdbId}`;
 
   // 1. Check memory cache
   if (memoryCastCache.has(key)) {
     return memoryCastCache.get(key)!;
   }
+  if (language === 'en-US' && memoryCastCache.has(legacyKey)) {
+    return memoryCastCache.get(legacyKey)!;
+  }
 
   // 2. Check localStorage
   try {
-    const raw = localStorage.getItem(`${CAST_STORAGE_PREFIX}${key}`);
+    const raw =
+      localStorage.getItem(`${CAST_STORAGE_PREFIX}${key}`) ||
+      (language === 'en-US' ? localStorage.getItem(`${CAST_STORAGE_PREFIX}${legacyKey}`) : null);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
@@ -71,8 +78,8 @@ export async function getCachedCast(
       ? { Authorization: `Bearer ${tmdbToken}`, 'Content-Type': 'application/json' }
       : { 'Content-Type': 'application/json' };
     const url = isBearer
-      ? `https://api.themoviedb.org/3/${mediaType}/${tmdbId}/credits`
-      : `https://api.themoviedb.org/3/${mediaType}/${tmdbId}/credits?api_key=${tmdbToken}`;
+      ? `https://api.themoviedb.org/3/${mediaType}/${tmdbId}/credits?language=${language}`
+      : `https://api.themoviedb.org/3/${mediaType}/${tmdbId}/credits?api_key=${tmdbToken}&language=${language}`;
 
     const res = await rateLimitedFetch(url, { headers });
     if (!res.ok) return [];
@@ -111,16 +118,23 @@ export async function getCachedSeasonEpisodes(
 ): Promise<CachedSeasonEpisode[]> {
   if (!tmdbId) return [];
 
-  const key = `${tmdbId}_s${seasonNumber}`;
+  const language = useSettingsStore.getState().tmdbLanguage || 'en-US';
+  const key = `${tmdbId}_s${seasonNumber}_${language}`;
+  const legacyKey = `${tmdbId}_s${seasonNumber}`;
 
   // 1. Check memory cache
   if (memorySeasonCache.has(key)) {
     return memorySeasonCache.get(key)!;
   }
+  if (language === 'en-US' && memorySeasonCache.has(legacyKey)) {
+    return memorySeasonCache.get(legacyKey)!;
+  }
 
   // 2. Check localStorage
   try {
-    const raw = localStorage.getItem(`${SEASON_STORAGE_PREFIX}${key}`);
+    const raw =
+      localStorage.getItem(`${SEASON_STORAGE_PREFIX}${key}`) ||
+      (language === 'en-US' ? localStorage.getItem(`${SEASON_STORAGE_PREFIX}${legacyKey}`) : null);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
@@ -140,7 +154,6 @@ export async function getCachedSeasonEpisodes(
     const headers: Record<string, string> = isBearer
       ? { Authorization: `Bearer ${tmdbToken}`, 'Content-Type': 'application/json' }
       : { 'Content-Type': 'application/json' };
-    const language = useSettingsStore.getState().tmdbLanguage || 'en-US';
     const url = isBearer
       ? `https://api.themoviedb.org/3/tv/${tmdbId}/season/${seasonNumber}?language=${language}`
       : `https://api.themoviedb.org/3/tv/${tmdbId}/season/${seasonNumber}?api_key=${tmdbToken}&language=${language}`;

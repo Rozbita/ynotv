@@ -2,6 +2,7 @@ import { useState, useEffect, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { IdentifyResolution, LocalEntry } from '../../services/local-library/types';
 import { useActiveTmdbToken } from '../../hooks/useTmdbLists';
+import { useSettingsStore } from '../../stores/settingsStore';
 
 interface IdentifyModalProps {
   target: LocalEntry[] | null;
@@ -92,7 +93,8 @@ export const IdentifyModal = memo(function IdentifyModal({
     const timer = setTimeout(async () => {
       try {
         const { headers, queryParam } = getTmdbHeadersAndParams(tmdbToken);
-        const params = new URLSearchParams({ query: q, include_adult: 'false' });
+        const language = useSettingsStore.getState().tmdbLanguage || 'en-US';
+        const params = new URLSearchParams({ query: q, include_adult: 'false', language });
         if (queryParam) params.set(queryParam.key, queryParam.value);
 
         const r = await fetch(`https://api.themoviedb.org/3/search/${kind}?${params}`, { headers });
@@ -135,7 +137,8 @@ export const IdentifyModal = memo(function IdentifyModal({
     if (tmdbToken) {
       try {
         const { headers, queryParam } = getTmdbHeadersAndParams(tmdbToken);
-        const dparams = new URLSearchParams({ append_to_response: 'external_ids' });
+        const language = useSettingsStore.getState().tmdbLanguage || 'en-US';
+        const dparams = new URLSearchParams({ append_to_response: 'external_ids', language });
         if (queryParam) dparams.set(queryParam.key, queryParam.value);
         const dr = await fetch(`https://api.themoviedb.org/3/${kind}/${c.tmdbId}?${dparams}`, { headers });
         if (dr.ok) {
