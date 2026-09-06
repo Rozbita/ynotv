@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { StremioMeta, StremioVideo } from '../types/stremio';
 import type { VodPlayInfo } from '../types/media';
@@ -20,6 +20,13 @@ export interface PlaybackDetailsModalProps {
   onOpenAppDetails?: () => void;
   onPlayEpisode?: (video: StremioVideo) => void;
   onPlayVodInfo?: (info: VodPlayInfo) => void;
+  onPlayJellyfinEpisode?: (target: {
+    id: string;
+    indexNumber?: number | null;
+    parentIndexNumber?: number | null;
+    name?: string;
+    positionTicks?: number;
+  }) => void;
   onSelectRecommendation?: (item: RecommendationItem) => void;
 }
 
@@ -392,6 +399,318 @@ function StremioEpisodesSection({
   );
 }
 
+interface JellyfinEpisodeItem {
+  id: string;
+  rawId?: string;
+  indexNumber: number;
+  parentIndexNumber: number;
+  name: string;
+  overview?: string;
+  communityRating?: number | null;
+  premiereDate?: string;
+  positionTicks?: number;
+  thumbnailUrl?: string;
+}
+
+function JellyfinEpisodesSection({
+  vodInfo,
+  onPlayEpisode,
+  onClose,
+}: {
+  vodInfo?: VodPlayInfo | null;
+  onPlayEpisode?: (target: {
+    id: string;
+    indexNumber?: number | null;
+    parentIndexNumber?: number | null;
+    name?: string;
+    positionTicks?: number;
+  }) => void;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation('player');
+
+  const initialEpisodes: JellyfinEpisodeItem[] = useMemo(() => {
+    if (!vodInfo?.jellyfinEpisodes || vodInfo.jellyfinEpisodes.length === 0) return [];
+    const server = vodInfo.jellyfinServerUrl?.replace(/\/+$/, '') || '';
+    const apiKey = vodInfo.jellyfinApiKey || '';
+    return vodInfo.jellyfinEpisodes.map((ep) => {
+      const cleanId = String(ep.id).replace(/-/g, '');
+      const thumb = server && apiKey
+        ? `${server}/Items/${encodeURIComponent(ep.id)}/Images/Primary?maxWidth=400&api_key=${encodeURIComponent(apiKey)}`
+        : undefined;
+      return {
+        id: cleanId,
+        rawId: ep.rawId || ep.id,
+        indexNumber: ep.indexNumber != null ? ep.indexNumber : 1,
+        parentIndexNumber: ep.parentIndexNumber != null ? ep.parentIndexNumber : 1,
+        name: ep.name || '',
+        overview: ep.overview || '',
+        communityRating: ep.communityRating ?? null,
+        premiereDate: ep.premiereDate ? String(ep.premiereDate).slice(0, 10) : '',
+        positionTicks: ep.positionTicks || 0,
+        thumbnailUrl: thumb,
+      };
+    });
+  }, [vodInfo?.jellyfinEpisodes, vodInfo?.jellyfinServerUrl, vodInfo?.jellyfinApiKey]);
+
+  const [episodes, setEpisodes] = useState<JellyfinEpisodeItem[]>(initialEpisodes);
+  const [loading, setLoading] = useState<boolean>(initialEpisodes.length === 0);
+  const [error, setError] = useState<string | null>(null);
+
+  // Sync if initialEpisodes changes
+  useEffect(() => {
+    if (initialEpisodes.length > 0) {
+      setEpisodes((prev) => (prev.length === 0 ? initialEpisodes : prev));
+    }
+  }, [initialEpisodes]);
+
+  // Fetch full episode list from Jellyfin server to get rich overviews, ratings, and image tags
+  const fetchEpisodes = useCallback(async () => {
+    const server = vodInfo?.jellyfinServerUrl?.replace(/\/+$/, '');
+    const seriesId = vodInfo?.jellyfinSeriesId || vodInfo?.seriesId;
+    const apiKey = vodInfo?.jellyfinApiKey || '';
+
+    if (!server || !seriesId) {
+      if (initialEpisodes.length === 0) {
+        setError(t('noEpisodesFound', 'No episodes found'));
+        setLoading(false);
+      }
+      return;
+    }
+
+    if (episodes.length === 0) setLoading(true);
+    setError(null);
+
+    try {
+      const url = `${server}/Shows/${encodeURIComponent(seriesId)}/Episodes?Fields=Overview,PrimaryImageAspectRatio,CommunityRating,PremiereDate${apiKey ? `&api_key=${encodeURIComponent(apiKey)}` : ''}`;
+      const res = await fetch(url, {
+        headers: apiKey ? { 'X-Emby-Token': apiKey } : undefined,
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to fetch episodes (${res.status})`);
+      }
+
+      const data = await res.json();
+      if (Array.isArray(data?.Items) && data.Items.length > 0) {
+        // The refresh request has no UserId, so the server usually returns no
+        // per-user data; keep the resume ticks the bridge captured on the page
+        // (keyed by clean item id) so "resume watching" still works for cards
+        // that came from the refreshed list.
+        const cachedTicks = new Map<string, number>();
+        for (const cached of initialEpisodes) {
+          if (cached.positionTicks && cached.positionTicks > 0) {
+            cachedTicks.set(cached.id.toLowerCase(), cached.positionTicks);
+          }
+        }
+        const mapped: JellyfinEpisodeItem[] = data.Items.map((it: any) => {
+          const cleanId = String(it.Id).replace(/-/g, '');
+          const thumb = apiKey
+            ? `${server}/Items/${encodeURIComponent(it.Id)}/Images/Primary?maxWidth=400&api_key=${encodeURIComponent(apiKey)}`
+            : `${server}/Items/${encodeURIComponent(it.Id)}/Images/Primary?maxWidth=400`;
+          const serverTicks = it.UserData?.PlaybackPositionTicks || 0;
+          return {
+            id: cleanId,
+            rawId: it.Id,
+            indexNumber: it.IndexNumber != null ? it.IndexNumber : 1,
+            parentIndexNumber: it.ParentIndexNumber != null ? it.ParentIndexNumber : 1,
+            name: it.Name || '',
+            overview: it.Overview || '',
+            communityRating: it.CommunityRating != null ? Number(it.CommunityRating) : null,
+            premiereDate: it.PremiereDate ? String(it.PremiereDate).slice(0, 10) : '',
+            positionTicks: serverTicks > 0 ? serverTicks : cachedTicks.get(cleanId.toLowerCase()) || 0,
+            thumbnailUrl: thumb,
+          };
+        });
+        setEpisodes(mapped);
+      } else if (initialEpisodes.length === 0) {
+        setError(t('noEpisodesFound', 'No episodes found'));
+      }
+    } catch (err: any) {
+      console.warn('[JellyfinEpisodesSection] Failed to fetch episodes:', err);
+      if (episodes.length === 0 && initialEpisodes.length === 0) {
+        setError(err?.message || 'Failed to load episodes');
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [vodInfo?.jellyfinServerUrl, vodInfo?.jellyfinSeriesId, vodInfo?.seriesId, vodInfo?.jellyfinApiKey, initialEpisodes.length, episodes.length, t]);
+
+  useEffect(() => {
+    void fetchEpisodes();
+  }, [fetchEpisodes]);
+
+  const seasonsMap = useMemo(() => {
+    const map = new Map<number, JellyfinEpisodeItem[]>();
+    for (const ep of episodes) {
+      const s = ep.parentIndexNumber ?? 1;
+      if (!map.has(s)) map.set(s, []);
+      map.get(s)!.push(ep);
+    }
+    return map;
+  }, [episodes]);
+
+  const seasonNumbers = useMemo(() => {
+    return Array.from(seasonsMap.keys()).sort((a, b) => a - b);
+  }, [seasonsMap]);
+
+  const currentSeason = vodInfo?.seasonNum ?? vodInfo?.jellyfinEpisodeParentIndexNumber ?? 1;
+  const [selectedSeason, setSelectedSeason] = useState<number>(
+    currentSeason && seasonNumbers.includes(currentSeason)
+      ? currentSeason
+      : seasonNumbers[0] ?? 1
+  );
+
+  useEffect(() => {
+    if (seasonNumbers.length > 0 && !seasonNumbers.includes(selectedSeason)) {
+      setSelectedSeason(seasonNumbers.includes(currentSeason) ? currentSeason : seasonNumbers[0]);
+    }
+  }, [seasonNumbers, selectedSeason, currentSeason]);
+
+  const seasonEpisodes = useMemo(() => {
+    return (seasonsMap.get(selectedSeason) || []).sort(
+      (a, b) => (a.indexNumber ?? 0) - (b.indexNumber ?? 0)
+    );
+  }, [seasonsMap, selectedSeason]);
+
+  if (loading && episodes.length === 0) {
+    return (
+      <div style={{ padding: '32px 0', textAlign: 'center', color: 'rgba(255,255,255,0.6)' }}>
+        {t('loadingEpisodes')}
+      </div>
+    );
+  }
+
+  if (error && episodes.length === 0) {
+    return (
+      <div style={{ padding: '24px 0', textAlign: 'center', color: '#ff6b6b' }}>
+        <p>{error}</p>
+        <button
+          type="button"
+          onClick={() => void fetchEpisodes()}
+          style={{
+            marginTop: '8px',
+            padding: '6px 16px',
+            borderRadius: '8px',
+            background: 'rgba(255,255,255,0.1)',
+            border: '1px solid rgba(255,255,255,0.2)',
+            color: '#ffffff',
+            cursor: 'pointer',
+          }}
+        >
+          {t('tryAgain')}
+        </button>
+      </div>
+    );
+  }
+
+  if (seasonEpisodes.length === 0) {
+    return (
+      <div style={{ padding: '32px 0', textAlign: 'center', color: 'rgba(255,255,255,0.5)' }}>
+        {t('noEpisodesSeason', { season: selectedSeason })}.
+      </div>
+    );
+  }
+
+  const currentCleanItemId = (vodInfo?.jellyfinItemId || '').replace(/-/g, '').toLowerCase();
+
+  return (
+    <div className="playback-details-episodes-panel">
+      {/* Season Pill Buttons Row */}
+      {seasonNumbers.length > 1 && (
+        <div className="playback-details-season-pills">
+          {seasonNumbers.map((s) => (
+            <button
+              key={s}
+              type="button"
+              className={`playback-details-season-pill ${selectedSeason === s ? 'active' : ''}`}
+              onClick={() => setSelectedSeason(s)}
+            >
+              {t('season', { number: s })}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Episode Cards Grid */}
+      <div className="playback-details-episode-grid">
+        {seasonEpisodes.map((ep) => {
+          const isCurrent =
+            (Boolean(currentCleanItemId) && ep.id.toLowerCase() === currentCleanItemId) ||
+            (ep.indexNumber === vodInfo?.episodeNum && ep.parentIndexNumber === vodInfo?.seasonNum);
+          const epTitle = ep.name || t('episode', { number: ep.indexNumber });
+          const airDate = ep.premiereDate || null;
+          const rating = ep.communityRating;
+          const plot = ep.overview || null;
+
+          return (
+            <div
+              key={ep.id}
+              className={`playback-details-ep-card ${isCurrent ? 'active' : ''}`}
+              onClick={() => {
+                if (onPlayEpisode) {
+                  onPlayEpisode({
+                    id: ep.id,
+                    indexNumber: ep.indexNumber,
+                    parentIndexNumber: ep.parentIndexNumber,
+                    name: ep.name,
+                    positionTicks: ep.positionTicks,
+                  });
+                  onClose();
+                }
+              }}
+            >
+              <div className="playback-details-ep-thumb-wrap">
+                {ep.thumbnailUrl ? (
+                  <img
+                    src={ep.thumbnailUrl}
+                    alt={epTitle}
+                    className="playback-details-ep-thumb"
+                    loading="lazy"
+                    onError={(e) => {
+                      const fallback = vodInfo?.backdropUrl || vodInfo?.posterUrl;
+                      if (fallback && (e.currentTarget as HTMLImageElement).src !== fallback) {
+                        (e.currentTarget as HTMLImageElement).src = fallback;
+                      } else {
+                        (e.currentTarget as HTMLImageElement).style.display = 'none';
+                      }
+                    }}
+                  />
+                ) : (
+                  <div className="playback-details-ep-thumb-placeholder">
+                    <span>E{ep.indexNumber}</span>
+                  </div>
+                )}
+                <div className="playback-details-ep-play-overlay">
+                  <div className="playback-details-ep-play-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                      <polygon points="5 3 19 12 5 21 5 3" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+
+              <div className="playback-details-ep-meta">
+                <div className="playback-details-ep-title-row">
+                  <span className="playback-details-ep-num">{ep.indexNumber}</span>
+                  <span className="playback-details-ep-name">{epTitle}</span>
+                </div>
+                <div className="playback-details-ep-submeta">
+                  {airDate && <span>{airDate}</span>}
+                  {rating !== null && rating !== undefined && !isNaN(rating) && rating > 0 && (
+                    <span>★ {rating.toFixed(1)}</span>
+                  )}
+                </div>
+                {plot && <p className="playback-details-ep-plot">{plot}</p>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function PlaybackDetailsModal({
   open,
   onClose,
@@ -402,6 +721,7 @@ export function PlaybackDetailsModal({
   onOpenAppDetails,
   onPlayEpisode,
   onPlayVodInfo,
+  onPlayJellyfinEpisode,
   onSelectRecommendation,
 }: PlaybackDetailsModalProps) {
   const { t } = useTranslation('player');
@@ -409,11 +729,23 @@ export function PlaybackDetailsModal({
   const [expandedOverview, setExpandedOverview] = useState(false);
   const tmdbToken = useActiveTmdbToken();
 
+  const isJellyfin =
+    playbackSourceView === 'jellyfin' ||
+    vodInfo?.source_id === 'jellyfin' ||
+    Boolean(vodInfo?.jellyfinSeriesId || vodInfo?.jellyfinEpisodes?.length);
+
+  const jfBackdropId = vodInfo?.jellyfinSeriesId || vodInfo?.jellyfinItemId;
+  const jfBackdrop =
+    vodInfo?.jellyfinServerUrl && jfBackdropId
+      ? `${vodInfo.jellyfinServerUrl.replace(/\/+$/, '')}/Items/${encodeURIComponent(jfBackdropId)}/Images/Backdrop?maxWidth=1920${vodInfo.jellyfinApiKey ? `&api_key=${encodeURIComponent(vodInfo.jellyfinApiKey)}` : ''}`
+      : null;
+
   // If the caller didn't provide a usable backdrop (some playback entry points
   // only carry a raw provider path), look the item up and lazy-fetch a real
   // backdrop from TMDB/TVMaze so the banner always has a chance to load.
-  const explicitBackdrop = vodInfo?.backdropUrl;
+  const explicitBackdrop = vodInfo?.backdropUrl || jfBackdrop;
   const needsLazyBackdrop =
+    !isJellyfin &&
     !stremioMeta?.background &&
     !(explicitBackdrop && /^https?:\/\//i.test(explicitBackdrop));
   const { series: vodSeriesForBackdrop } = useSeriesById(
@@ -476,7 +808,8 @@ export function PlaybackDetailsModal({
   const isSeries =
     stremioMeta?.type === 'series' ||
     vodInfo?.type === 'series' ||
-    Boolean(vodInfo?.seriesId && vodInfo.seriesId.length > 0);
+    Boolean(vodInfo?.seriesId && vodInfo.seriesId.length > 0) ||
+    Boolean(vodInfo?.jellyfinSeriesId);
 
   const isStremioOrNuvio =
     playbackSourceView === 'stremio' ||
@@ -778,7 +1111,13 @@ export function PlaybackDetailsModal({
             </>
           ) : (
             /* Episodes Panel View */
-            !isStremioOrNuvio && vodInfo?.seriesId ? (
+            isJellyfin ? (
+              <JellyfinEpisodesSection
+                vodInfo={vodInfo}
+                onPlayEpisode={onPlayJellyfinEpisode}
+                onClose={onClose}
+              />
+            ) : !isStremioOrNuvio && vodInfo?.seriesId ? (
               <VodEpisodesSection
                 seriesId={vodInfo.seriesId}
                 currentSeasonNum={vodInfo.seasonNum}

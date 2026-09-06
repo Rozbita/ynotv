@@ -105,10 +105,14 @@ export interface VodPlayInfo {
   jellyfinEpisodeParentIndexNumber?: number;
   jellyfinEpisodes?: Array<{
     id: string;
+    rawId?: string;
     indexNumber?: number | null;
     parentIndexNumber?: number | null;
     name?: string;
     positionTicks?: number;
+    overview?: string;
+    communityRating?: number | null;
+    premiereDate?: string;
   }>;
   // Remembered subtitle stream index per Jellyfin item id (captured from the
   // web client), so prev/next episodes start with the user's subtitle.

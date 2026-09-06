@@ -114,10 +114,14 @@ export async function jellyfinEmbedReenable(): Promise<void> {
  * or ended, dismissing any active loading spinners or player overlays and
  * restoring the page state.
  */
-export async function jellyfinEmbedNotifyPlaybackEnded(positionTicks?: number): Promise<void> {
+export async function jellyfinEmbedNotifyPlaybackEnded(
+  positionTicks?: number,
+  targetItemId?: string,
+): Promise<void> {
   try {
     await invoke('jellyfin_embed_notify_playback_ended', {
       positionTicks: positionTicks && positionTicks > 0 ? positionTicks : undefined,
+      targetItemId: targetItemId || undefined,
     });
   } catch (e) {
     // Ignore errors if the child webview is not running

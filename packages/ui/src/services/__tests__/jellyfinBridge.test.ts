@@ -38,6 +38,18 @@ interface LoadedBridge {
     window: any;
 }
 
+/**
+ * Test-scoped overrides for the mocked browser the bridge boots in. The
+ * defaults keep the bridge's polling/timers inert so tests never hang; override
+ * them when exercising code paths that schedule navigation or reloads.
+ */
+interface BridgeLoadOptions {
+    location?: any;
+    windowExtras?: Record<string, unknown>;
+    setIntervalFn?: (fn: () => void) => number;
+    setTimeoutFn?: (fn: () => void) => number;
+}
+
 const INIT_MARKER = 'const INIT_SCRIPT: &str = r##"';
 
 function extractInitScript(source: string): string {
@@ -67,8 +79,8 @@ function makeStorage() {
     };
 }
 
-function loadBridge(): LoadedBridge {
-    const location = {
+function loadBridge(opts: BridgeLoadOptions = {}): LoadedBridge {
+    const location = opts.location ?? {
         origin: 'http://jf.test:8096',
         pathname: '/web/index.html',
         hash: '',
@@ -80,6 +92,7 @@ function loadBridge(): LoadedBridge {
         location,
         addEventListener: () => {},
         dispatchEvent: () => {},
+        ...(opts.windowExtras || {}),
     };
     win.window = win;
 
@@ -130,8 +143,8 @@ function loadBridge(): LoadedBridge {
         MutationObserverMock,
         HTMLMediaElementMock,
         XMLHttpRequestMock,
-        () => 1, // no-op interval: the bridge's polling must not keep the test alive
-        () => 0,
+        opts.setIntervalFn ?? (() => 1), // no-op interval: polling must not keep the test alive
+        opts.setTimeoutFn ?? (() => 0),
         (globalThis as any).CustomEvent ?? class CustomEventMock {},
         URL,
     );
@@ -369,6 +382,111 @@ describe('jellyfin bridge item isolation', () => {
             // HLS playlists are rewritten to the direct static stream for mpv;
             // the path id is dash-stripped.
             expect(result.url).toContain(`/Videos/${ITEM_A_CLEAN}/stream`);
+        });
+    });
+
+    describe('__ynotvOnPlaybackEnded target navigation (series details)', () => {
+        interface NavRecorder {
+            location: any;
+            shown: string[];
+            reloads: number;
+            intervals: Array<() => void>;
+            timeouts: Array<() => void>;
+        }
+
+        function loadNavBridge(): NavRecorder & LoadedBridge {
+            // A single mutable holder: the sandbox's reload/intervals/timeouts
+            // callbacks must observe the same state the assertions read, so the
+            // recorder is returned with a live getter instead of a value copy.
+            const rec: NavRecorder = {
+                location: {
+                    origin: 'http://jf.test:8096',
+                    pathname: '/web/index.html',
+                    hash: '',
+                    href: 'http://jf.test:8096/web/index.html',
+                    reload: () => {
+                        rec.reloads += 1;
+                    },
+                },
+                shown: [],
+                reloads: 0,
+                intervals: [],
+                timeouts: [],
+            };
+            const loaded = loadBridge({
+                location: rec.location,
+                windowExtras: {
+                    AppRouter: {
+                        showItem: (id: string) => {
+                            rec.shown.push(id);
+                        },
+                    },
+                },
+                setIntervalFn: (fn: () => void) => {
+                    rec.intervals.push(fn);
+                    return rec.intervals.length;
+                },
+                setTimeoutFn: (fn: () => void) => {
+                    rec.timeouts.push(fn);
+                    return rec.timeouts.length;
+                },
+            });
+            return {
+                ...loaded,
+                location: rec.location,
+                shown: rec.shown,
+                intervals: rec.intervals,
+                timeouts: rec.timeouts,
+                get reloads() {
+                    return rec.reloads;
+                },
+            } as NavRecorder & LoadedBridge;
+        }
+
+        // The bridge installs its own background polling at boot, so only the
+        // intervals/timers scheduled DURING __ynotvOnPlaybackEnded belong to the
+        // navigation-under-test. Record a baseline before invoking it.
+        function navBaseline(rec: NavRecorder): { intervalsStart: number; timeoutsStart: number } {
+            return { intervalsStart: rec.intervals.length, timeoutsStart: rec.timeouts.length };
+        }
+
+        it('passes the dash-stripped id to AppRouter.showItem and reloads only once the details route commits', () => {
+            const rec = loadNavBridge();
+            const { intervalsStart, timeoutsStart } = navBaseline(rec);
+            // Series id arrives raw (dashed GUID) from the app; the bridge strips
+            // dashes before handing it to the router.
+            rec.window.__ynotvOnPlaybackEnded('9f2c8a14-5b6d-4e7a-9c01-2d3e4f5a6b7c');
+            expect(rec.shown).toEqual(['9f2c8a145b6d4e7a9c012d3e4f5a6b7c']);
+            // No reload before the (async) router navigation has committed.
+            expect(rec.reloads).toBe(0);
+            expect(rec.timeouts.length).toBe(timeoutsStart);
+            // Exactly one new poll interval was scheduled.
+            expect(rec.intervals.length).toBe(intervalsStart + 1);
+
+            // AppRouter.showItem resolves the item over the network, then the
+            // SPA pushes the details route — simulate that landing.
+            rec.location.pathname = '/web/details';
+            rec.location.href = 'http://jf.test:8096/web/details?id=9f2c8a145b6d4e7a9c012d3e4f5a6b7c';
+            for (const fn of rec.intervals.slice(intervalsStart)) fn();
+            // The deferred reload was scheduled, exactly once.
+            expect(rec.timeouts.length).toBe(timeoutsStart + 1);
+            rec.timeouts.slice(timeoutsStart).forEach((fn) => fn());
+            expect(rec.reloads).toBe(1);
+        });
+
+        it('does not double-reload if a stale poll tick fires after the navigation committed', () => {
+            const rec = loadNavBridge();
+            const { intervalsStart, timeoutsStart } = navBaseline(rec);
+            rec.window.__ynotvOnPlaybackEnded('9f2c8a145b6d4e7a9c012d3e4f5a6b7c');
+            rec.location.pathname = '/web/details?id=9f2c8a145b6d4e7a9c012d3e4f5a6b7c';
+            for (const fn of rec.intervals.slice(intervalsStart)) fn();
+            expect(rec.timeouts.length).toBe(timeoutsStart + 1);
+            rec.timeouts.slice(timeoutsStart).forEach((fn) => fn());
+            expect(rec.reloads).toBe(1);
+            // A late tick must not schedule another reload.
+            for (const fn of rec.intervals.slice(intervalsStart)) fn();
+            expect(rec.timeouts.length).toBe(timeoutsStart + 1);
+            expect(rec.reloads).toBe(1);
         });
     });
 });

@@ -1894,6 +1894,13 @@ function useTmdbPresencePoster(
 
   const [showShortcutsOverlay, setShowShortcutsOverlay] = useState(false);
 
+  // When stopping a Jellyfin stream to "open details" from the playback modal,
+  // the ended notification should carry the series id so the embedded webview
+  // navigates to that series' details page instead of doing its generic
+  // back()/reload. Set just before handleStop; consumed (and cleared) by the
+  // Jellyfin stop notification below so the signal is sent exactly once.
+  const jellyfinOpenDetailsTargetRef = useRef<string | null>(null);
+
   // Wrap handleStop to restore the source page if stopped from a media context.
   const handleStop = useCallback(async (returnView?: 'movies' | 'series' | 'dvr' | 'stremio' | 'nuvio' | 'jellyfin') => {
     // Prop wired via onBack/onStop/onClick hands React the click event as the
@@ -1985,7 +1992,12 @@ function useTmdbPresencePoster(
     if (isJellyfin) {
       const pos = positionRef.current;
       const ticks = pos > 0 ? Math.round(pos * 10000000) : undefined;
-      await jellyfinEmbedNotifyPlaybackEnded(ticks).catch(() => {});
+      // One-shot "open details" target: pass the series id through so the
+      // webview navigates to the series page while this stop notification is
+      // being sent (avoids a second, racing ended notification).
+      const detailsTarget = jellyfinOpenDetailsTargetRef.current;
+      jellyfinOpenDetailsTargetRef.current = null;
+      await jellyfinEmbedNotifyPlaybackEnded(ticks, detailsTarget ?? undefined).catch(() => {});
     }
 
     await handleStopRaw();
@@ -5678,6 +5690,22 @@ function useTmdbPresencePoster(
         currentEpisode={currentStremioEpisode}
         onOpenAppDetails={async () => {
           setShowPlaybackDetailsModal(false);
+          // Jellyfin: stop playback, returning to the Jellyfin webview tab. If
+          // a series ID is known, tell the child webview to navigate directly
+          // to that series' details page.
+          const isJellyfin = vodInfo?.source_id === 'jellyfin' || playbackSourceView === 'jellyfin';
+          if (isJellyfin) {
+            const seriesId = vodInfo?.jellyfinSeriesId || (vodInfo?.type === 'series' ? vodInfo?.seriesId : undefined);
+            // handleStop's ended notification carries the target so the webview
+            // gets a single signal: stop playback AND navigate to the series
+            // details page. Sending a second notification here would race the
+            // first one's back()/reload inside the webview.
+            if (seriesId) {
+              jellyfinOpenDetailsTargetRef.current = seriesId;
+            }
+            await handleStop();
+            return;
+          }
           // Stremio/Nuvio: stopping already restores the detail page in those
           // apps (the app keeps its own view state), so nothing else to do.
           const isStremio = vodInfo?.source_id === 'stremio' || vodInfo?.source_id === 'trailer';
@@ -5731,6 +5759,12 @@ function useTmdbPresencePoster(
         onPlayVodInfo={(info) => {
           setShowPlaybackDetailsModal(false);
           handlePlayVodWrapper(info, () => setActiveView('none'));
+        }}
+        onPlayJellyfinEpisode={(target) => {
+          setShowPlaybackDetailsModal(false);
+          if (vodInfo) {
+            void playJellyfinEpisode(vodInfo, target);
+          }
         }}
         onSelectRecommendation={(item: RecommendationItem) => {
           setShowPlaybackDetailsModal(false);

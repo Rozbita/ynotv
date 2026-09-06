@@ -797,6 +797,7 @@ pub async fn jellyfin_embed_reenable<R: Runtime>(app: AppHandle<R>) -> Result<()
 pub async fn jellyfin_embed_notify_playback_ended<R: Runtime>(
     app: AppHandle<R>,
     position_ticks: Option<u64>,
+    target_item_id: Option<String>,
 ) -> Result<(), String> {
     let state = app.state::<JellyfinEmbedState>();
     // Cancel any in-flight geometry re-asserts spawned by this handoff, and
@@ -850,7 +851,14 @@ pub async fn jellyfin_embed_notify_playback_ended<R: Runtime>(
     }
 
     if let Some(wv) = app.get_webview(JELLYFIN_LABEL) {
-        let _ = wv.eval("window.__ynotvOnPlaybackEnded && window.__ynotvOnPlaybackEnded();");
+        let script = match target_item_id {
+            Some(id) if !id.trim().is_empty() => {
+                let clean = id.trim().replace('\'', "\\'");
+                format!("window.__ynotvOnPlaybackEnded && window.__ynotvOnPlaybackEnded('{}');", clean)
+            }
+            _ => "window.__ynotvOnPlaybackEnded && window.__ynotvOnPlaybackEnded();".to_string(),
+        };
+        let _ = wv.eval(&script);
     }
     Ok(())
 }
@@ -1865,7 +1873,10 @@ const INIT_SCRIPT: &str = r##"
                     indexNumber: it.IndexNumber != null ? it.IndexNumber : null,
                     parentIndexNumber: it.ParentIndexNumber != null ? it.ParentIndexNumber : null,
                     name: it.Name || "",
-                    positionTicks: it.UserData && it.UserData.PlaybackPositionTicks ? it.UserData.PlaybackPositionTicks : 0
+                    positionTicks: it.UserData && it.UserData.PlaybackPositionTicks ? it.UserData.PlaybackPositionTicks : 0,
+                    overview: it.Overview || "",
+                    communityRating: it.CommunityRating != null ? it.CommunityRating : null,
+                    premiereDate: it.PremiereDate || ""
                 });
                 rememberItemDto(it);
             }
@@ -2614,7 +2625,7 @@ const INIT_SCRIPT: &str = r##"
         warn("re-enabled Jellyfin web player after failed mpv handoff");
     };
 
-    window.__ynotvOnPlaybackEnded = function () {
+    window.__ynotvOnPlaybackEnded = function (targetItemId) {
         try {
             window.__ynotvPlaybackActive = false;
             lastSignalKey = null;
@@ -2633,6 +2644,51 @@ const INIT_SCRIPT: &str = r##"
             }
             var els = document.querySelectorAll("video,audio");
             for (var i = 0; i < els.length; i++) releaseMedia(els[i]);
+
+            if (targetItemId) {
+                var cleanTarget = String(targetItemId).replace(/-/g, '');
+                var navStartedAt = Date.now();
+                var navReloaded = false;
+                function finishTargetNav() {
+                    if (navReloaded) return;
+                    navReloaded = true;
+                    // Deferred like the generic stop path: give the SPA a moment
+                    // to finish rendering before the hard reload that reboots the
+                    // bridge cleanly on the details page.
+                    setTimeout(function () {
+                        try { window.location.reload(); } catch (e) {}
+                    }, 60);
+                }
+                try {
+                    // AppRouter.showItem resolves the item over the network
+                    // BEFORE routing (async), so wait for the details route to
+                    // actually appear in the URL before reloading — a fixed
+                    // short reload can fire mid-navigation and strand the
+                    // webview on the pre-playback page. Fall back to the hash
+                    // route for old clients without the AppRouter global.
+                    if (window.AppRouter && typeof window.AppRouter.showItem === "function") {
+                        window.AppRouter.showItem(cleanTarget);
+                    } else {
+                        window.location.hash = '#/details?id=' + cleanTarget;
+                    }
+                } catch (e) {}
+                var navPoll = setInterval(function () {
+                    try {
+                        var navUrl = ((location.pathname || '') + (location.hash || '')).toLowerCase();
+                        var navCommitted = navUrl.indexOf('details') >= 0 || navUrl.indexOf(cleanTarget.toLowerCase()) >= 0;
+                        // Safety cap: never leave the page frozen on the player
+                        // screen; reload once even if the route never appeared.
+                        if (navCommitted || Date.now() - navStartedAt > 3000) {
+                            clearInterval(navPoll);
+                            finishTargetNav();
+                        }
+                    } catch (e) {
+                        clearInterval(navPoll);
+                        finishTargetNav();
+                    }
+                }, 150);
+                return;
+            }
 
             var cur = location.hash || "";
             if (/videoosd/i.test(cur)) {
