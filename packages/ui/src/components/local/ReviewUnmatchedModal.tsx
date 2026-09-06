@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, memo } from 'react';
+import { useState, useMemo, useEffect, useRef, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { VirtualList } from '../common/VirtualList';
 import type { LocalGroup } from '../../services/local-library/types';
@@ -71,6 +71,7 @@ export const ReviewUnmatchedModal = memo(function ReviewUnmatchedModal({
     () => new Set(groups.map(groupKey)),
   );
   const [filter, setFilter] = useState('');
+  const listRef = useRef<HTMLDivElement>(null);
 
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase();
@@ -225,8 +226,9 @@ export const ReviewUnmatchedModal = memo(function ReviewUnmatchedModal({
           </div>
 
           {/* Virtualized list of review units (one per series/movie) */}
-          <div className="local-batch-list overflow-y-auto" style={{ height: 'min(45vh, 400px)' }}>
+          <div ref={listRef} className="local-batch-list" style={{ height: 'min(45vh, 400px)' }}>
             <VirtualList
+              scrollRef={listRef}
               items={filtered}
               estimateItemHeight={56}
               getKey={(g) => groupKey(g)}
