@@ -5127,7 +5127,9 @@ function useTmdbPresencePoster(
           setCats(false);
           setView(curView === 'stremio' ? 'none' : 'stremio');
           setTimeout(() => focusViewOnOpen(), 120);
-          break;        case 'nuvio':
+          break;
+
+        case 'nuvio':
           setCats(false);
           setView(curView === 'nuvio' ? 'none' : 'nuvio');
           setTimeout(() => focusViewOnOpen(), 120);

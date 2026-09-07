@@ -706,7 +706,6 @@ pub(crate) async fn get_mpv_params_from_store<R: Runtime>(app: &AppHandle<R>) ->
                 debug!("[MPV] TimeShift enabled — injecting demuxer cache bytes: {}", cache_bytes);
                 args.push(format!("--demuxer-max-back-bytes={}", cache_bytes));
                 args.push(format!("--demuxer-max-bytes={}", cache_bytes));
-                args.push("--demuxer-readahead-secs=20".to_string());
             }
 
             // 4. Inject Subtitles and Audio settings (Settings -> Subtitles and Audio)
