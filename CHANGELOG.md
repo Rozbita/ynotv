@@ -1,5 +1,33 @@
 # Changelog
 
+## v2.5.3
+
+### Added
+
+- **Jellyfin Integration** *(Beta)* - Uses the WebUI, playback hands off to the embedded player with full player controls. Opt in under `Settings → Jellyfin`. Currently does not support controller/phone remote.
+- **View All Programs in three-column EPG** - The View All Programs panel has been added to the three-column EPG layout for browsing past and future programs and accessing catch-up content.
+- **Multiple proxy profiles** - Multiple SOCKS5 proxy profiles can now be saved and switched between under `Settings → Sources → Proxies`.
+- **Failover group list sorting** - Failover groups can be sorted by name, creation date, or channel count in ascending or descending order. The selected sort order is remembered between sessions.
+- **Updated app icon** - The app icon has been updated. Alternative icons, including the previous one, can be selected under `Settings → About`.
+- **Auto-sort favorites alphabetically** - Favorites can be automatically kept sorted A–Z instead of using manual ordering. Enable under `Settings → Live TV → Favorites`.
+- **Catch-up channel filter** - A filter button in the Live TV channel list header shows only channels with catch-up support. Enable under `Settings → Navigation`.
+- **Quick probe** - Right-click any channel in the EPG to run a quick stream probe without opening the full probe tool for average bitrate metadata, autoenables bitrate badges on use.
+- **Probe and Failover access from Favorites and custom groups** - The channel probe can now be launched scoped to the current Favorites or custom group view. The Failover overlay also includes a new button to open the Failover group manager directly.
+- **Bulk import for MAC portals** - MAC/Stalker portal credentials can now be bulk-imported from a pasted list.
+- **AFL support** - The Australian Football League has been added to Sports leagues, team pages, and stream matching.
+- **Local library quick cleanup** - A `Clean Unavailable` action scans local library folders and removes entries whose files or folders no longer exist. Missing files can also be removed individually from the Local view.
+- **Duplicate detection when adding to playlists** - Adding local movies or episodes that are already in a playlist now prompts for confirmation before creating duplicates
+- **Local metadata language** - TMDb metadata lookups for the local library will now use the language selected in Metadata settings.
+- **Preserved scroll position in Custom Groups Manager** - Moving categories in the Custom Groups Manager no longer resets the list scroll position.
+
+### Fixed
+
+- **Certain Settings not persisting after restart** - Resolved an issue where certain settings were not saved correctly and would revert on restart.
+- **Category strip rendering transparently** - The category strip no longer appears see-through in certain themes.
+- **Three-column EPG layout in UI v1/v2** - The three-column layout now renders correctly in the v1 and v2 UI designs, with uniform program cards and full-width program details.
+- **Auto-hide sidebar flashing on hide** - The auto-hide category sidebar no longer flashes when transitioning to the hidden state.
+- **Sidebar background bleeding content** - The sidebar now uses a solid background, preventing underlying content from showing through when using optimizations.
+
 ## v2.5.2
 
 ### Added
