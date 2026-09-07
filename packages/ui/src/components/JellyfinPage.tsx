@@ -11,6 +11,7 @@ import {
   jellyfinEmbedResize,
   jellyfinEmbedSetVisible,
 } from '../services/jellyfin';
+import { useSettingsStore } from '../stores/settingsStore';
 import './JellyfinPage.css';
 
 /**
@@ -156,7 +157,8 @@ export function JellyfinPage({ visible, onPlay }: JellyfinPageProps) {
       const bounds = boundsMaybe ?? computeBounds();
       if (!bounds) return false;
       try {
-        await jellyfinEmbedOpen(url, bounds);
+        const debugLogging = useSettingsStore.getState().jellyfinDebugLoggingEnabled;
+        await jellyfinEmbedOpen(url, bounds, debugLogging);
         return true;
       } catch (e) {
         console.warn('[Jellyfin] Failed to open embedded webview:', e);

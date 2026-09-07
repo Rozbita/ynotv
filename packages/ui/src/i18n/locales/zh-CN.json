@@ -1340,7 +1340,19 @@
       "openFailed": "无法打开 Jellyfin 窗口。",
       "closeFailed": "无法关闭 Jellyfin 窗口。",
       "notes": "在 Jellyfin 窗口内开始的播放会移交给 ynoTV 的 mpv 播放器。播放位置会回传给服务器，因此 Jellyfin 会显示\"正在播放\"，并保存续播位置。",
-      "disclaimer": "Jellyfin 是第三方媒体服务器。ynoTV 与 Jellyfin 项目无任何关联。嵌入式窗口会直接从您配置的服务器加载网页界面。"
+      "disclaimer": "Jellyfin 是第三方媒体服务器。ynoTV 与 Jellyfin 项目无任何关联。嵌入式窗口会直接从您配置的服务器加载网页界面。",
+      "diagnosticsTitle": "诊断与故障排除",
+      "diagnosticsHint": "排查嵌入式 Jellyfin Web 客户端或播放移交的问题。Webview 日志将写入独立的 jellyfin.log 文件，并与常规应用日志分开保存。",
+      "debugLogging": "启用 Jellyfin 调试日志",
+      "debugLoggingHint": "将 Webview 控制台日志（log、info、warn、error）和桥接事件捕获到 jellyfin.log。默认关闭。",
+      "openLogFile": "打开日志文件",
+      "openLogDir": "打开日志文件夹",
+      "clearLogFile": "清除日志",
+      "clearing": "正在清除...",
+      "cleared": "日志已清除",
+      "inspectDevtools": "使用 DevTools 检查",
+      "inspectDevtoolsHint": "打开附加到 Jellyfin Webview 的 DevTools（或按 F12 / Ctrl+Shift+I）。",
+      "devtoolsError": "必须打开 Jellyfin 标签页才能使用 DevTools 检查。"
     },
     "simkl": {
       "title": "Simkl",

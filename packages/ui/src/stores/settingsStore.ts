@@ -108,6 +108,7 @@ export interface JellyfinSettings {
   jellyfinEnabled: boolean;
   jellyfinTraktScrobbleEnabled: boolean;
   jellyfinSimklScrobbleEnabled: boolean;
+  jellyfinDebugLoggingEnabled: boolean;
 }
 
 export interface CategorySettings {
@@ -377,6 +378,7 @@ export interface SettingsState {
   // server-side Trakt/Simkl Jellyfin plugins don't double-scrobble.
   jellyfinTraktScrobbleEnabled: boolean;
   jellyfinSimklScrobbleEnabled: boolean;
+  jellyfinDebugLoggingEnabled: boolean;
   setJellyfinEnabled: (enabled: boolean) => void;
   setJellyfinSettings: (partial: Partial<JellyfinSettings>) => void;
 
@@ -1746,6 +1748,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   jellyfinEnabled: false,
   jellyfinTraktScrobbleEnabled: false,
   jellyfinSimklScrobbleEnabled: false,
+  jellyfinDebugLoggingEnabled: false,
   setJellyfinEnabled: (enabled) => {
     set({ jellyfinEnabled: enabled });
     persistSettings({ jellyfinEnabled: enabled });
@@ -1755,6 +1758,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (partial.jellyfinEnabled !== undefined) patch.jellyfinEnabled = partial.jellyfinEnabled;
     if (partial.jellyfinTraktScrobbleEnabled !== undefined) patch.jellyfinTraktScrobbleEnabled = partial.jellyfinTraktScrobbleEnabled;
     if (partial.jellyfinSimklScrobbleEnabled !== undefined) patch.jellyfinSimklScrobbleEnabled = partial.jellyfinSimklScrobbleEnabled;
+    if (partial.jellyfinDebugLoggingEnabled !== undefined) patch.jellyfinDebugLoggingEnabled = partial.jellyfinDebugLoggingEnabled;
     set(patch);
     persistSettings(patch);
   },

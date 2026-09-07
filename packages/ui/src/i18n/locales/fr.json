@@ -1340,7 +1340,19 @@
       "openFailed": "Impossible d'ouvrir la fenêtre Jellyfin.",
       "closeFailed": "Impossible de fermer la fenêtre Jellyfin.",
       "notes": "La lecture démarrée dans la fenêtre Jellyfin est transférée au lecteur mpv d'ynoTV. La position est renvoyée au serveur, afin que Jellyfin affiche « En cours de lecture » et que les positions de reprise soient enregistrées.",
-      "disclaimer": "Jellyfin est un serveur multimédia tiers. ynoTV n'est pas affiliée au projet Jellyfin. La fenêtre intégrée charge l'interface web directement depuis votre serveur configuré."
+      "disclaimer": "Jellyfin est un serveur multimédia tiers. ynoTV n'est pas affiliée au projet Jellyfin. La fenêtre intégrée charge l'interface web directement depuis votre serveur configuré.",
+      "diagnosticsTitle": "Diagnostic et dépannage",
+      "diagnosticsHint": "Résolvez les problèmes liés au client web Jellyfin intégré ou aux transferts de lecture. Les journaux de la webview sont écrits dans un fichier jellyfin.log isolé et conservés séparément des journaux normaux de l'application.",
+      "debugLogging": "Activer la journalisation de débogage Jellyfin",
+      "debugLoggingHint": "Capture les journaux de la console de la webview (log, info, warn, error) et les événements du pont dans jellyfin.log. Désactivé par défaut.",
+      "openLogFile": "Ouvrir le fichier journal",
+      "openLogDir": "Ouvrir le dossier des journaux",
+      "clearLogFile": "Effacer le journal",
+      "clearing": "Effacement...",
+      "cleared": "Journal effacé",
+      "inspectDevtools": "Inspecter avec DevTools",
+      "inspectDevtoolsHint": "Ouvre DevTools attaché à la webview Jellyfin (ou appuyez sur F12 / Ctrl+Shift+I).",
+      "devtoolsError": "L'onglet Jellyfin doit être ouvert pour inspecter avec DevTools."
     },
     "simkl": {
       "title": "Simkl",

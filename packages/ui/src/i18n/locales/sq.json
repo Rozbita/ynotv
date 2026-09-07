@@ -1340,7 +1340,19 @@
       "openFailed": "Dështoi hapja e dritares së Jellyfin.",
       "closeFailed": "Dështoi mbyllja e dritares së Jellyfin.",
       "notes": "Luajtja e nisur brenda dritares së Jellyfin kalohet te player-i mpv i ynoTV. Pozicioni i dërgohet përsëri serverit, kështu që Jellyfin shfaq \"Duke luajtur tani\" dhe pozicionet e vazhdimit ruhen.",
-      "disclaimer": "Jellyfin është një server mediash nga palë të treta. ynoTV nuk është e lidhur me projektin Jellyfin. Dritarja e integruar ngarkon ndërfaqen web direkt nga serveri që keni konfiguruar."
+      "disclaimer": "Jellyfin është një server mediash nga palë të treta. ynoTV nuk është e lidhur me projektin Jellyfin. Dritarja e integruar ngarkon ndërfaqen web direkt nga serveri që keni konfiguruar.",
+      "diagnosticsTitle": "Diagnostika dhe zgjidhja e problemeve",
+      "diagnosticsHint": "Zgjidhni problemet me klientin web të Jellyfin të integruar ose me transferimet e riprodhimit. Regjistrat e webview shkruhen në një skedar të izoluar jellyfin.log dhe mbahen të ndarë nga regjistrat e zakonshëm të aplikacionit.",
+      "debugLogging": "Aktivizo regjistrimin e korrigjimit të Jellyfin",
+      "debugLoggingHint": "Kap regjistrat e konsolës së webview (log, info, warn, error) dhe ngjarjet e urës në jellyfin.log. I çaktivizuar si parazgjedhje.",
+      "openLogFile": "Hap skedarin e regjistrit",
+      "openLogDir": "Hap dosjen e regjistrave",
+      "clearLogFile": "Pastro regjistrin",
+      "clearing": "Duke pastruar...",
+      "cleared": "Regjistri u pastrua",
+      "inspectDevtools": "Inspekto me DevTools",
+      "inspectDevtoolsHint": "Hap DevTools të bashkangjitur me webview-in e Jellyfin (ose shtyp F12 / Ctrl+Shift+I).",
+      "devtoolsError": "Skeda Jellyfin duhet të jetë e hapur për të inspektuar me DevTools."
     },
     "simkl": {
       "title": "Simkl",

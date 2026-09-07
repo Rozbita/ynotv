@@ -1340,7 +1340,19 @@
       "openFailed": "Das Jellyfin-Fenster konnte nicht geöffnet werden.",
       "closeFailed": "Das Jellyfin-Fenster konnte nicht geschlossen werden.",
       "notes": "Die im Jellyfin-Fenster gestartete Wiedergabe wird an ynoTVs mpv-Player übergeben. Die Position wird an den Server zurückgemeldet, sodass Jellyfin „Jetzt läuft\" anzeigt und Fortsetzungspositionen gespeichert werden.",
-      "disclaimer": "Jellyfin ist ein Media-Server eines Drittanbieters. ynoTV steht in keiner Verbindung zum Jellyfin-Projekt. Das eingebettete Fenster lädt die Weboberfläche direkt von deinem konfigurierten Server."
+      "disclaimer": "Jellyfin ist ein Media-Server eines Drittanbieters. ynoTV steht in keiner Verbindung zum Jellyfin-Projekt. Das eingebettete Fenster lädt die Weboberfläche direkt von deinem konfigurierten Server.",
+      "diagnosticsTitle": "Diagnose und Fehlerbehebung",
+      "diagnosticsHint": "Beheben Sie Probleme mit dem eingebetteten Jellyfin-Webclient oder bei der Übergabe der Wiedergabe. Webview-Protokolle werden in eine isolierte jellyfin.log-Datei geschrieben und getrennt von den normalen App-Protokollen aufbewahrt.",
+      "debugLogging": "Jellyfin-Debug-Protokollierung aktivieren",
+      "debugLoggingHint": "Erfasst Webview-Konsolenprotokolle (log, info, warn, error) und Bridge-Ereignisse in jellyfin.log. Standardmäßig deaktiviert.",
+      "openLogFile": "Protokolldatei öffnen",
+      "openLogDir": "Protokollordner öffnen",
+      "clearLogFile": "Protokoll löschen",
+      "clearing": "Wird gelöscht...",
+      "cleared": "Protokoll gelöscht",
+      "inspectDevtools": "Mit DevTools untersuchen",
+      "inspectDevtoolsHint": "Öffnet DevTools für die Jellyfin-Webview (oder drücken Sie F12 / Ctrl+Shift+I).",
+      "devtoolsError": "Die Jellyfin-Registerkarte muss geöffnet sein, um DevTools zu untersuchen."
     },
     "simkl": {
       "title": "Simkl",

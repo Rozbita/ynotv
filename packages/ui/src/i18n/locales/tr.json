@@ -1340,7 +1340,19 @@
       "openFailed": "Jellyfin penceresi açılamadı.",
       "closeFailed": "Jellyfin penceresi kapatılamadı.",
       "notes": "Jellyfin penceresinde başlatılan oynatma, ynoTV'nin mpv oynatıcısına aktarılır. Konum sunucuya geri bildirilir; böylece Jellyfin \"Şu An Oynatılıyor\"u gösterir ve kaldığı yerden devam konumları kaydedilir.",
-      "disclaimer": "Jellyfin üçüncü taraf bir medya sunucusudur. ynoTV, Jellyfin projesiyle bağlantılı değildir. Gömülü pencere, web arayüzünü doğrudan yapılandırdığınız sunucudan yükler."
+      "disclaimer": "Jellyfin üçüncü taraf bir medya sunucusudur. ynoTV, Jellyfin projesiyle bağlantılı değildir. Gömülü pencere, web arayüzünü doğrudan yapılandırdığınız sunucudan yükler.",
+      "diagnosticsTitle": "Tanılama ve Sorun Giderme",
+      "diagnosticsHint": "Gömülü Jellyfin web istemcisi veya oynatma aktarımlarıyla ilgili sorunları giderin. Webview günlükleri izole bir jellyfin.log dosyasına yazılır ve normal uygulama günlüklerinden ayrı tutulur.",
+      "debugLogging": "Jellyfin Hata Ayıklama Günlüğünü Etkinleştir",
+      "debugLoggingHint": "Webview konsol günlüklerini (log, info, warn, error) ve köprü olaylarını jellyfin.log dosyasına yakalar. Varsayılan olarak kapalıdır.",
+      "openLogFile": "Günlük Dosyasını Aç",
+      "openLogDir": "Günlük Klasörünü Aç",
+      "clearLogFile": "Günlüğü Temizle",
+      "clearing": "Temizleniyor...",
+      "cleared": "Günlük Temizlendi",
+      "inspectDevtools": "DevTools ile İncele",
+      "inspectDevtoolsHint": "Jellyfin webview'ine bağlı DevTools'u açar (veya F12 / Ctrl+Shift+I tuşlarına basın).",
+      "devtoolsError": "DevTools ile incelemek için Jellyfin sekmesinin açık olması gerekir."
     },
     "simkl": {
       "title": "Simkl",

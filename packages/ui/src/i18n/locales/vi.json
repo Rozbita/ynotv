@@ -2921,7 +2921,19 @@
       "openFailed": "Không mở được cửa sổ Jellyfin.",
       "closeFailed": "Không đóng được cửa sổ Jellyfin.",
       "notes": "Quá trình phát bắt đầu bên trong cửa sổ Jellyfin được chuyển sang trình phát mpv của ynoTV. Vị trí được báo lại máy chủ để Jellyfin hiển thị \"Đang phát\" và vị trí tiếp tục được lưu.",
-      "disclaimer": "Jellyfin là máy chủ phương tiện của bên thứ ba. ynoTV không liên kết với dự án Jellyfin. Cửa sổ nhúng tải giao diện web trực tiếp từ máy chủ bạn đã cấu hình."
+      "disclaimer": "Jellyfin là máy chủ phương tiện của bên thứ ba. ynoTV không liên kết với dự án Jellyfin. Cửa sổ nhúng tải giao diện web trực tiếp từ máy chủ bạn đã cấu hình.",
+      "diagnosticsTitle": "Chẩn đoán và khắc phục sự cố",
+      "diagnosticsHint": "Khắc phục sự cố với ứng dụng web Jellyfin được nhúng hoặc quá trình chuyển phát. Nhật ký webview được ghi vào tệp jellyfin.log riêng biệt và được tách khỏi nhật ký thông thường của ứng dụng.",
+      "debugLogging": "Bật ghi nhật ký gỡ lỗi Jellyfin",
+      "debugLoggingHint": "Ghi lại nhật ký bảng điều khiển webview (log, info, warn, error) và các sự kiện cầu nối vào jellyfin.log. Tắt theo mặc định.",
+      "openLogFile": "Mở tệp nhật ký",
+      "openLogDir": "Mở thư mục nhật ký",
+      "clearLogFile": "Xóa nhật ký",
+      "clearing": "Đang xóa...",
+      "cleared": "Đã xóa nhật ký",
+      "inspectDevtools": "Kiểm tra bằng DevTools",
+      "inspectDevtoolsHint": "Mở DevTools gắn với webview Jellyfin (hoặc nhấn F12 / Ctrl+Shift+I).",
+      "devtoolsError": "Phải mở tab Jellyfin để kiểm tra bằng DevTools."
     },
     "simkl": {
       "title": "Simkl",

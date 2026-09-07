@@ -47,6 +47,7 @@ export async function jellyfinAuthenticate(
 export async function jellyfinEmbedOpen(
   url: string,
   bounds: { x: number; y: number; width: number; height: number },
+  debugLogging?: boolean,
 ): Promise<void> {
   await invoke('jellyfin_embed_open', {
     url,
@@ -54,6 +55,7 @@ export async function jellyfinEmbedOpen(
     y: bounds.y,
     width: bounds.width,
     height: bounds.height,
+    debugLogging: debugLogging ?? false,
   });
 }
 
@@ -126,4 +128,33 @@ export async function jellyfinEmbedNotifyPlaybackEnded(
   } catch (e) {
     // Ignore errors if the child webview is not running
   }
+}
+
+/** Toggle debug logging dynamically on the running Jellyfin child WebView. */
+export async function jellyfinSetDebugLogging(enabled: boolean): Promise<void> {
+  try {
+    await invoke('jellyfin_set_debug_logging', { enabled });
+  } catch (e) {
+    console.warn('[Jellyfin] Failed to toggle debug logging:', e);
+  }
+}
+
+/** Open DevTools inspector attached to the Jellyfin child WebView. */
+export async function jellyfinEmbedOpenDevtools(): Promise<void> {
+  await invoke('jellyfin_embed_open_devtools');
+}
+
+/** Open jellyfin.log in the system default text viewer. */
+export async function jellyfinOpenLogFile(): Promise<void> {
+  await invoke('jellyfin_open_log_file');
+}
+
+/** Open the directory containing jellyfin.log in the file explorer. */
+export async function jellyfinOpenLogDir(): Promise<void> {
+  await invoke('jellyfin_open_log_dir');
+}
+
+/** Clear the contents of jellyfin.log. */
+export async function jellyfinClearLogFile(): Promise<void> {
+  await invoke('jellyfin_clear_log_file');
 }

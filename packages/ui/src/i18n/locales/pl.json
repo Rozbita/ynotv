@@ -1340,7 +1340,19 @@
       "openFailed": "Nie udało się otworzyć okna Jellyfin.",
       "closeFailed": "Nie udało się zamknąć okna Jellyfin.",
       "notes": "Odtwarzanie rozpoczęte w oknie Jellyfin jest przekazywane do odtwarzacza mpv ynoTV. Pozycja jest raportowana z powrotem do serwera, dzięki czemu Jellyfin pokazuje „Teraz odtwarzane\", a pozycje wznowienia są zapisywane.",
-      "disclaimer": "Jellyfin to serwer multimedialny firmy trzeciej. ynoTV nie jest powiązany z projektem Jellyfin. Osadzone okno ładuje interfejs internetowy bezpośrednio ze skonfigurowanego serwera."
+      "disclaimer": "Jellyfin to serwer multimedialny firmy trzeciej. ynoTV nie jest powiązany z projektem Jellyfin. Osadzone okno ładuje interfejs internetowy bezpośrednio ze skonfigurowanego serwera.",
+      "diagnosticsTitle": "Diagnostyka i rozwiązywanie problemów",
+      "diagnosticsHint": "Rozwiązuj problemy z osadzonym klientem internetowym Jellyfin lub przekazywaniem odtwarzania. Dzienniki webview są zapisywane w izolowanym pliku jellyfin.log i przechowywane oddzielnie od zwykłych dzienników aplikacji.",
+      "debugLogging": "Włącz rejestrowanie debugowania Jellyfin",
+      "debugLoggingHint": "Przechwytuje dzienniki konsoli webview (log, info, warn, error) i zdarzenia mostka do jellyfin.log. Domyślnie wyłączone.",
+      "openLogFile": "Otwórz plik dziennika",
+      "openLogDir": "Otwórz folder dzienników",
+      "clearLogFile": "Wyczyść dziennik",
+      "clearing": "Czyszczenie...",
+      "cleared": "Dziennik wyczyszczony",
+      "inspectDevtools": "Sprawdź za pomocą DevTools",
+      "inspectDevtoolsHint": "Otwiera DevTools podłączone do webview Jellyfin (lub naciśnij F12 / Ctrl+Shift+I).",
+      "devtoolsError": "Karta Jellyfin musi być otwarta, aby sprawdzić za pomocą DevTools."
     },
     "simkl": {
       "title": "Simkl",

@@ -428,7 +428,7 @@
       "cache": "Cache",
       "debug": "Debug",
       "discord": "Discord Rich Presence",
-      "jellyfin": "Jellyfin",
+      "jellyfin": "Jellyfin (Beta)",
       "export-import": "Export / Import",
       "livetv": "LiveTV",
       "metadata": "Metadata",
@@ -1320,7 +1320,7 @@
       "failedGenerateTraktCode": "Failed to generate Trakt device code"
     },
     "jellyfin": {
-      "title": "Jellyfin",
+      "title": "Jellyfin (Beta)",
       "scrobblingTitle": "Scrobbling",
       "scrobblingHint": "Scrobble movies and episodes watched inside Jellyfin to Trakt and/or Simkl. Off by default — enable a service only if you don't already scrobble Jellyfin through a server-side Trakt or Simkl plugin.",
       "traktScrobble": "Enable Trakt Scrobbling",
@@ -1328,7 +1328,7 @@
       "simklScrobble": "Enable Simkl Scrobbling",
       "simklScrobbleHint": "Send Jellyfin playback progress to your Simkl account.",
       "configured": "Configured",
-      "enabled": "Enable Jellyfin",
+      "enabled": "Enable Jellyfin (Beta)",
       "enabledHint": "Show the Jellyfin tab in the titlebar navigation so you can browse your server and play through ynoTV's mpv player. Disabled by default on new installs.",
       "disabledHint": "The Jellyfin tab is hidden while Jellyfin is disabled. Flip the switch above to show it and configure your server.",
       "description": "Browse your Jellyfin server inside an embedded window and play everything through ynoTV's own mpv player. Login happens inside the window, so web-only skins and plugins keep working.",
@@ -1340,7 +1340,19 @@
       "openFailed": "Failed to open the Jellyfin window.",
       "closeFailed": "Failed to close the Jellyfin window.",
       "notes": "Playback started inside the Jellyfin window is handed off to ynoTV's mpv player. Position is reported back to the server so Jellyfin shows Now Playing and resume positions are saved.",
-      "disclaimer": "Jellyfin is a third-party media server. ynoTV is not affiliated with the Jellyfin project. The embedded window loads the web UI directly from your configured server."
+      "disclaimer": "Jellyfin is a third-party media server. ynoTV is not affiliated with the Jellyfin project. The embedded window loads the web UI directly from your configured server.",
+      "diagnosticsTitle": "Diagnostics & Troubleshooting",
+      "diagnosticsHint": "Troubleshoot issues with the embedded Jellyfin web client or playback handoffs. Webview logs are written to an isolated jellyfin.log file and kept separate from regular app logs.",
+      "debugLogging": "Enable Jellyfin Debug Logging",
+      "debugLoggingHint": "Capture webview console logs (log, info, warn, error) and bridge events into jellyfin.log. Off by default.",
+      "openLogFile": "Open Log File",
+      "openLogDir": "Open Log Folder",
+      "clearLogFile": "Clear Log",
+      "clearing": "Clearing...",
+      "cleared": "Log Cleared",
+      "inspectDevtools": "Inspect with DevTools",
+      "inspectDevtoolsHint": "Open DevTools attached to the Jellyfin webview (or press F12 / Ctrl+Shift+I).",
+      "devtoolsError": "The Jellyfin tab must be open to inspect DevTools."
     },
     "simkl": {
       "title": "Simkl",

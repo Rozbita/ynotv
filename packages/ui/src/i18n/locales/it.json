@@ -1340,7 +1340,19 @@
       "openFailed": "Impossibile aprire la finestra di Jellyfin.",
       "closeFailed": "Impossibile chiudere la finestra di Jellyfin.",
       "notes": "La riproduzione avviata nella finestra di Jellyfin viene trasferita al player mpv di ynoTV. La posizione viene comunicata al server, così Jellyfin mostra \"In riproduzione\" e le posizioni di ripresa vengono salvate.",
-      "disclaimer": "Jellyfin è un server multimediale di terze parti. ynoTV non è affiliata al progetto Jellyfin. La finestra integrata carica l'interfaccia web direttamente dal server configurato."
+      "disclaimer": "Jellyfin è un server multimediale di terze parti. ynoTV non è affiliata al progetto Jellyfin. La finestra integrata carica l'interfaccia web direttamente dal server configurato.",
+      "diagnosticsTitle": "Diagnostica e risoluzione dei problemi",
+      "diagnosticsHint": "Risolvi i problemi con il client web Jellyfin integrato o con i passaggi di riproduzione. I log della webview vengono scritti in un file jellyfin.log isolato e tenuti separati dai log normali dell'app.",
+      "debugLogging": "Abilita la registrazione di debug di Jellyfin",
+      "debugLoggingHint": "Cattura i log della console della webview (log, info, warn, error) e gli eventi del bridge in jellyfin.log. Disattivata per impostazione predefinita.",
+      "openLogFile": "Apri file di log",
+      "openLogDir": "Apri cartella dei log",
+      "clearLogFile": "Cancella log",
+      "clearing": "Cancellazione...",
+      "cleared": "Log cancellato",
+      "inspectDevtools": "Ispeziona con DevTools",
+      "inspectDevtoolsHint": "Apre DevTools collegato alla webview di Jellyfin (oppure premi F12 / Ctrl+Shift+I).",
+      "devtoolsError": "La scheda Jellyfin deve essere aperta per ispezionare con DevTools."
     },
     "simkl": {
       "title": "Simkl",

@@ -1340,7 +1340,19 @@
       "openFailed": "Otvaranje Jellyfin prozora nije uspjelo.",
       "closeFailed": "Zatvaranje Jellyfin prozora nije uspjelo.",
       "notes": "Reprodukcija pokrenuta unutar Jellyfin prozora prebacuje se na ynoTV-ov mpv player. Pozicija se šalje nazad serveru, tako da Jellyfin prikazuje „Trenutno se reproducira\" i spremaju se pozicije nastavka.",
-      "disclaimer": "Jellyfin je media server treće strane. ynoTV nije povezan sa Jellyfin projektom. Ugrađeni prozor učitava web sučelje direktno sa servera koji ste konfigurisali."
+      "disclaimer": "Jellyfin je media server treće strane. ynoTV nije povezan sa Jellyfin projektom. Ugrađeni prozor učitava web sučelje direktno sa servera koji ste konfigurisali.",
+      "diagnosticsTitle": "Dijagnostika i rješavanje problema",
+      "diagnosticsHint": "Riješite probleme s ugrađenim web klijentom za Jellyfin ili prijenosom reprodukcije. Zapisi webviewa zapisuju se u izoliranu datoteku jellyfin.log i drže odvojeno od uobičajenih zapisa aplikacije.",
+      "debugLogging": "Omogući Jellyfin zapisivanje za otklanjanje grešaka",
+      "debugLoggingHint": "Bilježi zapise konzole webviewa (log, info, warn, error) i događaje mosta u jellyfin.log. Zadano je isključeno.",
+      "openLogFile": "Otvori datoteku zapisa",
+      "openLogDir": "Otvori mapu zapisa",
+      "clearLogFile": "Očisti zapis",
+      "clearing": "Čišćenje...",
+      "cleared": "Zapis očišćen",
+      "inspectDevtools": "Pregledaj pomoću DevTools alata",
+      "inspectDevtoolsHint": "Otvara DevTools povezane s Jellyfin webviewom (ili pritisnite F12 / Ctrl+Shift+I).",
+      "devtoolsError": "Kartica Jellyfin mora biti otvorena za pregled pomoću DevTools alata."
     },
     "simkl": {
       "title": "Simkl",

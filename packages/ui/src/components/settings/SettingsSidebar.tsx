@@ -42,7 +42,7 @@ const SETTINGS_TABS: SettingsTab[] = [
   { id: 'subtitles', label: 'Subtitles & Audio' },
   { id: 'strem', label: 'Strem' },
   { id: 'nuvio', label: 'Nuvio' },
-  { id: 'jellyfin', label: 'Jellyfin' },
+  { id: 'jellyfin', label: 'Jellyfin (Beta)' },
   { id: 'discord', label: 'Discord Rich Presence' },
   { id: 'theme', label: 'Theme' },
   { id: 'ui', label: 'UI' },

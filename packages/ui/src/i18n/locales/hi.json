@@ -1340,7 +1340,19 @@
       "openFailed": "Jellyfin विंडो खोलने में विफल रहा।",
       "closeFailed": "Jellyfin विंडो बंद करने में विफल रहा।",
       "notes": "Jellyfin विंडो के अंदर शुरू हुआ प्लेबैक ynoTV के mpv प्लेयर को सौंप दिया जाता है। पोज़िशन सर्वर को वापस भेजी जाती है ताकि Jellyfin \"अभी चल रहा है\" दिखाए और रिज़्यूम पोज़िशन सेव हों।",
-      "disclaimer": "Jellyfin एक तृतीय-पक्ष मीडिया सर्वर है। ynoTV का Jellyfin प्रोजेक्ट से कोई संबंध नहीं है। एम्बेडेड विंडो वेब इंटरफ़ेस को सीधे आपके कॉन्फ़िगर किए गए सर्वर से लोड करती है।"
+      "disclaimer": "Jellyfin एक तृतीय-पक्ष मीडिया सर्वर है। ynoTV का Jellyfin प्रोजेक्ट से कोई संबंध नहीं है। एम्बेडेड विंडो वेब इंटरफ़ेस को सीधे आपके कॉन्फ़िगर किए गए सर्वर से लोड करती है।",
+      "diagnosticsTitle": "निदान और समस्या समाधान",
+      "diagnosticsHint": "एम्बेडेड Jellyfin वेब क्लाइंट या प्लेबैक हैंडऑफ़ से संबंधित समस्याओं का निवारण करें। Webview लॉग एक अलग jellyfin.log फ़ाइल में लिखे जाते हैं और सामान्य ऐप लॉग से अलग रखे जाते हैं।",
+      "debugLogging": "Jellyfin डीबग लॉगिंग सक्षम करें",
+      "debugLoggingHint": "Webview कंसोल लॉग (log, info, warn, error) और ब्रिज इवेंट को jellyfin.log में कैप्चर करता है। डिफ़ॉल्ट रूप से बंद है।",
+      "openLogFile": "लॉग फ़ाइल खोलें",
+      "openLogDir": "लॉग फ़ोल्डर खोलें",
+      "clearLogFile": "लॉग साफ़ करें",
+      "clearing": "साफ़ किया जा रहा है...",
+      "cleared": "लॉग साफ़ हो गया",
+      "inspectDevtools": "DevTools से निरीक्षण करें",
+      "inspectDevtoolsHint": "Jellyfin webview से जुड़ा DevTools खोलें (या F12 / Ctrl+Shift+I दबाएँ)।",
+      "devtoolsError": "DevTools से निरीक्षण करने के लिए Jellyfin टैब खुला होना चाहिए।"
     },
     "simkl": {
       "title": "Simkl",

@@ -1340,7 +1340,19 @@
       "openFailed": "Het Jellyfin-venster kon niet worden geopend.",
       "closeFailed": "Het Jellyfin-venster kon niet worden gesloten.",
       "notes": "Afspelen dat in het Jellyfin-venster is gestart, wordt overgedragen aan ynoTV's mpv-speler. De positie wordt teruggerapporteerd aan de server, zodat Jellyfin \"Now Playing\" toont en hervatposities worden opgeslagen.",
-      "disclaimer": "Jellyfin is een mediaserver van een derde partij. ynoTV is niet gelieerd aan het Jellyfin-project. Het ingebedde venster laadt de webinterface rechtstreeks van je geconfigureerde server."
+      "disclaimer": "Jellyfin is een mediaserver van een derde partij. ynoTV is niet gelieerd aan het Jellyfin-project. Het ingebedde venster laadt de webinterface rechtstreeks van je geconfigureerde server.",
+      "diagnosticsTitle": "Diagnose en probleemoplossing",
+      "diagnosticsHint": "Los problemen op met de ingebedde Jellyfin-webclient of de overdracht van de weergave. Webview-logboeken worden naar een geïsoleerd jellyfin.log-bestand geschreven en gescheiden gehouden van de normale app-logboeken.",
+      "debugLogging": "Jellyfin-foutopsporingslogboek inschakelen",
+      "debugLoggingHint": "Legt webview-consolelogboeken (log, info, warn, error) en bridgegebeurtenissen vast in jellyfin.log. Standaard uitgeschakeld.",
+      "openLogFile": "Logboekbestand openen",
+      "openLogDir": "Logboekmap openen",
+      "clearLogFile": "Logboek wissen",
+      "clearing": "Bezig met wissen...",
+      "cleared": "Logboek gewist",
+      "inspectDevtools": "Inspecteren met DevTools",
+      "inspectDevtoolsHint": "Opent DevTools die aan de Jellyfin-webview zijn gekoppeld (of druk op F12 / Ctrl+Shift+I).",
+      "devtoolsError": "Het Jellyfin-tabblad moet open zijn om met DevTools te inspecteren."
     },
     "simkl": {
       "title": "Simkl",

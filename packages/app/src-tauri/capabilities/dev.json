@@ -31,7 +31,14 @@
       "jellyfin_embed_set_visible",
       "jellyfin_embed_is_open",
       "jellyfin_confirm_playback",
-      "jellyfin_embed_reenable"
+      "jellyfin_embed_reenable",
+      "jellyfin_embed_notify_playback_ended",
+      "jellyfin_embed_open_devtools",
+      "jellyfin_open_log_file",
+      "jellyfin_open_log_dir",
+      "jellyfin_clear_log_file",
+      "jellyfin_set_debug_logging",
+      "jellyfin_append_logs"
     ]
   }
 }

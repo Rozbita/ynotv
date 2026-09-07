@@ -1340,7 +1340,19 @@
       "openFailed": "A Jellyfin ablak megnyitása nem sikerült.",
       "closeFailed": "A Jellyfin ablak bezárása nem sikerült.",
       "notes": "A Jellyfin ablakban indított lejátszás átadásra kerül az ynoTV mpv lejátszójának. A pozíció visszajelentésre kerül a szervernek, így a Jellyfin megjeleníti a „Most lejátszás\" feliratot, és a folytatási pozíciók elmentődnek.",
-      "disclaimer": "A Jellyfin harmadik féltől származó médiaszerver. Az ynoTV nem áll kapcsolatban a Jellyfin projekttel. A beágyazott ablak közvetlenül az Ön által beállított szerverről tölti be a webes felületet."
+      "disclaimer": "A Jellyfin harmadik féltől származó médiaszerver. Az ynoTV nem áll kapcsolatban a Jellyfin projekttel. A beágyazott ablak közvetlenül az Ön által beállított szerverről tölti be a webes felületet.",
+      "diagnosticsTitle": "Diagnosztika és hibaelhárítás",
+      "diagnosticsHint": "Oldja meg a beágyazott Jellyfin webklienssel vagy a lejátszás átadásával kapcsolatos problémákat. A webview-naplók egy elkülönített jellyfin.log fájlba kerülnek, külön a normál alkalmazásnaplóktól.",
+      "debugLogging": "Jellyfin hibakeresési naplózás engedélyezése",
+      "debugLoggingHint": "Rögzíti a webview konzolnaplóit (log, info, warn, error) és a hídkapcsolati eseményeket a jellyfin.log fájlba. Alapértelmezetten ki van kapcsolva.",
+      "openLogFile": "Naplófájl megnyitása",
+      "openLogDir": "Naplómappa megnyitása",
+      "clearLogFile": "Napló törlése",
+      "clearing": "Törlés...",
+      "cleared": "Napló törölve",
+      "inspectDevtools": "Vizsgálat a DevTools segítségével",
+      "inspectDevtoolsHint": "Megnyitja a Jellyfin webview-hoz csatolt DevTools-t (vagy nyomja meg az F12 / Ctrl+Shift+I billentyűket).",
+      "devtoolsError": "A Jellyfin lapnak nyitva kell lennie a DevTools-szal történő vizsgálathoz."
     },
     "simkl": {
       "title": "Simkl",

@@ -1340,7 +1340,19 @@
       "openFailed": "باز کردن پنجرهٔ Jellyfin ناموفق بود.",
       "closeFailed": "بستن پنجرهٔ Jellyfin ناموفق بود.",
       "notes": "پخش آغازشده داخل پنجرهٔ Jellyfin به پخشکنندهٔ mpv یونیتیوی منتقل میشود. موقعیت پخش به سرور گزارش میشود تا Jellyfin «در حال پخش» را نمایش دهد و موقعیتهای ادامه ذخیره میشوند.",
-      "disclaimer": "Jellyfin یک سرور رسانهای شخص ثالث است. ynoTV هیچ وابستگی به پروژهٔ Jellyfin ندارد. پنجرهٔ جاسازیشده رابط کاربری وب را مستقیماً از سرور پیکربندیشدهٔ شما بارگذاری میکند."
+      "disclaimer": "Jellyfin یک سرور رسانهای شخص ثالث است. ynoTV هیچ وابستگی به پروژهٔ Jellyfin ندارد. پنجرهٔ جاسازیشده رابط کاربری وب را مستقیماً از سرور پیکربندیشدهٔ شما بارگذاری میکند.",
+      "diagnosticsTitle": "تشخیص و رفع مشکلات",
+      "diagnosticsHint": "مشکلات مربوط به کلاینت وب جاسازیشدهٔ Jellyfin یا انتقال پخش را عیبیابی کنید. گزارش‌های webview در فایل ایزولهٔ jellyfin.log نوشته می‌شوند و جدا از گزارش‌های عادی برنامه نگهداری می‌شوند.",
+      "debugLogging": "فعال‌سازی ثبت اشکال‌زدایی Jellyfin",
+      "debugLoggingHint": "گزارش‌های کنسول webview (log، info، warn، error) و رویدادهای پل را در jellyfin.log ثبت می‌کند. به‌طور پیش‌فرض غیرفعال است.",
+      "openLogFile": "باز کردن فایل گزارش",
+      "openLogDir": "باز کردن پوشهٔ گزارش‌ها",
+      "clearLogFile": "پاک کردن گزارش",
+      "clearing": "در حال پاک‌کردن...",
+      "cleared": "گزارش پاک شد",
+      "inspectDevtools": "بررسی با DevTools",
+      "inspectDevtoolsHint": "DevTools متصل به webview Jellyfin را باز می‌کند (یا F12 / Ctrl+Shift+I را فشار دهید).",
+      "devtoolsError": "برای بررسی با DevTools باید تب Jellyfin باز باشد."
     },
     "simkl": {
       "title": "Simkl",

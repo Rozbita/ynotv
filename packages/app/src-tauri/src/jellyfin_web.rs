@@ -86,6 +86,53 @@ pub struct JellyfinEmbedState {
     confirm_seq: Mutex<u64>,
     /// Reassembled chunks of the in-flight play payload (chunked title flush).
     chunk_parts: Mutex<Vec<String>>,
+    /// Controls whether child webview console logs and bridge events are appended
+    /// to <app_log_dir>/jellyfin.log.
+    debug_logging: AtomicBool,
+}
+
+/// Thread-safe helper to append log entries to <app_log_dir>/jellyfin.log
+/// when Jellyfin debug logging is enabled.
+pub fn append_to_jellyfin_log<R: Runtime>(app: &AppHandle<R>, bytes: &[u8]) {
+    let state = app.state::<JellyfinEmbedState>();
+    if !state.debug_logging.load(Ordering::Relaxed) {
+        return;
+    }
+    if let Ok(log_dir) = app.path().app_log_dir() {
+        let _ = std::fs::create_dir_all(&log_dir);
+        let log_file = log_dir.join("jellyfin.log");
+
+        // Rotate log if it exceeds 10MB to keep disk usage bounded
+        if let Ok(meta) = std::fs::metadata(&log_file) {
+            if meta.len() > 10 * 1024 * 1024 {
+                let bak = log_dir.join("jellyfin.log.bak");
+                let _ = std::fs::rename(&log_file, bak);
+            }
+        }
+
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(log_file)
+        {
+            use std::io::Write;
+            let _ = file.write_all(bytes);
+            if !bytes.ends_with(b"\n") {
+                let _ = file.write_all(b"\n");
+            }
+        }
+    }
+}
+
+/// Formats and records a Rust-side bridge event into jellyfin.log if debug logging is enabled.
+pub fn log_jellyfin_bridge<R: Runtime>(app: &AppHandle<R>, level: &str, message: &str) {
+    let state = app.state::<JellyfinEmbedState>();
+    if !state.debug_logging.load(Ordering::Relaxed) {
+        return;
+    }
+    let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
+    let line = format!("[{}] [BRIDGE] [{}] {}\n", now, level, message);
+    append_to_jellyfin_log(app, line.as_bytes());
 }
 
 /// Live playback-reporting session for a Jellyfin stream playing through mpv.
@@ -463,8 +510,13 @@ pub async fn jellyfin_embed_open<R: Runtime>(
     y: f64,
     width: f64,
     height: f64,
+    debug_logging: Option<bool>,
 ) -> Result<(), String> {
     close_existing(&app);
+
+    let debug_enabled = debug_logging.unwrap_or(false);
+    let state = app.state::<JellyfinEmbedState>();
+    state.debug_logging.store(debug_enabled, Ordering::Relaxed);
 
     ensure_status_listener(&app);
 
@@ -477,9 +529,24 @@ pub async fn jellyfin_embed_open<R: Runtime>(
         return Err("Jellyfin URL must use http:// or https://".into());
     }
 
+    log_jellyfin_bridge(
+        &app,
+        "INFO",
+        &format!(
+            "Opening embedded webview: url={}, bounds=({}, {}, {}, {}), debug_logging={}",
+            url, x, y, width, height, debug_enabled
+        ),
+    );
+
+    let init_script = format!(
+        "window.__YNOTV_DEBUG_LOGGING__ = {};\n{}",
+        debug_enabled, INIT_SCRIPT
+    );
+
     let webview_builder =
         tauri::webview::WebviewBuilder::new(JELLYFIN_LABEL, WebviewUrl::External(parsed_url))
-            .initialization_script(INIT_SCRIPT)
+            .devtools(true)
+            .initialization_script(&init_script)
             .on_document_title_changed(move |wv, title| {
                 if let Some(raw) = title.strip_prefix("ynotv-jf:diag:") {
                     if let Ok(payload) = serde_json::from_str::<serde_json::Value>(raw.trim()) {
@@ -492,9 +559,11 @@ pub async fn jellyfin_embed_open<R: Runtime>(
                     if let Some((_, url)) = raw.split_once(':') {
                         let url = url.trim();
                         if is_allowed_external_metadata_url(url) {
+                            log_jellyfin_bridge(&wv.app_handle(), "INFO", &format!("Opening external link: {}", url));
                             let _ = tauri_plugin_opener::open_url(url, None::<&str>);
                         } else {
                             log::warn!("[Jellyfin] Rejected external link with unsupported URL");
+                            log_jellyfin_bridge(&wv.app_handle(), "WARN", &format!("Rejected external link with unsupported URL: {}", url));
                         }
                     }
                 } else if let Some(raw) = title.strip_prefix(CHUNK_PREFIX) {
@@ -575,9 +644,18 @@ pub async fn jellyfin_embed_open<R: Runtime>(
                                     }
                                 }
                                 log::info!("[Jellyfin] Play request forwarded to frontend");
+                                log_jellyfin_bridge(
+                                    &app,
+                                    "INFO",
+                                    &format!(
+                                        "Play request forwarded to frontend: item_id={:?}, title={:?}",
+                                        payload.item_id, payload.title
+                                    ),
+                                );
                             }
                             Err(e) => {
                                 log::error!("[Jellyfin] Failed to parse play payload: {}", e);
+                                log_jellyfin_bridge(&wv.app_handle(), "ERROR", &format!("Failed to parse play payload: {}", e));
                             }
                         }
                     }
@@ -586,6 +664,7 @@ pub async fn jellyfin_embed_open<R: Runtime>(
                     // localStorage (document.title truncates at ~4096 chars,
                     // which used to cut the JSON mid-string and stall
                     // playback). Start the chunked flush.
+                    log_jellyfin_bridge(&wv.app_handle(), "INFO", "Play signal detected; requesting payload chunks");
                     if let Ok(mut guard) = wv
                         .app_handle()
                         .state::<JellyfinEmbedState>()
@@ -654,6 +733,7 @@ pub async fn jellyfin_embed_close<R: Runtime>(app: AppHandle<R>) -> Result<(), S
     if let Ok(mut guard) = app.state::<JellyfinEmbedState>().open.lock() {
         *guard = false;
     }
+    log_jellyfin_bridge(&app, "INFO", "Embedded webview closed");
     Ok(())
 }
 
@@ -695,6 +775,7 @@ pub async fn jellyfin_confirm_playback<R: Runtime>(
         .last_hidden_at
         .lock()
         .unwrap_or_else(|e| e.into_inner()) = Some(Instant::now());
+    log_jellyfin_bridge(&app, "INFO", &format!("Playback confirmed for URL: {}", url));
 
     // Each handoff gets a fresh sequence number so the geometry re-asserts
     // below can tell when playback was stopped or replaced by a newer stream.
@@ -852,7 +933,7 @@ pub async fn jellyfin_embed_notify_playback_ended<R: Runtime>(
 
     if let Some(wv) = app.get_webview(JELLYFIN_LABEL) {
         let script = match target_item_id {
-            Some(id) if !id.trim().is_empty() => {
+            Some(ref id) if !id.trim().is_empty() => {
                 let clean = id.trim().replace('\'', "\\'");
                 format!("window.__ynotvOnPlaybackEnded && window.__ynotvOnPlaybackEnded('{}');", clean)
             }
@@ -860,6 +941,107 @@ pub async fn jellyfin_embed_notify_playback_ended<R: Runtime>(
         };
         let _ = wv.eval(&script);
     }
+    log_jellyfin_bridge(
+        &app,
+        "INFO",
+        &format!(
+            "Playback ended notification processed: ticks={:?}, target_item_id={:?}",
+            position_ticks, target_item_id
+        ),
+    );
+    Ok(())
+}
+
+/// Dynamically toggle Jellyfin debug logging while the child webview is running.
+#[tauri::command]
+pub async fn jellyfin_set_debug_logging<R: Runtime>(
+    app: AppHandle<R>,
+    enabled: bool,
+) -> Result<(), String> {
+    let state = app.state::<JellyfinEmbedState>();
+    state.debug_logging.store(enabled, Ordering::Relaxed);
+    log_jellyfin_bridge(&app, "INFO", &format!("Debug logging changed: {}", enabled));
+    if let Some(child) = app.get_webview(JELLYFIN_LABEL) {
+        let script = format!("window.__ynotvSetDebugLogging && window.__ynotvSetDebugLogging({});", enabled);
+        let _ = child.eval(&script);
+    }
+    Ok(())
+}
+
+/// Append a batch of webview log lines (formatted by the embedded page) to
+/// jellyfin.log. The page batches and bounds its queue; this only writes when
+/// debug logging is enabled.
+#[tauri::command]
+pub async fn jellyfin_append_logs<R: Runtime>(
+    app: AppHandle<R>,
+    lines: Vec<String>,
+) -> Result<(), String> {
+    let state = app.state::<JellyfinEmbedState>();
+    if !state.debug_logging.load(Ordering::Relaxed) {
+        return Ok(());
+    }
+    let mut out = String::new();
+    for line in lines {
+        out.push_str(&line);
+        out.push('\n');
+    }
+    append_to_jellyfin_log(&app, out.as_bytes());
+    Ok(())
+}
+
+/// Open DevTools for the embedded Jellyfin child webview.
+#[tauri::command]
+pub async fn jellyfin_embed_open_devtools<R: Runtime>(
+    app: AppHandle<R>,
+) -> Result<(), String> {
+    if let Some(child) = app.get_webview(JELLYFIN_LABEL) {
+        child.open_devtools();
+        log_jellyfin_bridge(&app, "INFO", "DevTools opened via command");
+        Ok(())
+    } else {
+        Err("Jellyfin window is not open".into())
+    }
+}
+
+/// Open jellyfin.log in the system's default text viewer.
+#[tauri::command]
+pub async fn jellyfin_open_log_file<R: Runtime>(
+    app: AppHandle<R>,
+) -> Result<(), String> {
+    let log_dir = app.path().app_log_dir().map_err(|e| e.to_string())?;
+    let _ = std::fs::create_dir_all(&log_dir);
+    let log_file = log_dir.join("jellyfin.log");
+    if !log_file.exists() {
+        let _ = std::fs::File::create(&log_file);
+    }
+    tauri_plugin_opener::open_path(log_file.to_string_lossy().as_ref(), None::<&str>)
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Open the directory containing jellyfin.log in the file manager.
+#[tauri::command]
+pub async fn jellyfin_open_log_dir<R: Runtime>(
+    app: AppHandle<R>,
+) -> Result<(), String> {
+    let log_dir = app.path().app_log_dir().map_err(|e| e.to_string())?;
+    let _ = std::fs::create_dir_all(&log_dir);
+    tauri_plugin_opener::open_path(log_dir.to_string_lossy().as_ref(), None::<&str>)
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Clear the contents of jellyfin.log.
+#[tauri::command]
+pub async fn jellyfin_clear_log_file<R: Runtime>(
+    app: AppHandle<R>,
+) -> Result<(), String> {
+    let log_dir = app.path().app_log_dir().map_err(|e| e.to_string())?;
+    let log_file = log_dir.join("jellyfin.log");
+    if log_file.exists() {
+        std::fs::write(&log_file, b"").map_err(|e| e.to_string())?;
+    }
+    log_jellyfin_bridge(&app, "INFO", "Log file cleared by user");
     Ok(())
 }
 
@@ -887,6 +1069,141 @@ const INIT_SCRIPT: &str = r##"
 (function () {
     if (window.__ynotvJfHooked) return;
     window.__ynotvJfHooked = true;
+
+    // -------------------------------------------------------------------------
+    // Debug Logging & DevTools Hotkeys
+    // -------------------------------------------------------------------------
+    var debugLoggingActive = !!(typeof window !== 'undefined' && window.__YNOTV_DEBUG_LOGGING__);
+    var logQueue = [];
+    var logFlushTimer = null;
+
+    function formatLogArg(arg) {
+        if (arg === null) return 'null';
+        if (arg === undefined) return 'undefined';
+        if (typeof arg === 'string') return arg;
+        if (arg instanceof Error) return arg.stack || arg.message || String(arg);
+        try {
+            return JSON.stringify(arg);
+        } catch (e) {
+            return String(arg);
+        }
+    }
+
+    function pushLog(level, args) {
+        if (!debugLoggingActive) return;
+        var parts = [];
+        for (var i = 0; i < args.length; i++) {
+            parts.push(formatLogArg(args[i]));
+        }
+        var msg = parts.join(' ');
+        var now = new Date();
+        var y = now.getFullYear();
+        var mo = String(now.getMonth() + 1);
+        if (mo.length < 2) mo = '0' + mo;
+        var d = String(now.getDate());
+        if (d.length < 2) d = '0' + d;
+        var h = String(now.getHours());
+        if (h.length < 2) h = '0' + h;
+        var mi = String(now.getMinutes());
+        if (mi.length < 2) mi = '0' + mi;
+        var s = String(now.getSeconds());
+        if (s.length < 2) s = '0' + s;
+        var ms = String(now.getMilliseconds());
+        while (ms.length < 3) ms = '0' + ms;
+        var ts = y + '-' + mo + '-' + d + ' ' + h + ':' + mi + ':' + s + '.' + ms;
+        var line = '[' + ts + '] [WEB] [' + level + '] ' + msg;
+        logQueue.push(line);
+        if (logQueue.length > 500) {
+            logQueue.shift();
+        }
+        if (!logFlushTimer && typeof setTimeout === 'function') {
+            logFlushTimer = setTimeout(flushLogs, 250);
+        }
+    }
+
+    function flushLogs() {
+        logFlushTimer = null;
+        if (!debugLoggingActive || !logQueue.length) return;
+        var batch = logQueue.slice();
+        logQueue = [];
+        try {
+            if (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke) {
+                window.__TAURI_INTERNALS__.invoke('jellyfin_append_logs', { lines: batch }).catch(function () {});
+            }
+        } catch (e) {}
+    }
+
+    // Hook console methods
+    if (typeof console !== 'undefined') {
+        var origLog = console.log;
+        var origInfo = console.info;
+        var origWarn = console.warn;
+        var origError = console.error;
+        var origDebug = console.debug;
+
+        console.log = function () {
+            pushLog('INFO', arguments);
+            if (origLog) { try { origLog.apply(console, arguments); } catch (e) {} }
+        };
+        console.info = function () {
+            pushLog('INFO', arguments);
+            if (origInfo) { try { origInfo.apply(console, arguments); } catch (e) {} }
+        };
+        console.warn = function () {
+            pushLog('WARN', arguments);
+            if (origWarn) { try { origWarn.apply(console, arguments); } catch (e) {} }
+        };
+        console.error = function () {
+            pushLog('ERROR', arguments);
+            if (origError) { try { origError.apply(console, arguments); } catch (e) {} }
+        };
+        console.debug = function () {
+            pushLog('DEBUG', arguments);
+            if (origDebug) { try { origDebug.apply(console, arguments); } catch (e) {} }
+        };
+    }
+
+    // Capture uncaught window errors and unhandled promise rejections
+    if (typeof window !== 'undefined' && window.addEventListener) {
+        window.addEventListener('error', function (e) {
+            if (!debugLoggingActive) return;
+            var err = (e && (e.error || e.message)) || 'Unknown Error';
+            var file = (e && e.filename) || '';
+            var line = (e && e.lineno) || 0;
+            var col = (e && e.colno) || 0;
+            pushLog('ERROR', ['Uncaught exception:', err, 'at', file + ':' + line + ':' + col]);
+        });
+        window.addEventListener('unhandledrejection', function (e) {
+            if (!debugLoggingActive) return;
+            var reason = (e && e.reason) || 'Unknown Rejection';
+            pushLog('ERROR', ['Unhandled promise rejection:', reason]);
+        });
+
+        // F12 or Ctrl+Shift+I hotkey to open devtools — only when debug
+        // logging is enabled. The Settings -> Jellyfin "Inspect with DevTools"
+        // button calls the Rust command directly and stays available always.
+        window.addEventListener('keydown', function (e) {
+            if (!debugLoggingActive) return;
+            if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i'))) {
+                try {
+                    if (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke) {
+                        window.__TAURI_INTERNALS__.invoke('jellyfin_embed_open_devtools').catch(function () {});
+                    }
+                } catch (err) {}
+            }
+        });
+    }
+
+    // Expose dynamic toggle so frontend settings change can enable/disable logging without reload
+    if (typeof window !== 'undefined') {
+        window.__ynotvSetDebugLogging = function (enabled) {
+            debugLoggingActive = !!enabled;
+            window.__YNOTV_DEBUG_LOGGING__ = debugLoggingActive;
+            if (debugLoggingActive) {
+                pushLog('INFO', ['[Jellyfin Embed] Debug logging enabled']);
+            }
+        };
+    }
 
     var SIGNAL = "ynotv-jf:play:";
     var lastSignalKey = null;

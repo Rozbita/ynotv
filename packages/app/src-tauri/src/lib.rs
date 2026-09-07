@@ -5543,6 +5543,12 @@ pub fn run() {
             jellyfin_web::jellyfin_confirm_playback,
             jellyfin_web::jellyfin_embed_reenable,
             jellyfin_web::jellyfin_embed_notify_playback_ended,
+            jellyfin_web::jellyfin_set_debug_logging,
+            jellyfin_web::jellyfin_append_logs,
+            jellyfin_web::jellyfin_embed_open_devtools,
+            jellyfin_web::jellyfin_open_log_file,
+            jellyfin_web::jellyfin_open_log_dir,
+            jellyfin_web::jellyfin_clear_log_file,
             // App icon switcher
             icon_switcher::set_app_icon
         ])

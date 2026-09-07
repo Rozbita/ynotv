@@ -1340,7 +1340,19 @@
       "openFailed": "تعذّر فتح نافذة Jellyfin.",
       "closeFailed": "تعذّر إغلاق نافذة Jellyfin.",
       "notes": "يتم نقل التشغيل الذي يبدأ داخل نافذة Jellyfin إلى مشغل mpv الخاص بـ ynoTV. يتم إرسال موضع التشغيل مرة أخرى إلى الخادم حتى يعرض Jellyfin \"قيد التشغيل الآن\" وتُحفظ مواضع الاستئناف.",
-      "disclaimer": "Jellyfin هو خادم وسائط تابع لجهة خارجية. ynoTV ليست تابعة لمشروع Jellyfin. تقوم النافذة المدمجة بتحميل واجهة الويب مباشرة من الخادم الذي قمت بتكوينه."
+      "disclaimer": "Jellyfin هو خادم وسائط تابع لجهة خارجية. ynoTV ليست تابعة لمشروع Jellyfin. تقوم النافذة المدمجة بتحميل واجهة الويب مباشرة من الخادم الذي قمت بتكوينه.",
+      "diagnosticsTitle": "التشخيص واستكشاف الأخطاء وإصلاحها",
+      "diagnosticsHint": "استكشف المشكلات المتعلقة بعميل الويب المضمّن لـ Jellyfin أو عمليات نقل التشغيل وأصلحها. تُكتب سجلات webview في ملف jellyfin.log معزول وتُحفظ منفصلة عن سجلات التطبيق العادية.",
+      "debugLogging": "تفعيل سجل تصحيح Jellyfin",
+      "debugLoggingHint": "يلتقط سجلات وحدة التحكم في webview (log وinfo وwarn وerror) وأحداث الجسر في jellyfin.log. معطّل افتراضيًا.",
+      "openLogFile": "فتح ملف السجل",
+      "openLogDir": "فتح مجلد السجلات",
+      "clearLogFile": "مسح السجل",
+      "clearing": "جارٍ المسح...",
+      "cleared": "تم مسح السجل",
+      "inspectDevtools": "فحص باستخدام DevTools",
+      "inspectDevtoolsHint": "يفتح DevTools المرتبط بـ webview الخاص بـ Jellyfin (أو اضغط F12 / Ctrl+Shift+I).",
+      "devtoolsError": "يجب فتح تبويب Jellyfin لفحصه باستخدام DevTools."
     },
     "simkl": {
       "title": "Simkl",

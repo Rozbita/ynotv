@@ -1340,7 +1340,19 @@
       "openFailed": "Falha ao abrir a janela do Jellyfin.",
       "closeFailed": "Falha ao fechar a janela do Jellyfin.",
       "notes": "A reprodução iniciada dentro da janela do Jellyfin é transferida para o player mpv da ynoTV. A posição é informada de volta ao servidor, para que o Jellyfin mostre \"Reproduzindo agora\" e as posições de retomada sejam salvas.",
-      "disclaimer": "O Jellyfin é um servidor de mídia de terceiros. A ynoTV não é afiliada ao projeto Jellyfin. A janela embutida carrega a interface web diretamente do servidor configurado."
+      "disclaimer": "O Jellyfin é um servidor de mídia de terceiros. A ynoTV não é afiliada ao projeto Jellyfin. A janela embutida carrega a interface web diretamente do servidor configurado.",
+      "diagnosticsTitle": "Diagnóstico e solução de problemas",
+      "diagnosticsHint": "Solucione problemas com o cliente web Jellyfin incorporado ou com as transferências de reprodução. Os registros da webview são gravados em um arquivo jellyfin.log isolado e mantidos separados dos registros normais do aplicativo.",
+      "debugLogging": "Ativar registro de depuração do Jellyfin",
+      "debugLoggingHint": "Captura os registros do console da webview (log, info, warn, error) e os eventos da ponte em jellyfin.log. Desativado por padrão.",
+      "openLogFile": "Abrir arquivo de registro",
+      "openLogDir": "Abrir pasta de registros",
+      "clearLogFile": "Limpar registro",
+      "clearing": "Limpando...",
+      "cleared": "Registro limpo",
+      "inspectDevtools": "Inspecionar com DevTools",
+      "inspectDevtoolsHint": "Abre o DevTools anexado à webview do Jellyfin (ou pressione F12 / Ctrl+Shift+I).",
+      "devtoolsError": "A aba Jellyfin deve estar aberta para inspecionar com DevTools."
     },
     "simkl": {
       "title": "Simkl",
