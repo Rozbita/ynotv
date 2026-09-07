@@ -258,7 +258,7 @@ pub async fn init_mpv_with_params<R: Runtime>(
     let mut embed_hwnd: Option<i64> = None;
     #[cfg(windows)]
     {
-        if let Some(window) = app.get_webview_window("main") {
+        if let Some(window) = app.get_window("main") {
             if let Ok(hwnd) = window.hwnd() {
                 embed_hwnd = Some(hwnd.0 as i64);
             }
@@ -290,7 +290,7 @@ pub async fn init_mpv_with_params<R: Runtime>(
     #[cfg(target_os = "macos")]
     {
         let window = app
-            .get_webview_window("main")
+            .get_window("main")
             .ok_or_else(|| "main window missing for render API install".to_string())?;
         let ns_window_ptr = window
             .ns_window()
@@ -1042,7 +1042,7 @@ pub async fn toggle_stats<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> 
 pub async fn sync_window<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
-        if let Some(window) = app.get_webview_window("main") {
+        if let Some(window) = app.get_window("main") {
             let size = window.inner_size().map_err(|e| e.to_string())?;
             let geom = MpvGeometry {
                 css_left: 0.0,
@@ -1075,7 +1075,7 @@ pub async fn set_geometry<R: Runtime>(
 ) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
-        if let Some(window) = app.get_webview_window("main") {
+        if let Some(window) = app.get_window("main") {
             let size = window.inner_size().map_err(|e| e.to_string())?;
             let (target_x, target_y, target_w, target_h) = if width == 0 && height == 0 {
                 (0.0, 0.0, size.width as f64, size.height as f64)
@@ -1103,7 +1103,7 @@ pub async fn set_geometry<R: Runtime>(
         use windows::Win32::UI::WindowsAndMessaging::{SetWindowPos, SWP_NOZORDER, SWP_NOACTIVATE, GetClientRect};
         use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 
-        let window = app.get_webview_window("main")
+        let window = app.get_window("main")
             .ok_or("Main window not found")?;
         let handle = window.window_handle().map_err(|e| e.to_string())?;
         let parent_hwnd = match handle.as_raw() {

@@ -93,6 +93,16 @@ export async function jellyfinEmbedIsOpen(): Promise<boolean> {
   }
 }
 
+/** Send a spatial navigation command to the embedded Jellyfin child WebView. */
+export async function jellyfinEmbedNav(action: string): Promise<boolean> {
+  try {
+    return (await invoke('jellyfin_embed_nav', { action })) ?? false;
+  } catch (e) {
+    console.warn('[Jellyfin] Failed to send nav command:', e);
+    return false;
+  }
+}
+
 /**
  * Confirm that a handed-off Jellyfin stream is now playing through mpv.
  * Rust records the handoff (so its idle listener can later signal playback

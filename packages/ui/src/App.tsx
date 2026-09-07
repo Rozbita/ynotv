@@ -2121,8 +2121,12 @@ function useTmdbPresencePoster(
           () => {
             setPlaybackSourceView('jellyfin');
             setActiveView('none');
+            window.focus();
           },
         );
+        if (ok) {
+          window.focus();
+        }
         return ok;
       } catch (e) {
         console.warn('[Jellyfin] Failed to start playback:', e);

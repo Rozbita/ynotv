@@ -1721,7 +1721,7 @@ async fn mpv_get_property<R: Runtime>(app: AppHandle<R>, name: String) -> Result
 
 #[tauri::command]
 async fn mpv_sync_window<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
-    let window = app.get_webview_window("main").ok_or("Main window not found")?;
+    let window = app.get_window("main").ok_or("Main window not found")?;
     let pos = window.outer_position().map_err(|e| e.to_string())?;
     let size = window.outer_size().map_err(|e| e.to_string())?;
     
@@ -1808,7 +1808,7 @@ async fn mpv_toggle_fullscreen<R: Runtime>(
     app: AppHandle<R>,
     restore_to_maximized: Option<bool>,
 ) -> Result<(), String> {
-    if let Some(window) = app.get_webview_window("main") {
+    if let Some(window) = app.get_window("main") {
         let is_fullscreen = window.is_fullscreen().map_err(|e| e.to_string())?;
         let should_restore_maximized = is_fullscreen && restore_to_maximized.unwrap_or(false);
 
@@ -4675,7 +4675,7 @@ fn window_state_path<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Option<std
 }
 
 pub(crate) fn save_window_state<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
-    if let Some(window) = app.get_webview_window("main") {
+    if let Some(window) = app.get_window("main") {
         let is_fullscreen = window.is_fullscreen().unwrap_or(false);
         let is_maximized = if is_fullscreen {
             let tracker = app.state::<WindowStateTracker>();
@@ -4884,7 +4884,7 @@ fn restore_window_state(app: &tauri::AppHandle) {
     if let Some(path) = window_state_path(app) {
         if let Ok(json) = std::fs::read_to_string(&path) {
             if let Ok(state) = serde_json::from_str::<WindowState>(&json) {
-                if let Some(window) = app.get_webview_window("main") {
+                if let Some(window) = app.get_window("main") {
                     // Apply size as logical size (DPI-independent)
                     // This ensures the window opens at the correct logical size regardless of monitor scaling
                     let _ = window.set_size(tauri::Size::Logical(
@@ -4915,7 +4915,7 @@ fn restore_window_position(app: &tauri::AppHandle) {
     if let Some(path) = window_state_path(app) {
         if let Ok(json) = std::fs::read_to_string(&path) {
             if let Ok(state) = serde_json::from_str::<WindowState>(&json) {
-                if let Some(window) = app.get_webview_window("main") {
+                if let Some(window) = app.get_window("main") {
                     let valid_position = is_valid_saved_window_position(state.x, state.y);
                     let valid_size = state.width >= 400 && state.height >= 300;
 
@@ -5130,7 +5130,7 @@ pub fn run() {
             // WAL recovery) runs. The window is transparent, so until React
             // paints it has no visible content - making it visible early means
             // a slow startup shows the boot splash instead of "no window".
-            if let Some(window) = app.get_webview_window("main") {
+            if let Some(window) = app.get_window("main") {
                 if let Some(icon) = app.default_window_icon() {
                     let _ = window.set_icon(icon.clone());
                 }
@@ -5149,7 +5149,7 @@ pub fn run() {
             app.manage(CanvasMultiviewState::new());
 
             #[cfg(target_os = "windows")]
-            if let Some(window) = app.get_webview_window("main") {
+            if let Some(window) = app.get_window("main") {
                 let hwnd = window.hwnd().map_err(|e| e.to_string())?;
                 resize_coalescing::install(windows::Win32::Foundation::HWND(hwnd.0))?;
             }
@@ -5157,7 +5157,7 @@ pub fn run() {
             // Configure macOS window for proper dragging with transparent titlebar
             #[cfg(target_os = "macos")]
             {
-                if let Some(window) = app.get_webview_window("main") {
+                if let Some(window) = app.get_window("main") {
                     let _ = window.set_title_bar_style(TitleBarStyle::Overlay);
                     info!("[macOS] Window configured with Overlay title bar style");
                 }
@@ -5540,6 +5540,8 @@ pub fn run() {
             jellyfin_web::jellyfin_embed_close,
             jellyfin_web::jellyfin_embed_set_visible,
             jellyfin_web::jellyfin_embed_is_open,
+            jellyfin_web::jellyfin_embed_nav,
+            jellyfin_web::jellyfin_embed_focus_signal,
             jellyfin_web::jellyfin_confirm_playback,
             jellyfin_web::jellyfin_embed_reenable,
             jellyfin_web::jellyfin_embed_notify_playback_ended,

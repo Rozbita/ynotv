@@ -229,7 +229,7 @@ fn find_hwnd_by_pid(target_pid: u32) -> Option<isize> {
 #[cfg(target_os = "windows")]
 fn get_parent_hwnd<R: Runtime>(app: &AppHandle<R>) -> Result<isize, String> {
     use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-    let window = app.get_webview_window("main")
+    let window = app.get_window("main")
         .ok_or("Main window not found")?;
     let handle = window.window_handle().map_err(|e| e.to_string())?;
     match handle.as_raw() {

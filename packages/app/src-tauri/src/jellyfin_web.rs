@@ -748,6 +748,9 @@ pub async fn jellyfin_embed_set_visible<R: Runtime>(
             child.show().map_err(|e| e.to_string())?;
         } else {
             child.hide().map_err(|e| e.to_string())?;
+            if let Some(main_win) = app.get_window("main") {
+                let _ = main_win.set_focus();
+            }
         }
     }
     Ok(())
@@ -776,6 +779,9 @@ pub async fn jellyfin_confirm_playback<R: Runtime>(
         .lock()
         .unwrap_or_else(|e| e.into_inner()) = Some(Instant::now());
     log_jellyfin_bridge(&app, "INFO", &format!("Playback confirmed for URL: {}", url));
+    if let Some(main_win) = app.get_window("main") {
+        let _ = main_win.set_focus();
+    }
 
     // Each handoff gets a fresh sequence number so the geometry re-asserts
     // below can tell when playback was stopped or replaced by a newer stream.
@@ -867,6 +873,46 @@ pub async fn jellyfin_confirm_playback<R: Runtime>(
 pub async fn jellyfin_embed_reenable<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
     if let Some(wv) = app.get_webview(JELLYFIN_LABEL) {
         let _ = wv.eval("window.__ynotvJfReenable && window.__ynotvJfReenable()");
+    }
+    Ok(())
+}
+
+/// Forward a spatial navigation action ('up', 'down', 'left', 'right', 'select', 'back', 'enter', 'blur')
+/// from the main window into the embedded Jellyfin child WebView.
+#[tauri::command]
+pub async fn jellyfin_embed_nav<R: Runtime>(app: AppHandle<R>, action: String) -> Result<bool, String> {
+    if let Some(wv) = app.get_webview(JELLYFIN_LABEL) {
+        let script = format!(
+            "window.__ynotvJfNav && window.__ynotvJfNav({});",
+            serde_json::to_string(&action).unwrap_or_else(|_| "\"\"".into())
+        );
+        let _ = wv.eval(&script);
+        return Ok(true);
+    }
+    Ok(false)
+}
+
+/// Forward a focus/blur signal from the embedded Jellyfin child WebView to the
+/// main window (spatial-navigation bridge). Routed over IPC rather than
+/// document.title so it can never interleave with the chunked play-payload
+/// stream — WebView2 coalesces rapid title changes, and any competing title
+/// write can clobber a chunk and stall the playback handoff.
+#[tauri::command]
+pub async fn jellyfin_embed_focus_signal<R: Runtime>(
+    app: AppHandle<R>,
+    kind: String,
+    direction: Option<String>,
+) -> Result<(), String> {
+    let main_win = app.get_window("main").ok_or("Main window not found")?;
+    match kind.as_str() {
+        "blur" => {
+            let _ = main_win.set_focus();
+            let _ = main_win.emit("jellyfin:nav-blur", direction.unwrap_or_default());
+        }
+        "focus" => {
+            let _ = main_win.emit("jellyfin:nav-focus-child", ());
+        }
+        _ => {}
     }
     Ok(())
 }
@@ -3045,6 +3091,344 @@ const INIT_SCRIPT: &str = r##"
             resolveCapturedHlsUrl: resolveCapturedHlsUrl
         };
     }
+
+    // -------------------------------------------------------------------------
+    // Spatial Navigation for TV Remotes & Gamepad Controllers
+    // -------------------------------------------------------------------------
+    (function () {
+        var currentFocused = null;
+        var styleInjected = false;
+
+        function injectStyles() {
+            if (styleInjected) return;
+            styleInjected = true;
+            try {
+                var style = document.createElement('style');
+                style.id = 'ynotv-spatial-styles';
+                style.textContent = [
+                    '.ynotv-tv-focus {',
+                    '  outline: 3px solid #00a4dc !important;',
+                    '  outline-offset: 3px !important;',
+                    '  box-shadow: 0 0 16px rgba(0, 164, 220, 0.7) !important;',
+                    '  transform: scale(1.02) !important;',
+                    '  transition: transform 0.12s ease, outline 0.12s ease !important;',
+                    '  z-index: 9999 !important;',
+                    '}',
+                    '.ynotv-tv-focus * {',
+                    '  outline: none !important;',
+                    '}'
+                ].join('\n');
+                (document.head || document.documentElement).appendChild(style);
+            } catch (e) {}
+        }
+
+        function isVisible(el) {
+            if (!el || !el.getBoundingClientRect) return false;
+            var r = el.getBoundingClientRect();
+            if (r.width <= 0 || r.height <= 0) return false;
+            if (r.bottom < -100 || r.top > window.innerHeight + 100) return false;
+            if (r.right < -100 || r.left > window.innerWidth + 100) return false;
+            try {
+                var cs = window.getComputedStyle(el);
+                if (cs.display === 'none' || cs.visibility === 'hidden' || cs.opacity === '0') return false;
+            } catch (e) {}
+            return true;
+        }
+
+        function getCandidates() {
+            var selectors = [
+                'button',
+                'a[href]',
+                'input:not([type="hidden"])',
+                'select',
+                'textarea',
+                '[tabindex]:not([tabindex="-1"])',
+                '[role="button"]',
+                '.card',
+                '.cardBox',
+                '.cardScalable',
+                '.cardContent',
+                '.listItem',
+                '.listItem-button',
+                '.emby-button',
+                '.paper-icon-button-light',
+                '.navMenuOption',
+                '.headerButton',
+                '.sectionTitleButton',
+                '.emby-tab-button'
+            ];
+            var all = Array.from(document.querySelectorAll(selectors.join(',')));
+            var result = [];
+            var seen = new Set();
+
+            for (var i = 0; i < all.length; i++) {
+                var el = all[i];
+                if (el.disabled || el.getAttribute('aria-hidden') === 'true') continue;
+                if (!isVisible(el)) continue;
+
+                var card = el.closest('.card, .listItem');
+                var target = card || el;
+
+                if (!seen.has(target) && isVisible(target)) {
+                    seen.add(target);
+                    result.push(target);
+                }
+            }
+            return result;
+        }
+
+        function applyFocus(el) {
+            if (!el) return;
+            injectStyles();
+            if (currentFocused && currentFocused !== el) {
+                currentFocused.classList.remove('ynotv-tv-focus');
+            }
+            currentFocused = el;
+            el.classList.add('ynotv-tv-focus');
+            try {
+                el.focus({ preventScroll: true });
+            } catch (e) {}
+            try {
+                el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+            } catch (e) {}
+        }
+
+        function clearFocus() {
+            if (currentFocused) {
+                currentFocused.classList.remove('ynotv-tv-focus');
+                try { currentFocused.blur(); } catch (e) {}
+                currentFocused = null;
+            }
+        }
+
+        function signalParentFocus(kind, direction) {
+            // Focus/blur signals ride over IPC (like debug logging), never over
+            // document.title: the title channel carries the chunked play-payload
+            // stream, and WebView2 coalesces rapid title changes, so a competing
+            // title write could clobber a chunk and stall the handoff.
+            try {
+                if (window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke) {
+                    window.__TAURI_INTERNALS__.invoke('jellyfin_embed_focus_signal', { kind: kind, direction: direction || null }).catch(function () {});
+                }
+            } catch (e) {}
+        }
+
+        function signalBlurToParent(direction) {
+            clearFocus();
+            signalParentFocus('blur', direction || 'up');
+        }
+
+        function findBest(current, candidates, dir) {
+            if (!current || !isVisible(current)) {
+                candidates.sort(function (a, b) {
+                    var ra = a.getBoundingClientRect();
+                    var rb = b.getBoundingClientRect();
+                    return (ra.top - rb.top) || (ra.left - rb.left);
+                });
+                return candidates[0] || null;
+            }
+
+            var curRect = current.getBoundingClientRect();
+            var curCenter = {
+                x: curRect.left + curRect.width / 2,
+                y: curRect.top + curRect.height / 2
+            };
+
+            var best = null;
+            var minScore = Infinity;
+
+            for (var i = 0; i < candidates.length; i++) {
+                var cand = candidates[i];
+                if (cand === current) continue;
+
+                var rect = cand.getBoundingClientRect();
+                var center = {
+                    x: rect.left + rect.width / 2,
+                    y: rect.top + rect.height / 2
+                };
+
+                var dx = center.x - curCenter.x;
+                var dy = center.y - curCenter.y;
+                var primary = 0;
+                var secondary = 0;
+                var valid = false;
+
+                switch (dir) {
+                    case 'right':
+                        if (dx > 4) {
+                            primary = dx;
+                            secondary = Math.abs(dy);
+                            valid = true;
+                        }
+                        break;
+                    case 'left':
+                        if (dx < -4) {
+                            primary = -dx;
+                            secondary = Math.abs(dy);
+                            valid = true;
+                        }
+                        break;
+                    case 'down':
+                        if (dy > 4) {
+                            primary = dy;
+                            secondary = Math.abs(dx);
+                            valid = true;
+                        }
+                        break;
+                    case 'up':
+                        if (dy < -4) {
+                            primary = -dy;
+                            secondary = Math.abs(dx);
+                            valid = true;
+                        }
+                        break;
+                }
+
+                if (!valid) continue;
+
+                var score = primary + secondary * 2.5;
+                if (score < minScore) {
+                    minScore = score;
+                    best = cand;
+                }
+            }
+            return best;
+        }
+
+        function handleDir(dir) {
+            injectStyles();
+            var candidates = getCandidates();
+            if (!candidates.length) {
+                if (dir === 'up') signalBlurToParent('up');
+                return;
+            }
+
+            if (currentFocused && !document.contains(currentFocused)) {
+                currentFocused = null;
+            }
+
+            var next = findBest(currentFocused, candidates, dir);
+            if (next) {
+                applyFocus(next);
+            } else {
+                if (dir === 'up') {
+                    var scroller = document.scrollingElement || document.documentElement || document.body;
+                    if (window.scrollY > 20 || (scroller && scroller.scrollTop > 20)) {
+                        window.scrollBy({ top: -200, behavior: 'smooth' });
+                    } else {
+                        signalBlurToParent('up');
+                    }
+                } else if (dir === 'down') {
+                    window.scrollBy({ top: 200, behavior: 'smooth' });
+                } else if (dir === 'right') {
+                    var p = currentFocused ? currentFocused.parentElement : null;
+                    while (p && p !== document.body) {
+                        if (p.scrollWidth > p.clientWidth + 10) {
+                            p.scrollBy({ left: 200, behavior: 'smooth' });
+                            break;
+                        }
+                        p = p.parentElement;
+                    }
+                } else if (dir === 'left') {
+                    var p2 = currentFocused ? currentFocused.parentElement : null;
+                    while (p2 && p2 !== document.body) {
+                        if (p2.scrollWidth > p2.clientWidth + 10) {
+                            p2.scrollBy({ left: -200, behavior: 'smooth' });
+                            break;
+                        }
+                        p2 = p2.parentElement;
+                    }
+                }
+            }
+        }
+
+        function handleSelect() {
+            if (!currentFocused) {
+                handleDir('down');
+                return;
+            }
+            var clickTarget = currentFocused.querySelector('button, a, input, select, textarea') || currentFocused;
+            var tag = (clickTarget.tagName || currentFocused.tagName || '').toLowerCase();
+            var isInput = tag === 'input' || tag === 'textarea';
+
+            try {
+                clickTarget.click();
+            } catch (e) {
+                try { currentFocused.click(); } catch (err) {}
+            }
+
+            // Only dispatch Enter for text inputs / form fields so search or login fields
+            // submit properly without double-triggering clicks on buttons, links, or cards.
+            if (isInput) {
+                try {
+                    var evDown = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true });
+                    var evUp = new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true });
+                    (clickTarget || currentFocused).dispatchEvent(evDown);
+                    (clickTarget || currentFocused).dispatchEvent(evUp);
+                } catch (e) {}
+            }
+        }
+
+        function handleBack() {
+            var dialog = document.querySelector('.dialogContainer:not(.hide), .actionSheet:not(.hide), .mainDrawer-open');
+            if (dialog) {
+                var closeBtn = dialog.querySelector('.button-close, [data-action="close"], .btnCancel');
+                if (closeBtn) {
+                    closeBtn.click();
+                    return;
+                }
+            }
+            var backBtn = document.querySelector('.headerBackButton:not(.hide), button[data-action="back"]');
+            if (backBtn && isVisible(backBtn)) {
+                backBtn.click();
+                return;
+            }
+            if (window.history && window.history.length > 1 && window.location.hash && window.location.hash !== '#/home') {
+                window.history.back();
+                return;
+            }
+            signalBlurToParent('back');
+        }
+
+        window.__ynotvJfNav = function (action) {
+            switch (action) {
+                case 'enter':
+                case 'down':
+                    if (action === 'enter' && !currentFocused) {
+                        var cands = getCandidates();
+                        if (cands.length) applyFocus(cands[0]);
+                    } else {
+                        handleDir(action === 'enter' ? 'down' : action);
+                    }
+                    break;
+                case 'up':
+                case 'left':
+                case 'right':
+                    handleDir(action);
+                    break;
+                case 'select':
+                    handleSelect();
+                    break;
+                case 'back':
+                    handleBack();
+                    break;
+                case 'blur':
+                    clearFocus();
+                    break;
+            }
+        };
+
+        document.addEventListener('focusin', function (e) {
+            if (e.target && e.target !== document.body && isVisible(e.target)) {
+                var card = e.target.closest('.card, .listItem');
+                applyFocus(card || e.target);
+            }
+        }, true);
+
+        document.addEventListener('pointerdown', function () {
+            signalParentFocus('focus', null);
+        }, true);
+    })();
 
 })();
 "##;

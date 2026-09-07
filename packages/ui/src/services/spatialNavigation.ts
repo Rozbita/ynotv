@@ -5,8 +5,57 @@
  */
 
 import './spatialNavigation.css';
+import { listen } from '@tauri-apps/api/event';
+import { jellyfinEmbedNav } from './jellyfin';
 
 export type SpatialDir = 'up' | 'down' | 'left' | 'right';
+
+// --- Jellyfin Child WebView Spatial Navigation State ---
+let isJellyfinEmbedFocused = false;
+
+export function isJellyfinEmbedNavActive(): boolean {
+  return isJellyfinEmbedFocused;
+}
+
+export function setJellyfinEmbedNavActive(active: boolean): void {
+  isJellyfinEmbedFocused = active;
+  if (!active) {
+    void jellyfinEmbedNav('blur');
+  }
+}
+
+if (typeof window !== 'undefined') {
+  listen<string>('jellyfin:nav-blur', () => {
+    isJellyfinEmbedFocused = false;
+    const toolbarInputs = Array.from(
+      document.querySelectorAll<HTMLElement>('.jellyfin-toolbar input, .jellyfin-toolbar button')
+    ).filter(isElementVisible);
+    if (toolbarInputs.length > 0) {
+      applyTvFocus(toolbarInputs[0]);
+    }
+  }).catch(() => {});
+
+  listen('jellyfin:nav-focus-child', () => {
+    isJellyfinEmbedFocused = true;
+    if (lastFocusedElement) {
+      lastFocusedElement.classList.remove('tv-focused');
+    }
+  }).catch(() => {});
+
+  window.addEventListener(
+    'mousedown',
+    (e) => {
+      if (isJellyfinEmbedFocused) {
+        const target = e.target as HTMLElement | null;
+        if (target && !target.closest('.jellyfin-frame-wrap')) {
+          isJellyfinEmbedFocused = false;
+          void jellyfinEmbedNav('blur');
+        }
+      }
+    },
+    true
+  );
+}
 
 const INTERACTIVE_SELECTOR = [
   'button:not([disabled]):not(.title-bar-control):not(.close)',
@@ -394,6 +443,7 @@ const VIEW_CONTAINERS: Array<[string, string]> = [
   ['.dvr-dashboard', 'dvr'],
   ['.tvcp-page, .tv-calendar-page, .calendar-view', 'calendar'],
   ['.settings-body, .settings-tab-content', 'settings'],
+  ['.jellyfin-page', 'jellyfin'],
 ];
 
 const SCROLLER_SELECTOR =
@@ -809,6 +859,30 @@ function isChromeEl(el: HTMLElement): boolean {
   return Boolean(el.closest('.title-bar, .now-playing-bar'));
 }
 
+/**
+ * Hand spatial focus to the embedded Jellyfin child webview. If the webview
+ * isn't open yet (the page retries opening with delays) or failed to open,
+ * jellyfinEmbedNav returns false — revert the flag so subsequent remote/
+ * gamepad actions don't get swallowed by a phantom embed-focus state.
+ */
+function handOffToEmbed(from: HTMLElement | null): boolean {
+  isJellyfinEmbedFocused = true;
+  if (from) from.blur();
+  if (lastFocusedElement) {
+    lastFocusedElement.classList.remove('tv-focused');
+  }
+  lastFocusedElement = null;
+  void jellyfinEmbedNav('enter').then((ok) => {
+    if (!ok && isJellyfinEmbedFocused) {
+      isJellyfinEmbedFocused = false;
+      if (from && document.contains(from)) {
+        applyTvFocus(from);
+      }
+    }
+  });
+  return true;
+}
+
 export function moveSpatialFocus(dir: SpatialDir): boolean {
   // While Virtuoso is mounting the requested row, the old focused DOM node
   // can be recycled. Do not run lost-focus restoration against that stale
@@ -908,6 +982,15 @@ export function moveSpatialFocus(dir: SpatialDir): boolean {
     x: curRect.left + curRect.width / 2,
     y: curRect.top + curRect.height / 2,
   };
+
+  // If moving down from within the Jellyfin toolbar and the embed is open,
+  // hand off spatial focus directly to the Jellyfin child webview!
+  if (dir === 'down' && current && current.closest('.jellyfin-toolbar')) {
+    const embedHost = document.querySelector('.jellyfin-embed-host');
+    if (embedHost) {
+      return handOffToEmbed(current);
+    }
+  }
 
   const isChannelInfo = current.classList.contains('guide-channel-info');
   const isFavoriteBtn = current.classList.contains('favorite-btn');
@@ -1250,6 +1333,14 @@ export function moveSpatialFocus(dir: SpatialDir): boolean {
     return true;
   }
 
+  // Fallback: if moving down anywhere in the Jellyfin view and no target below, enter the embed!
+  if (dir === 'down') {
+    const embedHost = document.querySelector('.jellyfin-embed-host');
+    if (embedHost && isElementVisible(embedHost as HTMLElement)) {
+      return handOffToEmbed(current);
+    }
+  }
+
   // No valid target in that direction — shake the focused element so remote
   // users get tactile feedback at list edges.
   flashNoTarget();
@@ -1261,6 +1352,12 @@ export function dispatchSpatialNav(action: SpatialDir | 'select' | 'back'): bool
   // activity: emit the same signal a mouse move sends, so the auto-hiding
   // titlebar and hero overlay appear and the auto-hide timer resets.
   window.dispatchEvent(new CustomEvent('ynotv:spatial-activity'));
+
+  // If spatial focus is currently inside the Jellyfin child webview, forward directly
+  if (isJellyfinEmbedFocused) {
+    void jellyfinEmbedNav(action);
+    return true;
+  }
 
   if (action === 'up' || action === 'down' || action === 'left' || action === 'right') {
     return moveSpatialFocus(action);

@@ -527,7 +527,7 @@ pub async fn init_mpv_with_params<R: Runtime>(
     custom_params: Vec<String>,
 ) -> Result<(), String> {
     // Get main window position and size
-    if let Some(window) = app.get_webview_window("main") {
+    if let Some(window) = app.get_window("main") {
         let pos = window.outer_position().map_err(|e| e.to_string())?;
         let size = window.outer_size().map_err(|e| e.to_string())?;
         launch_mpv(&app, pos.x, pos.y, size.width, size.height, custom_params).await

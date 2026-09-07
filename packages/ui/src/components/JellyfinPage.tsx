@@ -12,6 +12,7 @@ import {
   jellyfinEmbedSetVisible,
 } from '../services/jellyfin';
 import { useSettingsStore } from '../stores/settingsStore';
+import { setJellyfinEmbedNavActive } from '../services/spatialNavigation';
 import './JellyfinPage.css';
 
 /**
@@ -193,6 +194,7 @@ export function JellyfinPage({ visible, onPlay }: JellyfinPageProps) {
   // (with updated geometry) on return.
   useEffect(() => {
     if (!visible) {
+      setJellyfinEmbedNavActive(false);
       void jellyfinEmbedSetVisible(false).catch(() => {});
       return;
     }

@@ -382,7 +382,7 @@ async fn try_spawn_mpv<R: Runtime>(app: &AppHandle<R>, state: &tauri::State<'_, 
     let socket_path = get_socket_path();
 
     // Get the main window handle for embedding
-    let window = match app.get_webview_window("main") {
+    let window = match app.get_window("main") {
         Some(w) => w,
         None => {
             *state.initializing.lock().unwrap() = false;
@@ -1077,7 +1077,7 @@ pub async fn mpv_set_geometry<R: Runtime>(
     };
 
     // Get the Tauri window's HWND
-    let window = app.get_webview_window("main")
+    let window = app.get_window("main")
         .ok_or("Main window not found")?;
     let handle = window.window_handle().map_err(|e| e.to_string())?;
     let parent_hwnd = match handle.as_raw() {

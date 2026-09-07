@@ -543,17 +543,26 @@ export const Bridge = {
 
         if (!isFullscreen) {
             fullscreenRestoreMaximized = await appWindow.isMaximized();
-            await invoke('mpv_toggle_fullscreen', { restoreToMaximized: false });
+            try {
+                await invoke('mpv_toggle_fullscreen', { restoreToMaximized: false });
+            } catch (e) {
+                console.warn('[Bridge.toggleFullscreen] mpv_toggle_fullscreen failed, falling back to window.setFullscreen:', e);
+                await appWindow.setFullscreen(true);
+            }
             return;
         }
 
-        if (fullscreenRestoreMaximized) {
-            await invoke('mpv_toggle_fullscreen', { restoreToMaximized: true });
-            fullscreenRestoreMaximized = null;
-            return;
-        }
-        await invoke('mpv_toggle_fullscreen', { restoreToMaximized: false });
+        const restoreMax = fullscreenRestoreMaximized;
         fullscreenRestoreMaximized = null;
+        try {
+            await invoke('mpv_toggle_fullscreen', { restoreToMaximized: restoreMax === true });
+        } catch (e) {
+            console.warn('[Bridge.toggleFullscreen] mpv_toggle_fullscreen failed, falling back to window.setFullscreen:', e);
+            await appWindow.setFullscreen(false);
+            if (restoreMax) {
+                await appWindow.maximize();
+            }
+        }
     },
 
     async isFullscreen() {
@@ -570,19 +579,31 @@ export const Bridge = {
 
         if (fullscreen) {
             fullscreenRestoreMaximized = await appWindow.isMaximized();
-            await invoke('mpv_toggle_fullscreen', { restoreToMaximized: false });
+            try {
+                await invoke('mpv_toggle_fullscreen', { restoreToMaximized: false });
+            } catch (e) {
+                console.warn('[Bridge.setFullscreen] mpv_toggle_fullscreen failed, falling back to window.setFullscreen:', e);
+                await appWindow.setFullscreen(true);
+            }
             return;
         }
 
         const shouldRestoreMaximized = options?.restoreMaximized ?? fullscreenRestoreMaximized === true;
         fullscreenRestoreMaximized = null;
 
-        if (shouldRestoreMaximized) {
+        try {
             await invoke('mpv_toggle_fullscreen', { restoreToMaximized: shouldRestoreMaximized });
-            return;
+        } catch (e) {
+            console.warn('[Bridge.setFullscreen] mpv_toggle_fullscreen failed, falling back to window.setFullscreen:', e);
+            await appWindow.setFullscreen(false);
+            if (shouldRestoreMaximized) {
+                await appWindow.maximize();
+            }
         }
 
-        await invoke('mpv_toggle_fullscreen', { restoreToMaximized: shouldRestoreMaximized });
+        if (shouldRestoreMaximized) {
+            return;
+        }
 
         if (!fullscreen) {
             await delay(50);
