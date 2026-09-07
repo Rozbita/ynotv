@@ -1781,6 +1781,7 @@
         "toggleTransparentGuide": "Przełącz przezroczysty przewodnik",
         "toggleNuvio": "Przełącz Nuvio",
         "toggleStrem": "Przełącz Strem",
+        "toggleJellyfin": "Przełącz Jellyfin",
         "toggleShortcutsOverlay": "Przełącz nakładkę skrótów",
         "mouseBackNavigation": "Nawigacja wstecz (przycisk myszy)"
       },

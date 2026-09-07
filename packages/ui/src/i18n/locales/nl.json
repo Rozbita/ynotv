@@ -1781,6 +1781,7 @@
         "toggleTransparentGuide": "Transparante gids in-/uitschakelen",
         "toggleNuvio": "Nuvio in-/uitschakelen",
         "toggleStrem": "Strem in-/uitschakelen",
+        "toggleJellyfin": "Jellyfin in-/uitschakelen",
         "toggleShortcutsOverlay": "Sneltoetsenoverlay in-/uitschakelen",
         "mouseBackNavigation": "Terugnavigatie (muisknop)"
       },

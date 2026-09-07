@@ -1781,6 +1781,7 @@
         "toggleTransparentGuide": "पारदर्शी गाइड टॉगल करें",
         "toggleNuvio": "Nuvio टॉगल करें",
         "toggleStrem": "Strem टॉगल करें",
+        "toggleJellyfin": "Jellyfin टॉगल करें",
         "toggleShortcutsOverlay": "शॉर्टकट ओवरले टॉगल करें",
         "mouseBackNavigation": "पीछे नेविगेशन (माउस बटन)"
       },

@@ -1781,6 +1781,7 @@
         "toggleTransparentGuide": "切換透明指南",
         "toggleNuvio": "切換 Nuvio",
         "toggleStrem": "切換 Strem",
+        "toggleJellyfin": "切換 Jellyfin",
         "toggleShortcutsOverlay": "切換快捷鍵覆蓋層",
         "mouseBackNavigation": "返回導航（滑鼠按鈕）"
       },

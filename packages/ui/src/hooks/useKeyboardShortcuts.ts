@@ -35,6 +35,7 @@ export interface UseKeyboardShortcutsOptions {
     titleBarSearchRef: React.RefObject<HTMLInputElement | null>;
     handlePlayChannel: (channel: StoredChannel, autoSwitched?: boolean) => void;
     lastPlayedChannel: StoredChannel | null;
+    jellyfinEnabled?: boolean;
 
     // --- Action callbacks ---
     showShortcutsOverlay: boolean;
@@ -253,6 +254,12 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions): void
                 e.preventDefault();
                 setCategoriesOpen(false);
                 setActiveView((v) => (v === 'stremio' ? 'none' : 'stremio'));
+            } else if (matches('toggleJellyfin', key, code)) {
+                if (latestRefs.current.jellyfinEnabled) {
+                    e.preventDefault();
+                    setCategoriesOpen(false);
+                    setActiveView((v) => (v === 'jellyfin' ? 'none' : 'jellyfin'));
+                }
             } else if (matches('toggleEpgView', key, code)) {
                 e.preventDefault();
                 handleToggleEpgView();

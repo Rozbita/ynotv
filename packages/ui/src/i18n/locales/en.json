@@ -1781,6 +1781,7 @@
         "toggleTransparentGuide": "Toggle Transparent Guide",
         "toggleNuvio": "Toggle Nuvio",
         "toggleStrem": "Toggle Strem",
+        "toggleJellyfin": "Toggle Jellyfin",
         "toggleShortcutsOverlay": "Toggle Shortcuts Overlay",
         "mouseBackNavigation": "Back Navigation (Mouse Button)"
       },

@@ -314,6 +314,7 @@ const SETTINGS_SEARCH_INDEX: SettingsSearchResult[] = [
   { id: 'shortcut-toggle-epg-view', label: 'Toggle EPG View Layout', tabId: 'shortcuts', tabLabel: 'Shortcuts', section: 'Interface' },
   { id: 'shortcut-close', label: 'Close / Back', tabId: 'shortcuts', tabLabel: 'Shortcuts', section: 'Interface' },
   { id: 'shortcut-mouse-back-nav', label: 'Back Navigation (Mouse Button)', tabId: 'shortcuts', tabLabel: 'Shortcuts', section: 'Interface' },
+  { id: 'shortcut-toggle-jellyfin', label: 'Toggle Jellyfin', tabId: 'shortcuts', tabLabel: 'Shortcuts', section: 'Interface' },
   { id: 'shortcut-layout-main', label: 'Layout: Main View', tabId: 'shortcuts', tabLabel: 'Shortcuts', section: 'Layout' },
   { id: 'shortcut-layout-pip', label: 'Layout: Picture in Picture', tabId: 'shortcuts', tabLabel: 'Shortcuts', section: 'Layout' },
   { id: 'shortcut-layout-bottom', label: 'Layout: Big + Bottom Bar', tabId: 'shortcuts', tabLabel: 'Shortcuts', section: 'Layout' },

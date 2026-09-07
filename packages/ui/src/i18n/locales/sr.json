@@ -1781,6 +1781,7 @@
         "toggleTransparentGuide": "Пребаци провидни водич",
         "toggleNuvio": "Пребаци Nuvio",
         "toggleStrem": "Пребаци Стрем",
+        "toggleJellyfin": "Пребаци Jellyfin",
         "toggleShortcutsOverlay": "Пребаци преклоп пречица",
         "mouseBackNavigation": "Навигација уназад (дугме миша)"
       },

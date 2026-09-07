@@ -1781,6 +1781,7 @@
         "toggleTransparentGuide": "Εναλλαγή Διαφανούς Οδηγού",
         "toggleNuvio": "Εναλλαγή Nuvio",
         "toggleStrem": "Εναλλαγή Strem",
+        "toggleJellyfin": "Εναλλαγή Jellyfin",
         "toggleShortcutsOverlay": "Εναλλαγή Επικάλυψης Συντομεύσεων",
         "mouseBackNavigation": "Πλοήγηση Πίσω (Κουμπί Ποντικιού)"
       },

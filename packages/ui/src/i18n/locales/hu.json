@@ -1781,6 +1781,7 @@
         "toggleTransparentGuide": "Átlátszó útmutató váltása",
         "toggleNuvio": "Nuvio váltása",
         "toggleStrem": "Strem váltása",
+        "toggleJellyfin": "Jellyfin váltása",
         "toggleShortcutsOverlay": "Gyorsbillentyű-fedvény váltása",
         "mouseBackNavigation": "Vissza navigáció (egérgomb)"
       },

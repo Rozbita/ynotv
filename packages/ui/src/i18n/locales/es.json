@@ -1781,6 +1781,7 @@
         "toggleTransparentGuide": "Alternar guía transparente",
         "toggleNuvio": "Alternar Nuvio",
         "toggleStrem": "Alternar Strem",
+        "toggleJellyfin": "Alternar Jellyfin",
         "toggleShortcutsOverlay": "Alternar superposición de atajos",
         "mouseBackNavigation": "Navegación atrás (botón del ratón)"
       },

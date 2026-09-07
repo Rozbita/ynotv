@@ -4896,6 +4896,7 @@ function useTmdbPresencePoster(
     onChannelChangeFlash: triggerChannelChangeFlash,
     onTransparentGuideZapFlash: triggerTransparentGuideZapFlash,
     handleMouseBackNavigation,
+    jellyfinEnabled,
   });
 
   // ==========================================================================

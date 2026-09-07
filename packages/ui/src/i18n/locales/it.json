@@ -1781,6 +1781,7 @@
         "toggleTransparentGuide": "Attiva/disattiva guida trasparente",
         "toggleNuvio": "Attiva/disattiva Nuvio",
         "toggleStrem": "Attiva/disattiva Strem",
+        "toggleJellyfin": "Attiva/disattiva Jellyfin",
         "toggleShortcutsOverlay": "Attiva/disattiva overlay scorciatoie",
         "mouseBackNavigation": "Navigazione indietro (pulsante mouse)"
       },

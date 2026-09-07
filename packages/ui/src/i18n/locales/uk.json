@@ -1781,6 +1781,7 @@
         "toggleTransparentGuide": "Перемкнути прозорий гід",
         "toggleNuvio": "Nuvio вкл / викл",
         "toggleStrem": "Strem вкл / викл",
+        "toggleJellyfin": "Jellyfin вкл / викл",
         "toggleShortcutsOverlay": "Оверлей комбінацій вкл / викл",
         "mouseBackNavigation": "Навігація назад (кнопка миші)"
       },

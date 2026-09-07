@@ -1781,6 +1781,7 @@
         "toggleTransparentGuide": "Guide transparent",
         "toggleNuvio": "Basculer Nuvio",
         "toggleStrem": "Basculer Strem",
+        "toggleJellyfin": "Basculer Jellyfin",
         "toggleShortcutsOverlay": "Raccourcis en superposition",
         "mouseBackNavigation": "Navigation retour (bouton souris)"
       },

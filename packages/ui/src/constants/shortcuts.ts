@@ -42,6 +42,7 @@ export const DEFAULT_SHORTCUTS: Record<ShortcutAction, string> = {
     toggleTransparentGuide: 'z',
     toggleNuvio: 'n',
     toggleStrem: 'x',
+    toggleJellyfin: 'k',
     toggleShortcutsOverlay: '/',
     // Which mouse button triggers the app's built-in "go back" navigation
     // (close settings popup, stop playback, exit a view). Rebind or claim it

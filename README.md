@@ -41,6 +41,7 @@ A feature-rich, open source IPTV player for Windows built on [Tauri v2](https://
 - **M3U, Xtream Codes & Stalker Support** - multiple EPG sources supported
 - **Stremio Integration & Addons support** - Integrated optional stremio login to sync watchlist/addons or add addons directly
 - **Nuvio Integration** - Integrated login for 2 way sync with watchlist, addons, plugins, collections, settings
+- **Jellyfin Integration (Beta)** - Connect your personal Jellyfin server to browse and stream your libraries
 - **Playlist Editor** - Create Custom playlist from your sources, move categories/channels from one into another
 - **Grid-style EPG** - with an integrated preview window
 - **Catchup & Cache Time Shift** - instant replays on supported channels
@@ -231,6 +232,7 @@ All shortcuts are fully customizable in Settings > Shortcuts.
 | Toggle Sports | `U` |
 | Toggle TV Calendar | `T` |
 | Toggle Settings | `,` |
+| Toggle Jellyfin | `K` |
 | Show / Hide Stats | `I` |
 | Focus Search | `S` |
 | Toggle EPG View Layout | `E` |
@@ -289,6 +291,7 @@ ynoTV builds on the following open source projects and services:
 - [Trakt.tv](https://app.trakt.tv/) - Scrobble support & catalogs
 - [Stremio](https://www.stremio.com/) — for building an open addon ecosystem that makes third-party integration possible
 - [Nuvio](https://nuvio.tv/) — for creating a fantastic open source media platform and making their codebase publicly available
+- [Jellyfin](https://jellyfin.org/) — for their incredible open source media system and personal streaming platform
 - [Harbor](https://github.com/harborstremio/harbor) — Stremio integration and various features
 - [Simkl](https://simkl.com) — scrobbling support for movies and series
 - [OpenSubtitles](https://www.opensubtitles.com) — subtitle downloads in the player

@@ -834,7 +834,7 @@ export function PlaybackDetailsModal({
   }, [stremioMeta, vodInfo]);
 
   const { cast } = useLazyStremioCast(metaForHooks, tmdbToken);
-  const { items: recommendations } = useLazyStremioRecommendations(metaForHooks, tmdbToken);
+  const { items: recommendations } = useLazyStremioRecommendations(isJellyfin ? null : metaForHooks, tmdbToken);
 
   if (!open) return null;
 
@@ -1068,7 +1068,7 @@ export function PlaybackDetailsModal({
               )}
 
               {/* More Like This Section */}
-              {recommendations && recommendations.length > 0 && (
+              {!isJellyfin && recommendations && recommendations.length > 0 && (
                 <RailWithControls title={t('moreLikeThis')}>
                   {recommendations
                     .slice(0, 16)

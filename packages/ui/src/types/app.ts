@@ -71,6 +71,7 @@ export type ShortcutAction =
     | 'toggleTransparentGuide'
     | 'toggleNuvio'
     | 'toggleStrem'
+    | 'toggleJellyfin'
     | 'toggleShortcutsOverlay'
     | 'mouseBackNavigation';
 

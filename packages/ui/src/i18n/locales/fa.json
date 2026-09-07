@@ -1781,6 +1781,7 @@
         "toggleTransparentGuide": "تغییر حالت راهنمای شفاف",
         "toggleNuvio": "تغییر حالت Nuvio",
         "toggleStrem": "تغییر حالت Strem",
+        "toggleJellyfin": "تغییر حالت Jellyfin",
         "toggleShortcutsOverlay": "تغییر حالت لایه میانبرها",
         "mouseBackNavigation": "ناوبری بازگشت (دکمه ماوس)"
       },

@@ -1781,6 +1781,7 @@
         "toggleTransparentGuide": "Şeffaf Rehberi Aç / Kapat",
         "toggleNuvio": "Nuvio'yu Aç / Kapat",
         "toggleStrem": "Strem'i Aç / Kapat",
+        "toggleJellyfin": "Jellyfin'i Aç / Kapat",
         "toggleShortcutsOverlay": "Kısayol Kaplamasını Aç / Kapat",
         "mouseBackNavigation": "Geri Gezinme (Fare Düğmesi)"
       },

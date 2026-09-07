@@ -1781,6 +1781,7 @@
         "toggleTransparentGuide": "Transparenten Leitfaden umschalten",
         "toggleNuvio": "Nuvio umschalten",
         "toggleStrem": "Strem umschalten",
+        "toggleJellyfin": "Jellyfin umschalten",
         "toggleShortcutsOverlay": "Kürzel-Overlay umschalten",
         "mouseBackNavigation": "Zurück-Navigation (Maustaste)"
       },

@@ -3315,6 +3315,7 @@
         "toggleTransparentGuide": "Bật/Tắt Hướng Dẫn Trong Suốt",
         "toggleNuvio": "Bật/Tắt Nuvio",
         "toggleStrem": "Bật/Tắt Strem",
+        "toggleJellyfin": "Bật/Tắt Jellyfin",
         "toggleShortcutsOverlay": "Bật/Tắt Lớp Phủ Phím Tắt",
         "mouseBackNavigation": "Điều Hướng Quay Lại (Nút Chuột)"
       },
