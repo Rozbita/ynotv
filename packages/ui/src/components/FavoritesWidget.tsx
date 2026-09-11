@@ -8,6 +8,8 @@ import { db } from '../db';
 import './FavoritesWidget.css';
 
 const ACTIVE_FAVORITE_STORAGE_KEY = 'ynotv-active-favorite-stream-id';
+const FAVORITES_VISIBLE_COUNT = 7;
+const FAVORITES_SELECTED_OFFSET = 3;
 
 interface FavoriteChannelItemProps {
   channel: StoredChannel;
@@ -73,6 +75,7 @@ export function FavoritesWidget({
     }
   });
   const activeItemRef = useRef<HTMLDivElement | null>(null);
+  const favoritesListRef = useRef<HTMLDivElement | null>(null);
 
   const favoriteChannels = useLiveQuery(
     async () => {
@@ -106,15 +109,34 @@ export function FavoritesWidget({
   const isVisible = isMainScreen && showControls && (favoriteChannels?.length ?? 0) > 0 && !isVod;
 
   // The widget unmounts while the fullscreen controls are hidden. Restore the
-  // selected favorite and scroll it into view whenever the widget reappears.
+  // selected favorite and position it in the seven-channel window whenever the
+  // widget reappears. The window is clamped to the real list boundaries so it
+  // never creates empty slots.
   useEffect(() => {
     if (!isVisible || !activeStreamId || !favoriteChannels?.length) return;
-    const activeChannelStillExists = favoriteChannels.some((channel) => channel.stream_id === activeStreamId);
-    if (!activeChannelStillExists) return;
+
+    const selectedIndex = favoriteChannels.findIndex((channel) => channel.stream_id === activeStreamId);
+    if (selectedIndex < 0) return;
 
     const frame = requestAnimationFrame(() => {
-      activeItemRef.current?.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+      const list = favoritesListRef.current;
+      if (!list) return;
+
+      const visibleCount = Math.min(FAVORITES_VISIBLE_COUNT, favoriteChannels.length);
+      const maxStartIndex = Math.max(0, favoriteChannels.length - visibleCount);
+      const startIndex = Math.min(
+        Math.max(0, selectedIndex - FAVORITES_SELECTED_OFFSET),
+        maxStartIndex,
+      );
+      const firstVisibleItem = list.children[startIndex] as HTMLElement | undefined;
+
+      if (firstVisibleItem) {
+        list.scrollTop = firstVisibleItem.offsetTop - list.offsetTop;
+      } else {
+        list.scrollTop = 0;
+      }
     });
+
     return () => cancelAnimationFrame(frame);
   }, [isVisible, activeStreamId, favoriteChannels]);
 
@@ -147,7 +169,7 @@ export function FavoritesWidget({
           </div>
         )}
       </div>
-      <div className="favorites-list">
+      <div ref={favoritesListRef} className="favorites-list">
         {favoriteChannels?.map((channel) => (
           <FavoriteChannelItem
             key={channel.stream_id}
