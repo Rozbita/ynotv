@@ -31,7 +31,6 @@ import {
   type SortDirection,
   type VodSortKey,
 } from './vodSort';
-import { applyTvFocus } from '../../services/spatialNavigation';
 import './VodBrowse.css';
 
 const VOD_POSTER_SIZE_PRESETS = [
@@ -91,43 +90,30 @@ export interface VodBrowseProps {
   onItemClick: (item: StoredMovie | StoredSeries) => void;
 }
 
-export function VodBrowse({
-  type,
-  categoryId,
-  categoryName,
-  search,
-  onItemClick,
-}: VodBrowseProps) {
+export function VodBrowse({ type, categoryId, categoryName, search, onItemClick }: VodBrowseProps) {
   useTranslation();
   const virtualGridRef = useRef<VirtualGridHandle>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [visibleRange, setVisibleRange] = useState({ startIndex: 0, endIndex: 0 });
   const selectionStorageKey = `vod-browse-selected-${type}-${categoryId ?? 'all'}-${search ?? ''}`;
   const [selectedItemId, setSelectedItemId] = useState<string | null>(() => {
-    if (typeof window !== 'undefined') {
-      return sessionStorage.getItem(selectionStorageKey);
-    }
+    if (typeof window !== 'undefined') return sessionStorage.getItem(selectionStorageKey);
     return null;
   });
+  const restoredSelectionKeyRef = useRef<string | null>(null);
 
   const [posterSize, setPosterSize] = usePosterSizePreference();
-
   const [sortBy, setSortBy] = useState<VodSortKey>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('vodSortBy');
-      if (saved && (VOD_BROWSE_SORT_KEYS as string[]).includes(saved)) {
-        return saved as VodSortKey;
-      }
+      if (saved && (VOD_BROWSE_SORT_KEYS as string[]).includes(saved)) return saved as VodSortKey;
     }
     return 'name';
   });
-
   const [sortDirection, setSortDirection] = useState<SortDirection>(() => {
     if (typeof window !== 'undefined') {
       const savedDir = localStorage.getItem('vodSortDir');
-      if (savedDir === 'asc' || savedDir === 'desc') {
-        return savedDir;
-      }
+      if (savedDir === 'asc' || savedDir === 'desc') return savedDir;
       const savedBy = localStorage.getItem('vodSortBy');
       if (savedBy && (VOD_BROWSE_SORT_KEYS as string[]).includes(savedBy)) {
         return DEFAULT_SORT_DIRECTION[savedBy as VodSortKey];
@@ -148,9 +134,7 @@ export function VodBrowse({
   const toggleSortDirection = useCallback(() => {
     setSortDirection((prev) => {
       const next = prev === 'asc' ? 'desc' : 'asc';
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('vodSortDir', next);
-      }
+      if (typeof window !== 'undefined') localStorage.setItem('vodSortDir', next);
       return next;
     });
   }, []);
@@ -166,29 +150,20 @@ export function VodBrowse({
   const includeSourceInVodSearch = useSettingsStore((s) => s.includeSourceInVodSearch);
   const vodShowSourceBadge = useSettingsStore((s) => s.vodShowSourceBadge);
   const sourceNameMap = useSourceNameMap();
-
   const debouncedSearch = useDebouncedValue(search, 300);
 
-  // Scroll to top when category changes. The selected-item restore effect below
-  // runs afterward and moves back to the remembered item when returning.
   useEffect(() => {
-    if (virtualGridRef.current) {
-      virtualGridRef.current.scrollToIndex({ index: 0, align: 'start' });
-    }
+    if (virtualGridRef.current) virtualGridRef.current.scrollToIndex({ index: 0, align: 'start' });
   }, [categoryId]);
 
   const { syncing: lazyLoading, progress, message, completed, hasCache } = useLazyStalkerLoader(
-    type === 'movies' ? 'movies' : 'series',
-    categoryId
+    type === 'movies' ? 'movies' : 'series', categoryId
   );
-
   const hookSort = sortBy === 'added' ? 'added' : 'name';
   const moviesData = usePaginatedMovies(type === 'movies' ? categoryId : null, debouncedSearch, hookSort, completed);
   const seriesData = usePaginatedSeries(type === 'series' ? categoryId : null, debouncedSearch, hookSort, completed);
-
   const { items, loading: dataLoading, hasMore, loadMore } = type === 'movies' ? moviesData : seriesData;
   const loading = dataLoading || lazyLoading;
-
   const lastWatchedMap = useVodLastWatchedMap(type === 'movies' ? 'movie' : 'series');
 
   const sortedItems = useMemo(
@@ -200,19 +175,26 @@ export function VodBrowse({
   const favoritedIds = useMemo(() => {
     const ids = new Set<string>();
     for (const f of allFavorites) {
-      if ((type === 'movies' && f.type === 'movie') || (type === 'series' && f.type === 'series')) {
-        ids.add(f.id);
-      }
+      if ((type === 'movies' && f.type === 'movie') || (type === 'series' && f.type === 'series')) ids.add(f.id);
     }
     return ids;
   }, [allFavorites, type]);
   const addFavorite = useVodFavoritesStore((s) => s.addFavorite);
   const removeFavorite = useVodFavoritesStore((s) => s.removeFavorite);
 
-  // Restore the previously selected item when returning to this category.
-  // If pagination has not loaded that item yet, keep loading until it is available.
+  // Keep the remembered selection, but restore its scroll position only once for
+  // the current browse context. Later sortedItems updates (including watch-history
+  // changes after playback) must not fight the user's scrolling.
   useEffect(() => {
-    if (!selectedItemId || loading) return;
+    if (selectionStorageKey !== restoredSelectionKeyRef.current) {
+      const stored = typeof window !== 'undefined' ? sessionStorage.getItem(selectionStorageKey) : null;
+      setSelectedItemId(stored);
+      restoredSelectionKeyRef.current = null;
+    }
+  }, [selectionStorageKey]);
+
+  useEffect(() => {
+    if (!selectedItemId || loading || restoredSelectionKeyRef.current === selectionStorageKey) return;
 
     const selectedIndex = sortedItems.findIndex((item) => {
       if (!item) return false;
@@ -222,155 +204,93 @@ export function VodBrowse({
     });
 
     if (selectedIndex >= 0) {
+      restoredSelectionKeyRef.current = selectionStorageKey;
       const frame = window.requestAnimationFrame(() => {
         virtualGridRef.current?.scrollToIndex({ index: selectedIndex, align: 'center' });
-
-        // VirtualGrid may need one frame to mount the row after scrolling.
-        // Once the selected card exists, make spatial-navigation remember the
-        // same card and scroll position instead of restoring an older VOD focus
-        // position on top of this selected-item restore.
-        window.requestAnimationFrame(() => {
-          const escape = (value: string) =>
-            typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(value) : value;
-          const card = document.querySelector<HTMLElement>(
-            `.media-card[data-id="${escape(selectedItemId)}"]`
-          );
-          if (card && card.isConnected) {
-            applyTvFocus(card);
-          }
-        });
       });
       return () => window.cancelAnimationFrame(frame);
     }
 
-    if (hasMore) {
-      loadMore();
-    }
-  }, [selectedItemId, sortedItems, type, loading, hasMore, loadMore]);
+    if (hasMore) loadMore();
+  }, [selectedItemId, sortedItems, type, loading, hasMore, loadMore, selectionStorageKey]);
 
   const handleItemClick = useCallback((item: StoredMovie | StoredSeries) => {
-    const itemId = type === 'movies'
-      ? (item as StoredMovie).stream_id
-      : (item as StoredSeries).series_id;
-
+    const itemId = type === 'movies' ? (item as StoredMovie).stream_id : (item as StoredSeries).series_id;
     setSelectedItemId(itemId);
-    if (typeof window !== 'undefined') {
-      sessionStorage.setItem(selectionStorageKey, itemId);
-    }
-
+    restoredSelectionKeyRef.current = selectionStorageKey;
+    if (typeof window !== 'undefined') sessionStorage.setItem(selectionStorageKey, itemId);
     onItemClick(item);
   }, [type, onItemClick, selectionStorageKey]);
 
   const alphabetIndex = useAlphabetIndex(sortedItems);
   const currentLetter = useCurrentLetter(sortedItems, visibleRange.startIndex);
-
-  const availableLetters = useMemo(() => {
-    return new Set(alphabetIndex.keys());
-  }, [alphabetIndex]);
+  const availableLetters = useMemo(() => new Set(alphabetIndex.keys()), [alphabetIndex]);
 
   const handleLetterSelect = useCallback((letter: string) => {
     const index = alphabetIndex.get(letter);
-    if (index !== undefined && virtualGridRef.current) {
-      virtualGridRef.current.scrollToIndex({
-        index,
-        align: 'start',
-      });
-    }
+    if (index !== undefined && virtualGridRef.current) virtualGridRef.current.scrollToIndex({ index, align: 'start' });
   }, [alphabetIndex]);
 
   const handleRangeChange = useCallback((range: { startIndex: number; endIndex: number }) => {
     setVisibleRange(range);
-    if (hasMore && !loading && range.endIndex >= sortedItems.length - 20) {
-      loadMore();
-    }
+    if (hasMore && !loading && range.endIndex >= sortedItems.length - 20) loadMore();
   }, [hasMore, loading, loadMore, sortedItems.length]);
 
-  const computeItemKey = useCallback(
-    (item: StoredMovie | StoredSeries, index: number) => {
-      if (!item) return index;
-      return type === 'movies'
-        ? `movie-${(item as StoredMovie).stream_id}`
-        : `series-${(item as StoredSeries).series_id}`;
-    },
-    [type]
-  );
+  const computeItemKey = useCallback((item: StoredMovie | StoredSeries, index: number) => {
+    if (!item) return index;
+    return type === 'movies' ? `movie-${(item as StoredMovie).stream_id}` : `series-${(item as StoredSeries).series_id}`;
+  }, [type]);
 
   const cardDimensions = useMemo(() => {
     const cardWidth = posterSize;
     const posterHeight = Math.round(cardWidth * 1.5);
     const infoHeight = posterSize >= 180 ? 36 : posterSize >= 140 ? 32 : 30;
     const cardHeight = posterHeight + infoHeight + 4;
-    const itemWidth = cardWidth + 4;
-    const itemHeight = cardHeight + 4;
-    
-    return {
-      cardWidth,
-      cardHeight,
-      posterHeight,
-      infoHeight,
-      itemWidth,
-      itemHeight,
-    };
+    return { cardWidth, cardHeight, posterHeight, infoHeight, itemWidth: cardWidth + 4, itemHeight: cardHeight + 4 };
   }, [posterSize]);
 
-  const ItemContent = useCallback(
-    (index: number, item: StoredMovie | StoredSeries) => {
-      if (!item) return null;
-
-      const itemId = type === 'movies'
-        ? (item as StoredMovie).stream_id
-        : (item as StoredSeries).series_id;
-      const isFav = favoritedIds.has(itemId);
-      const isSelected = selectedItemId === itemId;
-
-      let sizeLabel: 'small' | 'medium' | 'large' = 'medium';
-      if (posterSize <= 120) sizeLabel = 'small';
-      else if (posterSize >= 180) sizeLabel = 'large';
-
-      const cardStyle = {
-        '--marquee-visible-width': `${cardDimensions.cardWidth}px`,
-        outline: isSelected ? '2px solid #fbbf24' : '2px solid transparent',
-        outlineOffset: isSelected ? '2px' : '0px',
-      } as React.CSSProperties;
-
-      const showBadge = vodShowSourceBadge || (includeSourceInVodSearch && search && search.trim());
-      const sourceName = showBadge
-        ? (item.source_id === 'local' ? 'Local' : sourceNameMap?.get(item.source_id))
-        : undefined;
-
-      return (
-        <MediaCard
-          item={item}
-          type={type === 'movies' ? 'movie' : 'series'}
-          index={index}
-          onClick={handleItemClick}
-          size={sizeLabel}
-          style={cardStyle}
-          isFavorited={isFav}
-          sourceName={sourceName}
-          onToggleFavorite={(clickedItem) => {
-            const clickedId = type === 'movies'
-              ? (clickedItem as StoredMovie).stream_id
-              : (clickedItem as StoredSeries).series_id;
-            if (favoritedIds.has(clickedId)) {
-              removeFavorite(clickedId, type === 'movies' ? 'movie' : 'series');
-            } else {
-              addFavorite({
-                id: clickedId,
-                type: type === 'movies' ? 'movie' : 'series',
-                title: clickedItem.title || clickedItem.name,
-                poster: type === 'movies'
-                  ? (clickedItem as StoredMovie).stream_icon
-                  : (clickedItem as StoredSeries).cover,
-                year: clickedItem.year || clickedItem.release_date?.slice(0, 4),
-              });
-            }
-          }}
-        />
-      );
-    },
-    [type, handleItemClick, posterSize, cardDimensions, favoritedIds, selectedItemId, addFavorite, removeFavorite, includeSourceInVodSearch, vodShowSourceBadge, search, sourceNameMap]
-  );
+  const ItemContent = useCallback((index: number, item: StoredMovie | StoredSeries) => {
+    if (!item) return null;
+    const itemId = type === 'movies' ? (item as StoredMovie).stream_id : (item as StoredSeries).series_id;
+    const isFav = favoritedIds.has(itemId);
+    const isSelected = selectedItemId === itemId;
+    let sizeLabel: 'small' | 'medium' | 'large' = 'medium';
+    if (posterSize <= 120) sizeLabel = 'small';
+    else if (posterSize >= 180) sizeLabel = 'large';
+    const cardStyle = {
+      '--marquee-visible-width': `${cardDimensions.cardWidth}px`,
+      outline: isSelected ? '2px solid #fbbf24' : '2px solid transparent',
+      outlineOffset: isSelected ? '2px' : '0px',
+    } as React.CSSProperties;
+    const showBadge = vodShowSourceBadge || (includeSourceInVodSearch && search && search.trim());
+    const sourceName = showBadge ? (item.source_id === 'local' ? 'Local' : sourceNameMap?.get(item.source_id)) : undefined;
+    return (
+      <MediaCard
+        item={item}
+        type={type === 'movies' ? 'movie' : 'series'}
+        index={index}
+        onClick={handleItemClick}
+        size={sizeLabel}
+        style={cardStyle}
+        isFavorited={isFav}
+        sourceName={sourceName}
+        onToggleFavorite={(clickedItem) => {
+          const clickedId = type === 'movies' ? (clickedItem as StoredMovie).stream_id : (clickedItem as StoredSeries).series_id;
+          if (favoritedIds.has(clickedId)) {
+            removeFavorite(clickedId, type === 'movies' ? 'movie' : 'series');
+          } else {
+            addFavorite({
+              id: clickedId,
+              type: type === 'movies' ? 'movie' : 'series',
+              title: clickedItem.title || clickedItem.name,
+              poster: type === 'movies' ? (clickedItem as StoredMovie).stream_icon : (clickedItem as StoredSeries).cover,
+              year: clickedItem.year || clickedItem.release_date?.slice(0, 4),
+            });
+          }
+        }}
+      />
+    );
+  }, [type, handleItemClick, posterSize, cardDimensions, favoritedIds, selectedItemId, addFavorite, removeFavorite, includeSourceInVodSearch, vodShowSourceBadge, search, sourceNameMap]);
 
   const gridStyle = useMemo(() => ({
     '--vod-card-width': `${cardDimensions.cardWidth}px`,
@@ -386,11 +306,7 @@ export function VodBrowse({
         <div className="vod-browse__spinner"></div>
         <h3>{i18n.t('vod:loading')}</h3>
         {message && <p>{message}</p>}
-        {progress > 0 && (
-          <div className="vod-browse__progress-bar">
-            <div className="vod-browse__progress-fill" style={{ width: `${progress}%` }}></div>
-          </div>
-        )}
+        {progress > 0 && <div className="vod-browse__progress-bar"><div className="vod-browse__progress-fill" style={{ width: `${progress}%` }}></div></div>}
       </div>
     );
   }
@@ -399,15 +315,9 @@ export function VodBrowse({
     return (
       <div className="vod-browse vod-browse--empty">
         <div className="vod-browse__empty-state">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d="M21 21l-6-6m2-5a7-7 0 11-14 0 7-7 0 0114 0z" />
-          </svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M21 21l-6-6m2-5a7-7 0 11-14 0 7-7 0 0114 0z" /></svg>
           <h3>{i18n.t('vod:noItemsFound', { type: type === 'movies' ? i18n.t('vod:movies') : i18n.t('vod:series') })}</h3>
-          <p>
-            {search
-              ? i18n.t('vod:noResultsInCategory', { search, category: categoryName })
-              : i18n.t('vod:noItemsInCategory', { type: type === 'movies' ? i18n.t('vod:movies') : i18n.t('vod:series'), category: categoryName })}
-          </p>
+          <p>{search ? i18n.t('vod:noResultsInCategory', { search, category: categoryName }) : i18n.t('vod:noItemsInCategory', { type: type === 'movies' ? i18n.t('vod:movies') : i18n.t('vod:series'), category: categoryName })}</p>
         </div>
       </div>
     );
@@ -425,47 +335,23 @@ export function VodBrowse({
             <div className="vod-browse__sync-status" title={message}>
               <div className="vod-browse__spinner" />
               <span>{message}</span>
-              {progress > 0 && (
-                <div className="vod-browse__sync-progress">
-                  <div
-                    className="vod-browse__sync-progress-fill"
-                    style={{ width: `${progress}%` }}
-                  />
-                </div>
-              )}
+              {progress > 0 && <div className="vod-browse__sync-progress"><div className="vod-browse__sync-progress-fill" style={{ width: `${progress}%` }} /></div>}
             </div>
           )}
           <div className="vod-browse__sort-container">
             <span className="vod-browse__sort-label">{i18n.t('vod:sort')}</span>
-            <select
-              className="vod-browse__sort-select"
-              value={sortBy}
-              onChange={(e) => handleSortSelect(e.target.value as VodSortKey)}
-              aria-label={i18n.t('vod:sort')}
-            >
+            <select className="vod-browse__sort-select" value={sortBy} onChange={(e) => handleSortSelect(e.target.value as VodSortKey)} aria-label={i18n.t('vod:sort')}>
               <option value="added">{i18n.t('vod:sortAdded')}</option>
               <option value="name">{i18n.t('vod:sortName')}</option>
               <option value="year">{i18n.t('vod:sortYear')}</option>
               <option value="rating">{i18n.t('vod:sortRating')}</option>
               <option value="lastWatched">{i18n.t('vod:sortLastWatched')}</option>
             </select>
-            <button
-              className={`vod-sort-dir-btn ${sortDirection === 'desc' ? 'active' : ''}`}
-              onClick={toggleSortDirection}
-              title={sortDirection === 'asc' ? i18n.t('vod:sortAscending') : i18n.t('vod:sortDescending')}
-              aria-label={sortDirection === 'asc' ? i18n.t('vod:sortAscending') : i18n.t('vod:sortDescending')}
-              type="button"
-            >
+            <button className={`vod-sort-dir-btn ${sortDirection === 'desc' ? 'active' : ''}`} onClick={toggleSortDirection} title={sortDirection === 'asc' ? i18n.t('vod:sortAscending') : i18n.t('vod:sortDescending')} aria-label={sortDirection === 'asc' ? i18n.t('vod:sortAscending') : i18n.t('vod:sortDescending')} type="button">
               {sortDirection === 'asc' ? (
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14">
-                  <path d="M12 19V5" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M5 12l7-7 7 7" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14"><path d="M12 19V5" strokeLinecap="round" strokeLinejoin="round" /><path d="M5 12l7-7 7 7" strokeLinecap="round" strokeLinejoin="round" /></svg>
               ) : (
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14">
-                  <path d="M12 5v14" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M19 12l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14"><path d="M12 5v14" strokeLinecap="round" strokeLinejoin="round" /><path d="M19 12l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round" /></svg>
               )}
             </button>
           </div>
@@ -487,21 +373,11 @@ export function VodBrowse({
           onRangeChange={handleRangeChange}
           overscan={4}
         />
-        {loading && (
-          <div className="vod-browse__loading">
-            <div className="vod-browse__spinner" />
-            <span>{i18n.t('vod:loadingMore')}</span>
-          </div>
-        )}
+        {loading && <div className="vod-browse__loading"><div className="vod-browse__spinner" /><span>{i18n.t('vod:loadingMore')}</span></div>}
       </div>
 
       {sortedItems.length > 0 && sortBy === 'name' && (
-        <AlphabetRail
-          currentLetter={currentLetter}
-          availableLetters={availableLetters}
-          onLetterSelect={handleLetterSelect}
-          count={sortedItems.length}
-        />
+        <AlphabetRail currentLetter={currentLetter} availableLetters={availableLetters} onLetterSelect={handleLetterSelect} count={sortedItems.length} />
       )}
     </div>
   );
