@@ -66,6 +66,21 @@
   background: rgba(251, 191, 36, 0.2);
 }
 
+.favorite-channel-item.active {
+  background: rgba(251, 191, 36, 0.16);
+  color: #fbbf24;
+  border-left: 3px solid #fbbf24;
+  padding-left: 5px;
+}
+
+.favorite-channel-item.active .favorite-channel-name {
+  color: #fbbf24;
+}
+
+.favorite-channel-item.active .favorite-channel-program {
+  color: rgba(251, 191, 36, 0.7);
+}
+
 .favorite-channel-name {
   font-size: 0.75rem;
   font-weight: 600;
