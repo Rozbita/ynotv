@@ -1,0 +1,36 @@
+name: one-time overlay logo size edit
+
+on:
+  push:
+    paths:
+      - '.github/workflows/one-time-overlay-logo-size-edit.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  edit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update logo size limit
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('packages/ui/src/components/settings/LiveViewTab.tsx')
+          s = p.read_text(encoding='utf-8')
+          old = '''                    min="24"\n                    max="72"\n                    value={channelInfoOverlayLogoSize}'''
+          new = '''                    min="24"\n                    max="200"\n                    value={channelInfoOverlayLogoSize}'''
+          if s.count(old) != 1:
+              raise SystemExit(f'Expected exactly 1 match, found {s.count(old)}')
+          p.write_text(s.replace(old, new), encoding='utf-8')
+          PY
+      - name: Remove temporary workflow
+        run: rm .github/workflows/one-time-overlay-logo-size-edit.yml
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packages/ui/src/components/settings/LiveViewTab.tsx .github/workflows/one-time-overlay-logo-size-edit.yml
+          git commit -m "Increase overlay logo size limit to 200px"
+          git push
