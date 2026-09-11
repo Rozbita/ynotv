@@ -1191,24 +1191,24 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   },
 
   // Widget scale
-  widgetScale: 1,
+  widgetScale: (cachedSettings?.widgetScale as number) ?? 1,
   setWidgetScale: (scale) => {
     set({ widgetScale: scale });
     persistSettings({ widgetScale: scale }, true);
   },
-  widgetBgOpacity: 0.55,
+  widgetBgOpacity: (cachedSettings?.widgetBgOpacity as number) ?? 0.55,
   setWidgetBgOpacity: (opacity) => {
     set({ widgetBgOpacity: opacity });
     persistSettings({ widgetBgOpacity: opacity }, true);
   },
 
   // Sports overlay
-  sportsScale: 1,
+  sportsScale: (cachedSettings?.sportsScale as number) ?? 1,
   setSportsScale: (scale) => {
     set({ sportsScale: scale });
     persistSettings({ sportsScale: scale }, true);
   },
-  sportsBgOpacity: 0.7,
+  sportsBgOpacity: (cachedSettings?.sportsBgOpacity as number) ?? 0.7,
   setSportsBgOpacity: (opacity) => {
     set({ sportsBgOpacity: opacity });
     persistSettings({ sportsBgOpacity: opacity }, true);
