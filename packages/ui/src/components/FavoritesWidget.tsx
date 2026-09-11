@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { StoredChannel } from '../db';
 import { useLiveQuery } from '../hooks/useSqliteLiveQuery';
@@ -7,12 +7,16 @@ import { useSettingsStore } from '../stores/settingsStore';
 import { db } from '../db';
 import './FavoritesWidget.css';
 
+const ACTIVE_FAVORITE_STORAGE_KEY = 'ynotv-active-favorite-stream-id';
+
 interface FavoriteChannelItemProps {
   channel: StoredChannel;
   onChannelClick: (channel: StoredChannel) => void;
+  isActive: boolean;
+  itemRef?: (element: HTMLDivElement | null) => void;
 }
 
-function FavoriteChannelItem({ channel, onChannelClick }: FavoriteChannelItemProps) {
+function FavoriteChannelItem({ channel, onChannelClick, isActive, itemRef }: FavoriteChannelItemProps) {
   const currentProgram = useCurrentProgram(channel.stream_id);
 
   const handleClick = useCallback(() => {
@@ -21,7 +25,8 @@ function FavoriteChannelItem({ channel, onChannelClick }: FavoriteChannelItemPro
 
   return (
     <div
-      className="favorite-channel-item"
+      ref={itemRef}
+      className={`favorite-channel-item${isActive ? ' active' : ''}`}
       onClick={handleClick}
       role="button"
       tabIndex={0}
@@ -60,6 +65,15 @@ export function FavoritesWidget({
 }: FavoritesWidgetProps) {
   const { t } = useTranslation('widgets');
   const alwaysSortFavoritesAlphabetically = useSettingsStore((s) => s.alwaysSortFavoritesAlphabetically);
+  const [activeStreamId, setActiveStreamId] = useState<string | null>(() => {
+    try {
+      return sessionStorage.getItem(ACTIVE_FAVORITE_STORAGE_KEY);
+    } catch {
+      return null;
+    }
+  });
+  const activeItemRef = useRef<HTMLDivElement | null>(null);
+
   const favoriteChannels = useLiveQuery(
     async () => {
       const results = await db.channels.whereRaw('(is_favorite = 1 OR is_favorite = true)').toArray();
@@ -91,6 +105,29 @@ export function FavoritesWidget({
   const isMainScreen = activeView === 'none';
   const isVisible = isMainScreen && showControls && (favoriteChannels?.length ?? 0) > 0 && !isVod;
 
+  // The widget unmounts while the fullscreen controls are hidden. Restore the
+  // selected favorite and scroll it into view whenever the widget reappears.
+  useEffect(() => {
+    if (!isVisible || !activeStreamId || !favoriteChannels?.length) return;
+    const activeChannelStillExists = favoriteChannels.some((channel) => channel.stream_id === activeStreamId);
+    if (!activeChannelStillExists) return;
+
+    const frame = requestAnimationFrame(() => {
+      activeItemRef.current?.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [isVisible, activeStreamId, favoriteChannels]);
+
+  const handleFavoriteClick = useCallback((channel: StoredChannel) => {
+    setActiveStreamId(channel.stream_id);
+    try {
+      sessionStorage.setItem(ACTIVE_FAVORITE_STORAGE_KEY, channel.stream_id);
+    } catch {
+      // Ignore storage failures; the in-memory highlight still works.
+    }
+    onChannelClick(channel);
+  }, [onChannelClick]);
+
   if (!isVisible) {
     return null;
   }
@@ -115,7 +152,9 @@ export function FavoritesWidget({
           <FavoriteChannelItem
             key={channel.stream_id}
             channel={channel}
-            onChannelClick={onChannelClick}
+            onChannelClick={handleFavoriteClick}
+            isActive={channel.stream_id === activeStreamId}
+            itemRef={channel.stream_id === activeStreamId ? (element) => { activeItemRef.current = element; } : undefined}
           />
         ))}
       </div>
