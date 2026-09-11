@@ -1,7 +1,8 @@
 name: One-time Text Size Edit
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [main]
 
 permissions:
   contents: write
