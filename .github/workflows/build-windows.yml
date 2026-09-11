@@ -1,0 +1,63 @@
+name: Build Windows Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install 7z (Windows)
+        run: choco install 7zip -y
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download MPV (Tauri Sidecar)
+        run: |
+          bash scripts/download-mpv-tauri.sh
+          echo "Checking MPV:"
+          ls -la packages/app/src-tauri/bin/ || true
+        shell: bash
+        continue-on-error: true
+
+      - name: Download FFmpeg (Tauri Sidecar)
+        run: |
+          cd packages/app
+          node scripts/download-ffmpeg.js
+          cd ../..
+          echo "Checking FFmpeg:"
+          ls -la packages/app/src-tauri/bin/ || true
+        shell: bash
+        continue-on-error: true
+
+      - name: Setup libmpv
+        run: powershell -ExecutionPolicy Bypass -File packages/app/src-tauri/setup-libmpv.ps1
+
+      - name: Build Tauri app
+        run: pnpm tauri build
+
+      - name: Upload Windows build
+        uses: actions/upload-artifact@v4
+        with:
+          name: ynoTV-windows
+          path: |
+            packages/app/src-tauri/target/release/bundle/**/*.exe
+            packages/app/src-tauri/target/release/bundle/**/*.msi
+          if-no-files-found: error
