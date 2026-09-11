@@ -1,0 +1,42 @@
+name: One-time overlay width edit
+
+on:
+  push:
+    paths:
+      - '.github/workflows/one-time-overlay-width-edit.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  edit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Increase overlay box width limit
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('packages/ui/src/components/settings/LiveViewTab.tsx')
+          content = path.read_text(encoding='utf-8')
+
+          old = '                    max="600"\n                    step="10"'
+          new = '                    max="1200"\n                    step="10"'
+
+          if old not in content:
+              raise SystemExit('Expected box width slider with max="600" was not found.')
+
+          content = content.replace(old, new, 1)
+          path.write_text(content, encoding='utf-8')
+          PY
+
+          rm .github/workflows/one-time-overlay-width-edit.yml
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packages/ui/src/components/settings/LiveViewTab.tsx .github/workflows/one-time-overlay-width-edit.yml
+          git commit -m "Increase overlay box width limit to 1200px"
+          git push
