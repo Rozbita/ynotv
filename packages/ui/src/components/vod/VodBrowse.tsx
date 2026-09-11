@@ -101,6 +101,13 @@ export function VodBrowse({
   const virtualGridRef = useRef<VirtualGridHandle>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [visibleRange, setVisibleRange] = useState({ startIndex: 0, endIndex: 0 });
+  const selectionStorageKey = `vod-browse-selected-${type}-${categoryId ?? 'all'}-${search ?? ''}`;
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return sessionStorage.getItem(selectionStorageKey);
+    }
+    return null;
+  });
 
   const [posterSize, setPosterSize] = usePosterSizePreference();
 
@@ -161,7 +168,8 @@ export function VodBrowse({
 
   const debouncedSearch = useDebouncedValue(search, 300);
 
-  // Scroll to top when category changes
+  // Scroll to top when category changes. The selected-item restore effect below
+  // runs afterward and moves back to the remembered item when returning.
   useEffect(() => {
     if (virtualGridRef.current) {
       virtualGridRef.current.scrollToIndex({ index: 0, align: 'start' });
@@ -199,6 +207,43 @@ export function VodBrowse({
   }, [allFavorites, type]);
   const addFavorite = useVodFavoritesStore((s) => s.addFavorite);
   const removeFavorite = useVodFavoritesStore((s) => s.removeFavorite);
+
+  // Restore the previously selected item when returning to this category.
+  // If pagination has not loaded that item yet, keep loading until it is available.
+  useEffect(() => {
+    if (!selectedItemId || loading) return;
+
+    const selectedIndex = sortedItems.findIndex((item) => {
+      if (!item) return false;
+      return type === 'movies'
+        ? (item as StoredMovie).stream_id === selectedItemId
+        : (item as StoredSeries).series_id === selectedItemId;
+    });
+
+    if (selectedIndex >= 0) {
+      const frame = window.requestAnimationFrame(() => {
+        virtualGridRef.current?.scrollToIndex({ index: selectedIndex, align: 'center' });
+      });
+      return () => window.cancelAnimationFrame(frame);
+    }
+
+    if (hasMore) {
+      loadMore();
+    }
+  }, [selectedItemId, sortedItems, type, loading, hasMore, loadMore]);
+
+  const handleItemClick = useCallback((item: StoredMovie | StoredSeries) => {
+    const itemId = type === 'movies'
+      ? (item as StoredMovie).stream_id
+      : (item as StoredSeries).series_id;
+
+    setSelectedItemId(itemId);
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem(selectionStorageKey, itemId);
+    }
+
+    onItemClick(item);
+  }, [type, onItemClick, selectionStorageKey]);
 
   const alphabetIndex = useAlphabetIndex(sortedItems);
   const currentLetter = useCurrentLetter(sortedItems, visibleRange.startIndex);
@@ -260,6 +305,7 @@ export function VodBrowse({
         ? (item as StoredMovie).stream_id
         : (item as StoredSeries).series_id;
       const isFav = favoritedIds.has(itemId);
+      const isSelected = selectedItemId === itemId;
 
       let sizeLabel: 'small' | 'medium' | 'large' = 'medium';
       if (posterSize <= 120) sizeLabel = 'small';
@@ -267,6 +313,8 @@ export function VodBrowse({
 
       const cardStyle = {
         '--marquee-visible-width': `${cardDimensions.cardWidth}px`,
+        outline: isSelected ? '2px solid #fbbf24' : '2px solid transparent',
+        outlineOffset: isSelected ? '2px' : '0px',
       } as React.CSSProperties;
 
       const showBadge = vodShowSourceBadge || (includeSourceInVodSearch && search && search.trim());
@@ -279,7 +327,7 @@ export function VodBrowse({
           item={item}
           type={type === 'movies' ? 'movie' : 'series'}
           index={index}
-          onClick={onItemClick}
+          onClick={handleItemClick}
           size={sizeLabel}
           style={cardStyle}
           isFavorited={isFav}
@@ -305,7 +353,7 @@ export function VodBrowse({
         />
       );
     },
-    [type, onItemClick, posterSize, cardDimensions, favoritedIds, addFavorite, removeFavorite, includeSourceInVodSearch, vodShowSourceBadge, search, sourceNameMap]
+    [type, handleItemClick, posterSize, cardDimensions, favoritedIds, selectedItemId, addFavorite, removeFavorite, includeSourceInVodSearch, vodShowSourceBadge, search, sourceNameMap]
   );
 
   const gridStyle = useMemo(() => ({
