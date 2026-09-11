@@ -224,7 +224,7 @@ export function LiveViewTab({
                   <input
                     type="range"
                     min="10"
-                    max="28"
+                    max="80"
                     value={channelInfoOverlayFontSize}
                     onChange={(e) => onChannelInfoOverlayFontSizeChange(parseInt(e.target.value))}
                     style={{ flex: 1 }}
