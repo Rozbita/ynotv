@@ -31,6 +31,7 @@ import {
   type SortDirection,
   type VodSortKey,
 } from './vodSort';
+import { applyTvFocus } from '../../services/spatialNavigation';
 import './VodBrowse.css';
 
 const VOD_POSTER_SIZE_PRESETS = [
@@ -223,6 +224,21 @@ export function VodBrowse({
     if (selectedIndex >= 0) {
       const frame = window.requestAnimationFrame(() => {
         virtualGridRef.current?.scrollToIndex({ index: selectedIndex, align: 'center' });
+
+        // VirtualGrid may need one frame to mount the row after scrolling.
+        // Once the selected card exists, make spatial-navigation remember the
+        // same card and scroll position instead of restoring an older VOD focus
+        // position on top of this selected-item restore.
+        window.requestAnimationFrame(() => {
+          const escape = (value: string) =>
+            typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(value) : value;
+          const card = document.querySelector<HTMLElement>(
+            `.media-card[data-id="${escape(selectedItemId)}"]`
+          );
+          if (card && card.isConnected) {
+            applyTvFocus(card);
+          }
+        });
       });
       return () => window.cancelAnimationFrame(frame);
     }
@@ -384,7 +400,7 @@ export function VodBrowse({
       <div className="vod-browse vod-browse--empty">
         <div className="vod-browse__empty-state">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            <path d="M21 21l-6-6m2-5a7-7 0 11-14 0 7-7 0 0114 0z" />
           </svg>
           <h3>{i18n.t('vod:noItemsFound', { type: type === 'movies' ? i18n.t('vod:movies') : i18n.t('vod:series') })}</h3>
           <p>
