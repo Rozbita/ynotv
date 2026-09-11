@@ -64,7 +64,7 @@ jobs:
           '@ | Set-Content -Path packages/app/src-tauri/tauri.test.conf.json -Encoding utf8
 
       - name: Build Tauri app (test build without updater artifacts)
-        run: pnpm tauri build --config packages/app/src-tauri/tauri.test.conf.json
+        run: pnpm tauri build --config src-tauri/tauri.test.conf.json
 
       - name: Remove test Tauri config
         if: always()
