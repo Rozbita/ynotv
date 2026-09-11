@@ -308,7 +308,7 @@ export function LiveViewTab({
                   <input
                     type="range"
                     min="200"
-                    max="600"
+                    max="1200"
                     step="10"
                     value={channelInfoOverlayBoxWidth}
                     onChange={(e) => onChannelInfoOverlayBoxWidthChange(parseInt(e.target.value))}
