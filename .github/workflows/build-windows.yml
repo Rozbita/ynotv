@@ -52,8 +52,24 @@ jobs:
       - name: Setup libmpv
         run: powershell -ExecutionPolicy Bypass -File packages/app/src-tauri/setup-libmpv.ps1
 
+      - name: Create test Tauri config
+        shell: pwsh
+        run: |
+          @'
+          {
+            "bundle": {
+              "createUpdaterArtifacts": false
+            }
+          }
+          '@ | Set-Content -Path packages/app/src-tauri/tauri.test.conf.json -Encoding utf8
+
       - name: Build Tauri app (test build without updater artifacts)
-        run: pnpm tauri build --config '{"bundle":{"createUpdaterArtifacts":false}}'
+        run: pnpm tauri build --config packages/app/src-tauri/tauri.test.conf.json
+
+      - name: Remove test Tauri config
+        if: always()
+        shell: pwsh
+        run: Remove-Item packages/app/src-tauri/tauri.test.conf.json -Force -ErrorAction SilentlyContinue
 
       - name: Upload Windows build
         uses: actions/upload-artifact@v4
