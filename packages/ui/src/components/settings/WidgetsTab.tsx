@@ -81,7 +81,7 @@ export function WidgetsTab({
           <SliderRow
             label={i18n.t('settings:livetv.widgets.widgetScale')}
             hint={i18n.t('settings:livetv.widgets.widgetScaleHint')}
-            min={50} max={200} step={5}
+            min={50} max={400} step={5}
             value={scalePercent}
             display={`${scalePercent}%`}
             onChange={(v) => onWidgetScaleChange(v / 100)}
@@ -166,13 +166,13 @@ export function WidgetsTab({
           {/* Height spacer */}
           <div aria-hidden="true" style={{
             height: `calc(${Math.round((172 + 36) * widgetScale)}px + 8px)`,
-            width:  `calc(${Math.round(700      * widgetScale)}px)`,
+            width:  `calc(${Math.round(700 * widgetScale)}px)`,
             pointerEvents: 'none',
           }} />
         </div>
       </div>
 
-      {/* ══ Sports Scores Overlay ═══════════════════════════════════ */}
+      {/* ══ Sports Scores Overlay ═══════════════════════════════════ */
       <div className="settings-section">
         <div className="section-header"><h3>{i18n.t('settings:livetv.widgets.sportsOverlay')}</h3></div>
         <p className="section-description">
@@ -184,7 +184,7 @@ export function WidgetsTab({
           <SliderRow
             label={i18n.t('settings:livetv.widgets.overlayScale')}
             hint={i18n.t('settings:livetv.widgets.overlayScaleHint')}
-            min={50} max={200} step={5}
+            min={50} max={400} step={5}
             value={sScalePct}
             display={`${sScalePct}%`}
             onChange={(v) => onSportsScaleChange(v / 100)}
@@ -250,7 +250,7 @@ export function WidgetsTab({
                   border: '1px solid var(--surface-border)',
                   display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0,
                 }}>
-                  <span style={{ fontSize: '9px', fontWeight: 600, textTransform: 'uppercase',                   color: 'var(--text-secondary)' }}>{g.league}</span>
+                  <span style={{ fontSize: '9px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)' }}>{g.league}</span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-primary)' }}>{g.away}</span>
                     <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', minWidth: '16px', textAlign: 'center' }}>{g.awayScore}</span>
