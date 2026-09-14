@@ -2092,21 +2092,22 @@ export class StalkerClient {
             const uniqueCandidates = [...new Set(cmdCandidates)];
             let resultUrl: string | undefined = undefined;
 
-            // Try candidates: first with GET, then fallback to POST (Method 2 for portals like fr5k.com)
+            // Try candidates: POST first (Method 2 - required for portals like fr5k.com that need play_token),
+            // then GET as fallback. POST returns URLs with ?play_token=... which is required by the stream server.
             for (const candidateCmd of uniqueCandidates) {
-                console.log(`[Stalker] Trying candidate cmd: ${candidateCmd}`);
+                console.log(`[Stalker] Trying candidate cmd (POST): ${candidateCmd}`);
 
-                // 1. Try GET
-                resultUrl = await requestLink(candidateCmd, false);
-                if (resultUrl) {
-                    console.log(`[Stalker] create_link (GET) succeeded with cmd: ${candidateCmd}`);
-                    break;
-                }
-
-                // 2. Fallback to POST (Method 2)
+                // 1. Try POST first (Method 2) - fr5k.com and similar portals require POST to get play_token
                 resultUrl = await requestLink(candidateCmd, true);
                 if (resultUrl) {
                     console.log(`[Stalker] create_link (POST / Method 2) succeeded with cmd: ${candidateCmd}`);
+                    break;
+                }
+
+                // 2. Fallback to GET
+                resultUrl = await requestLink(candidateCmd, false);
+                if (resultUrl) {
+                    console.log(`[Stalker] create_link (GET) succeeded with cmd: ${candidateCmd}`);
                     break;
                 }
             }
