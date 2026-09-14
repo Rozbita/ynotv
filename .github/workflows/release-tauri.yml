@@ -97,7 +97,7 @@ jobs:
               const p = "packages/app/src-tauri/tauri.conf.json";
               const cfg = JSON.parse(fs.readFileSync(p, "utf8"));
               if (cfg.plugins && cfg.plugins.updater) {
-                delete cfg.plugins.updater.pubkey;
+                delete cfg.plugins.updater;
               }
               if (cfg.bundle) {
                 cfg.bundle.createUpdaterArtifacts = false;
