@@ -463,7 +463,8 @@ export class StalkerClient {
         type: string = 'itv',
         extraParams: Record<string, string> = {},
         customHeaders: Record<string, string> | null = null,
-        isRetryAfterAuthRefresh: boolean = false
+        isRetryAfterAuthRefresh: boolean = false,
+        usePost: boolean = false
     ): Promise<T> {
         const params = new URLSearchParams({
             type,
@@ -481,15 +482,27 @@ export class StalkerClient {
         let lastError: any;
 
         for (const baseUrl of candidateBaseUrls) {
-            const url = `${baseUrl}?${params.toString()}`;
-            const headers = customHeaders || this.getHeaders(true, true);
+            const headers = { ...(customHeaders || this.getHeaders(true, true)) };
+            let url: string;
+            let method: 'GET' | 'POST' = usePost ? 'POST' : 'GET';
+            let body: string | undefined = undefined;
 
-            console.log(`[Stalker] Request: ${action}, URL: ${url}`);
+            if (usePost) {
+                headers['Content-Type'] = 'application/x-www-form-urlencoded; charset=utf-8';
+                url = baseUrl;
+                body = params.toString();
+            } else {
+                url = `${baseUrl}?${params.toString()}`;
+            }
+
+            console.log(`[Stalker] Request (${method}): ${action}, URL: ${url}`);
 
             for (let attempt = 1; attempt <= STALKER_MAX_RETRIES; attempt++) {
                 try {
                     const response = await universalFetch(url, {
+                        method,
                         headers,
+                        body,
                         timeout: STALKER_TIMEOUT_MS,
                     });
 
@@ -503,7 +516,7 @@ export class StalkerClient {
                             if (!isRetryAfterAuthRefresh && action !== 'handshake' && action !== 'get_profile') {
                                 console.log(`[Stalker] Retrying request ${action} with fresh token handshake...`);
                                 await this.ensureToken(true);
-                                return await this.fetchStalker<T>(action, type, extraParams, customHeaders, true);
+                                return await this.fetchStalker<T>(action, type, extraParams, customHeaders, true, usePost);
                             }
                         }
                         if (response.status === 404) {
@@ -532,7 +545,7 @@ export class StalkerClient {
                             console.warn(`[Stalker] Cached token for source ${this.sourceId} returned invalid JSON/HTML from server (likely expired session). Refreshing token...`);
                             try {
                                 await this.ensureToken(true);
-                                return await this.fetchStalker<T>(action, type, extraParams, customHeaders, true);
+                                return await this.fetchStalker<T>(action, type, extraParams, customHeaders, true, usePost);
                             } catch (refreshErr) {
                                 console.error(`[Stalker] Automatic token refresh retry failed for ${action}:`, refreshErr);
                             }
@@ -1991,64 +2004,115 @@ export class StalkerClient {
                     archiveParams['series'] = catchup.programId;
                 }
 
-                try {
-                    const response = await this.fetchStalker<any>('create_link', 'tv_archive', archiveParams);
-                    let resultUrl = response?.url || response?.cmd || response;
+                for (const usePost of [false, true]) {
+                    try {
+                        const response = await this.fetchStalker<any>('create_link', 'tv_archive', archiveParams, null, false, usePost);
+                        let rawUrl = response?.cmd || response?.url || response?.js?.cmd || response?.js?.url || (typeof response === 'string' ? response : undefined);
 
-                    if (resultUrl && typeof resultUrl === 'string') {
-                        resultUrl = this.sanitizeStreamUrl(resultUrl);
+                        if (rawUrl && typeof rawUrl === 'string') {
+                            let resultUrl = this.sanitizeStreamUrl(rawUrl);
 
-                        if (
-                            resultUrl &&
-                            !resultUrl.startsWith('?token=') &&
-                            !resultUrl.includes('load.php?token=') &&
-                            !resultUrl.includes('19691231')
-                        ) {
-                            console.log(`[Stalker] Resolved TV Archive stream URL (cmd: ${archiveCmd}): ${resultUrl}`);
-                            return resultUrl;
+                            if (
+                                resultUrl &&
+                                !resultUrl.startsWith('?token=') &&
+                                !resultUrl.includes('load.php?token=') &&
+                                !resultUrl.includes('19691231')
+                            ) {
+                                console.log(`[Stalker] Resolved TV Archive stream URL (${usePost ? 'POST' : 'GET'}, cmd: ${archiveCmd}): ${resultUrl}`);
+                                return resultUrl;
+                            }
                         }
+                    } catch (err) {
+                        console.warn(`[Stalker] TV Archive create_link (${usePost ? 'POST' : 'GET'}) failed for cmd (${archiveCmd}):`, err);
                     }
-                } catch (err) {
-                    console.warn(`[Stalker] TV Archive create_link failed for cmd (${archiveCmd}):`, err);
                 }
             }
         }
 
+        const extractUrlFromResponse = (response: any): string | undefined => {
+            if (!response) return undefined;
+            if (typeof response === 'string') return response;
+            const rawUrl = response.cmd || response.url || response.js?.cmd || response.js?.url || response.data?.cmd || response.data?.url;
+            if (typeof rawUrl === 'string') return rawUrl;
+            return undefined;
+        };
+
         // Helper to request create_link, cleanup and resolve relative URLs
-        const requestLink = async (command: string): Promise<string | undefined> => {
+        const requestLink = async (command: string, usePost: boolean = false): Promise<string | undefined> => {
             try {
                 const params: Record<string, string> = {
                     cmd: command,
                     type: type,
                 };
-                if (seriesEpisodeNum) {
+                if (type === 'itv') {
+                    params['series'] = seriesEpisodeNum || '';
+                    params['forced_storage'] = '0';
+                    params['disable_ad'] = '0';
+                    params['download'] = '0';
+                    params['force_ch_link_check'] = '0';
+                } else if (seriesEpisodeNum) {
                     params['series'] = seriesEpisodeNum;
                 }
 
-                const response = await this.fetchStalker<any>('create_link', type, params);
-                let resultUrl = response?.url || response?.cmd || response;
+                const response = await this.fetchStalker<any>('create_link', type, params, null, false, usePost);
+                let rawUrl = extractUrlFromResponse(response);
 
-                if (resultUrl && typeof resultUrl === 'string') {
-                    resultUrl = this.sanitizeStreamUrl(resultUrl);
-                    return resultUrl;
+                if (rawUrl) {
+                    const resultUrl = this.sanitizeStreamUrl(rawUrl);
+                    if (resultUrl && !resultUrl.startsWith('?token=') && !resultUrl.includes('load.php?token=')) {
+                        return resultUrl;
+                    }
                 }
             } catch (err) {
-                console.error('[Stalker] requestLink failed for cmd:', command, err);
+                console.error(`[Stalker] requestLink (${usePost ? 'POST' : 'GET'}) failed for cmd:`, command, err);
             }
             return undefined;
         };
 
         try {
             console.log(`[Stalker] Calling create_link. Type=${type}, Cmd=${forcedCmd}`);
-            let resultUrl = await requestLink(forcedCmd);
 
-            // If the resolved URL starts with '?token=' or matches the portal load.php page,
-            // it means the command format was incorrect and the portal fell back to a login token.
-            // We attempt to toggle the cmd format (between /media/file_id.mpg and /media/id.mpg) and retry.
-            if (!resultUrl || resultUrl.startsWith('?token=') || resultUrl.includes('load.php?token=')) {
-                console.log(`[Stalker] resolveStreamUrl: Initial command ${forcedCmd} returned invalid token link: ${resultUrl}. Attempting fallback format...`);
-                
-                // Extract the numerical ID from forcedCmd
+            // Build candidate commands for live ITV channels or VOD streams
+            const cmdCandidates: string[] = [];
+
+            if (type === 'itv') {
+                const idMatch = forcedCmd.match(/(\d+)/);
+                if (idMatch) {
+                    const streamId = idMatch[1];
+                    // Candidate 1: Standard Stalker player format (ffmpeg http://localhost/ch/26386_)
+                    cmdCandidates.push(`ffmpeg http://localhost/ch/${streamId}_`);
+                    cmdCandidates.push(`ffrt http://localhost/ch/${streamId}_`);
+                    cmdCandidates.push(`http://localhost/ch/${streamId}_`);
+                    cmdCandidates.push(`/ch/${streamId}_`);
+                }
+            }
+            // Always append original forcedCmd as candidate
+            cmdCandidates.push(forcedCmd);
+
+            const uniqueCandidates = [...new Set(cmdCandidates)];
+            let resultUrl: string | undefined = undefined;
+
+            // Try candidates: first with GET, then fallback to POST (Method 2 for portals like fr5k.com)
+            for (const candidateCmd of uniqueCandidates) {
+                console.log(`[Stalker] Trying candidate cmd: ${candidateCmd}`);
+
+                // 1. Try GET
+                resultUrl = await requestLink(candidateCmd, false);
+                if (resultUrl) {
+                    console.log(`[Stalker] create_link (GET) succeeded with cmd: ${candidateCmd}`);
+                    break;
+                }
+
+                // 2. Fallback to POST (Method 2)
+                resultUrl = await requestLink(candidateCmd, true);
+                if (resultUrl) {
+                    console.log(`[Stalker] create_link (POST / Method 2) succeeded with cmd: ${candidateCmd}`);
+                    break;
+                }
+            }
+
+            // If still no URL, attempt VOD file format fallback (between /media/file_id.mpg and /media/id.mpg)
+            if (!resultUrl) {
                 const idMatch = forcedCmd.match(/(\d+)/);
                 if (idMatch) {
                     const entityId = idMatch[1];
@@ -2060,12 +2124,8 @@ export class StalkerClient {
                     }
 
                     if (alternativeCmd && alternativeCmd !== forcedCmd) {
-                        console.log(`[Stalker] resolveStreamUrl: Retrying create_link with alternative cmd: ${alternativeCmd}`);
-                        const retryUrl = await requestLink(alternativeCmd);
-                        if (retryUrl && !retryUrl.startsWith('?token=') && !retryUrl.includes('load.php?token=')) {
-                            resultUrl = retryUrl;
-                            console.log(`[Stalker] resolveStreamUrl: Fallback command succeeded! Stream URL: ${resultUrl}`);
-                        }
+                        console.log(`[Stalker] resolveStreamUrl: Retrying create_link with alternative VOD cmd: ${alternativeCmd}`);
+                        resultUrl = await requestLink(alternativeCmd, false) || await requestLink(alternativeCmd, true);
                     }
                 }
             }
