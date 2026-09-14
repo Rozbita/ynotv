@@ -88,6 +88,24 @@ jobs:
           echo "$NOTES" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
         shell: bash
+      - name: Disable Updater Signing if Private Key Secret Missing (Fork Safety)
+        run: |
+          if [ -z "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}" ]; then
+            echo "No TAURI_SIGNING_PRIVATE_KEY secret found (forked repo build). Disabling updater signing..."
+            node -e '
+              const fs = require("fs");
+              const p = "packages/app/src-tauri/tauri.conf.json";
+              const cfg = JSON.parse(fs.readFileSync(p, "utf8"));
+              if (cfg.plugins && cfg.plugins.updater) {
+                delete cfg.plugins.updater.pubkey;
+              }
+              if (cfg.bundle) {
+                cfg.bundle.createUpdaterArtifacts = false;
+              }
+              fs.writeFileSync(p, JSON.stringify(cfg, null, 2));
+            '
+          fi
+        shell: bash
 
       - name: Build Tauri App
         id: tauri-build
