@@ -10,6 +10,7 @@ import { fetch as tauriFetch } from '@tauri-apps/plugin-http';
 export interface FetchOptions {
     headers?: Record<string, string>;
     method?: 'GET' | 'POST';
+    body?: string;
     timeout?: number;
 }
 
@@ -31,7 +32,7 @@ export async function universalFetch(
     url: string,
     options: FetchOptions = {}
 ): Promise<FetchResponse> {
-    const { headers = {}, method = 'GET', timeout = 30000 } = options;
+    const { headers = {}, method = 'GET', body, timeout = 30000 } = options;
 
     // Tauri Environment (Plugins handle CORS)
     if ((window as any).__TAURI__) {
@@ -42,6 +43,7 @@ export async function universalFetch(
             const response = await tauriFetch(url, {
                 method,
                 headers,
+                body,
                 signal: controller.signal,
             });
 
@@ -65,7 +67,7 @@ export async function universalFetch(
 
     // Tauri fetchProxy polyfill (for CORS bypass)
     if (typeof window !== 'undefined' && window.fetchProxy) {
-        const result = await window.fetchProxy.fetch(url, { headers });
+        const result = await window.fetchProxy.fetch(url, { headers, method, body });
 
         if (!result.success || !result.data) {
             throw new Error(result.error || 'Fetch failed');
@@ -88,6 +90,7 @@ export async function universalFetch(
         const response = await fetch(url, {
             method,
             headers,
+            body,
             signal: controller.signal,
         });
 
