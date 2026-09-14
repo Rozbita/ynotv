@@ -2092,23 +2092,30 @@ export class StalkerClient {
             const uniqueCandidates = [...new Set(cmdCandidates)];
             let resultUrl: string | undefined = undefined;
 
-            // Try candidates: POST first (Method 2 - required for portals like fr5k.com that need play_token),
-            // then GET as fallback. POST returns URLs with ?play_token=... which is required by the stream server.
-            for (const candidateCmd of uniqueCandidates) {
-                console.log(`[Stalker] Trying candidate cmd (POST): ${candidateCmd}`);
-
-                // 1. Try POST first (Method 2) - fr5k.com and similar portals require POST to get play_token
-                resultUrl = await requestLink(candidateCmd, true);
+            // Strategy:
+            // 1. Try POST (Method 2) first on the FIRST candidate only.
+            //    Portals like fr5k.com REQUIRE POST to get ?play_token= in the URL.
+            //    If POST works immediately, we're done fast.
+            // 2. If POST on first candidate fails, fall back to GET across ALL candidates.
+            //    This preserves the old behavior for all standard GET-based portals with zero regression.
+            const firstCandidate = uniqueCandidates[0];
+            if (firstCandidate) {
+                console.log(`[Stalker] Trying candidate cmd (POST / Method 2): ${firstCandidate}`);
+                resultUrl = await requestLink(firstCandidate, true);
                 if (resultUrl) {
-                    console.log(`[Stalker] create_link (POST / Method 2) succeeded with cmd: ${candidateCmd}`);
-                    break;
+                    console.log(`[Stalker] create_link (POST / Method 2) succeeded with cmd: ${firstCandidate}`);
                 }
+            }
 
-                // 2. Fallback to GET
-                resultUrl = await requestLink(candidateCmd, false);
-                if (resultUrl) {
-                    console.log(`[Stalker] create_link (GET) succeeded with cmd: ${candidateCmd}`);
-                    break;
+            // If POST didn't work, try GET for all candidates (original behavior)
+            if (!resultUrl) {
+                for (const candidateCmd of uniqueCandidates) {
+                    console.log(`[Stalker] Trying candidate cmd (GET): ${candidateCmd}`);
+                    resultUrl = await requestLink(candidateCmd, false);
+                    if (resultUrl) {
+                        console.log(`[Stalker] create_link (GET) succeeded with cmd: ${candidateCmd}`);
+                        break;
+                    }
                 }
             }
 
