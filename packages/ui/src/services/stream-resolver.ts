@@ -130,7 +130,7 @@ export async function resolvePlayUrl(
         // and must be resolved to a real HTTP URL via the Stalker portal API.
         if (
             sourceData.type === 'stalker' &&
-            (rawUrl.startsWith('stalker_') || rawUrl.startsWith('/media/') || catchup != null)
+            (rawUrl.startsWith('stalker_') || rawUrl.startsWith('/media/') || catchup != null || (rawUrl.startsWith('http') && !rawUrl.includes('/play/')))
         ) {
             const client = new StalkerClient(
                 {
