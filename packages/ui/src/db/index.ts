@@ -375,6 +375,16 @@ export interface EpgChannelOverride {
   logo_background?: string;   // Manual logo tile background override: 'auto' | 'light' | 'dark' (NULL = keep auto)
   logo_padding?: string;      // Manual logo padding override: 'default' | 'none' (NULL = keep default)
   timeshift_hours?: number;   // Per-channel EPG time offset (NULL = use source default)
+  // Feed this channel's guide must come from (NULL = any feed, waterfall order).
+  // 'global_epg_<linkId>' = pinned to that global EPG link; a bare source id =
+  // pinned to that source's own feed. Set when the user picks a match in the
+  // EPG editor's search, so a higher-priority feed can't overwrite their choice.
+  epg_source_id?: string;
+  // Match EPG on the channel's own (renamed) name instead of the provider's.
+  // When set, the provider name is not registered as a matching key at all, so
+  // a feed channel that happens to match the raw name can no longer fill this
+  // channel — it's replaced, not added as a fallback. Requires channels.alias.
+  match_by_alias?: boolean;
 }
 
 // EPG Program Override — overrides or tombstones for synced programs, plus user-created programs
@@ -637,7 +647,7 @@ class YnotvDatabase extends SqliteDatabase {
     // Each version block runs exactly ONCE. To add new columns in the future,
     // increment DB_VERSION and add a new case (do NOT modify existing cases).
     // ─────────────────────────────────────────────────────────────────────────
-    const DB_VERSION = 27;
+    const DB_VERSION = 29;
     const versionResult = await db.select('PRAGMA user_version') as Array<{ user_version: number }>;
     const currentVersion = versionResult[0]?.user_version ?? 0;
 
@@ -1067,6 +1077,25 @@ class YnotvDatabase extends SqliteDatabase {
         } catch (e) {
           console.error('[DB] v27 migration failed:', e);
         }
+      }
+
+      // v28: Add the feed pin (epg_source_id) to epg_channel_overrides — the
+      // EPG source a channel's guide must come from when the user picked one.
+      if (currentVersion < 28) {
+        console.log('[DB] v28 migration: Adding epg_source_id column to epg_channel_overrides');
+        const addColumn = async (table: string, col: string, type: string) => {
+          try { await db.execute(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`); } catch { /* already exists */ }
+        };
+        await addColumn('epg_channel_overrides', 'epg_source_id', 'TEXT');
+      }
+
+      // v29: Per-channel "match EPG by my name" flag (uses channels.alias).
+      if (currentVersion < 29) {
+        console.log('[DB] v29 migration: Adding match_by_alias column to epg_channel_overrides');
+        const addColumn = async (table: string, col: string, type: string) => {
+          try { await db.execute(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`); } catch { /* already exists */ }
+        };
+        await addColumn('epg_channel_overrides', 'match_by_alias', 'INTEGER');
       }
 
       // Bump the stored version so these migrations never run again
@@ -1528,6 +1557,8 @@ class YnotvDatabase extends SqliteDatabase {
     // versioned migration ran on a stale schema (or the column is missing for any reason).
     try { await db.execute(`ALTER TABLE epg_channel_overrides ADD COLUMN logo_background TEXT`); } catch (e) {}
     try { await db.execute(`ALTER TABLE epg_channel_overrides ADD COLUMN logo_padding TEXT`); } catch (e) {}
+    try { await db.execute(`ALTER TABLE epg_channel_overrides ADD COLUMN epg_source_id TEXT`); } catch (e) {}
+    try { await db.execute(`ALTER TABLE epg_channel_overrides ADD COLUMN match_by_alias INTEGER`); } catch (e) {}
 
     // Self-healing migrations: Ensure critical columns from standard migrations exist
     try { await db.execute(`ALTER TABLE categories ADD COLUMN alias TEXT`); } catch (e) {}
@@ -1549,7 +1580,9 @@ class YnotvDatabase extends SqliteDatabase {
       stream_icon     TEXT,
       logo_background TEXT,
       logo_padding    TEXT,
-      timeshift_hours REAL
+      timeshift_hours REAL,
+      epg_source_id   TEXT,
+      match_by_alias  INTEGER
     )`);
 
     // Per-program overrides (edited fields) + custom programs + tombstones
