@@ -800,6 +800,12 @@ export class StalkerClient {
                 let url: string;
                 if (rawCmd.includes('/ch/')) {
                     url = `stalker_ch:${rawCmd}`;
+                } else if (rawCmd.includes('/play/')) {
+                    // Dino / MAC direct URLs - do NOT resolve via create_link
+                    url = this.sanitizeStreamUrl(rawCmd);
+                } else if (ch.id) {
+                    // Portals like fr5k.com: use ch.id so create_link generates the play_token
+                    url = `stalker_ch:ffmpeg http://localhost/ch/${ch.id}_`;
                 } else {
                     url = this.sanitizeStreamUrl(rawCmd);
                 }
@@ -2076,7 +2082,7 @@ export class StalkerClient {
             const cmdCandidates: string[] = [];
 
             if (type === 'itv') {
-                const idMatch = forcedCmd.match(/(\d+)/);
+                const idMatch = forcedCmd.match(/\/ch\/(\d+)/) || forcedCmd.match(/\/(\d+)(?:_|\?|$)/) || forcedCmd.match(/(\d+)/);
                 if (idMatch) {
                     const streamId = idMatch[1];
                     // Candidate 1: Standard Stalker player format (ffmpeg http://localhost/ch/26386_)
