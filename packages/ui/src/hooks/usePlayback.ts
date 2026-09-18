@@ -11,6 +11,7 @@ import { addToRecentChannels } from '../utils/recentChannels';
 import { db, recordVodWatch, updateVodWatchProgress, getVodWatchProgress, recordEpisodeWatch, getEpisodeProgress, updateDvrRecordingProgress } from '../db';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useDownloadStore } from '../stores/downloadStore';
+import { useToastStore } from '../stores/toastStore';
 import { useStremioWatchStore } from '../stores/stremioWatchStore';
 import { useNuvioAuthStore } from '../stores/nuvioAuthStore';
 import { fetchNuvioWatchProgress, pushNuvioWatchProgress, type NuvioWatchProgressSyncEntry } from '../services/nuvio-api';
@@ -215,6 +216,48 @@ function mpvObject(value: any): Record<string, any> | null {
  * resolves and plays those correctly; transient 403s are handled by
  * yt-dlp/mpv internally and the trailer retry in maybeRetryTrailerStream.
  */
+export function formatPlaybackErrorMessage(rawError?: string | null): string {
+  if (!rawError) return 'Playback failed: Stream unavailable or could not be loaded';
+  const lower = rawError.toLowerCase();
+
+  if (lower.includes('503') || lower.includes('service unavailable')) {
+    return 'Playback failed: Provider storage offline (HTTP 503)';
+  }
+  if (lower.includes('404') || lower.includes('not found')) {
+    return 'Playback failed: File not found on server (HTTP 404)';
+  }
+  if (lower.includes('403') || lower.includes('forbidden') || lower.includes('blocked by server')) {
+    return 'Playback failed: Access denied or stream expired (HTTP 403)';
+  }
+  if (lower.includes('401') || lower.includes('unauthorized') || lower.includes('authentication required')) {
+    return 'Playback failed: Authentication required or expired account (HTTP 401)';
+  }
+  if (lower.includes('500') || lower.includes('internal server error')) {
+    return 'Playback failed: Server internal error (HTTP 500)';
+  }
+  if (lower.includes('502') || lower.includes('bad gateway')) {
+    return 'Playback failed: Server gateway error (HTTP 502)';
+  }
+  if (lower.includes('504') || lower.includes('gateway timeout')) {
+    return 'Playback failed: Server gateway timeout (HTTP 504)';
+  }
+  if (lower.includes('timeout') || lower.includes('timed out') || lower.includes('connection timed out')) {
+    return 'Playback failed: Connection timed out (Server unreachable)';
+  }
+  if (lower.includes('connection refused')) {
+    return 'Playback failed: Connection refused by server';
+  }
+  if (lower.includes('demuxer') || lower.includes('unsupported') || lower.includes('invalid content')) {
+    return 'Playback failed: Server returned invalid or unsupported media content';
+  }
+  if (lower.includes('loading failed')) {
+    return 'Playback failed: Server could not open stream file';
+  }
+
+  if (rawError.startsWith('Playback failed:')) return rawError;
+  return `Playback failed: ${rawError}`;
+}
+
 async function tryLoadWithFallbacks(
   primaryUrl: string,
   isLive: boolean,
@@ -413,6 +456,8 @@ interface UsePlaybackOptions {
   onSetCurrentChannel?: (channel: StoredChannel | null) => void;
   /** Shared MPV listener state from parent (must be provided to avoid duplicate hook instances) */
   mpvListeners: ReturnType<typeof useMpvListeners>;
+  /** Optional callback when VOD playback fails (allows parent to restore view) */
+  onVodPlaybackError?: (info: VodPlayInfo | null, errorMsg: string) => void;
 }
 
 export function usePlayback(options: UsePlaybackOptions): PlaybackState {
@@ -547,15 +592,60 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
     catchupInfoRef.current = catchupInfo;
   }, [catchupInfo]);
 
+  const onVodPlaybackErrorRef = useRef(options.onVodPlaybackError);
+  useEffect(() => {
+    onVodPlaybackErrorRef.current = options.onVodPlaybackError;
+  }, [options.onVodPlaybackError]);
+
+  const lastHttpErrorRef = useRef<{ message: string; timestamp: number } | null>(null);
+  const vodErrorHandledRef = useRef(false);
+  const handleStopRef = useRef<(() => Promise<void>) | null>(null);
+
+  // Clear loader overlay when playback starts or an error is encountered
+  const loaderLastPositionRef = useRef(position);
+  const isPlayLoadingRef = useRef(false);
+
+  const triggerVodPlaybackError = useCallback(async (rawError?: string) => {
+    const currentVod = vodInfoRef.current;
+    if (!currentVod && !isPlayLoadingRef.current) return;
+    if (vodErrorHandledRef.current) return;
+    vodErrorHandledRef.current = true;
+    setTimeout(() => { vodErrorHandledRef.current = false; }, 2000);
+
+    const effectiveError = rawError || (lastHttpErrorRef.current && Date.now() - lastHttpErrorRef.current.timestamp < 6000 ? lastHttpErrorRef.current.message : null) || 'Stream unavailable or could not be loaded';
+    const friendlyMessage = formatPlaybackErrorMessage(effectiveError);
+
+    logError('[Playback] VOD playback failure:', friendlyMessage, 'raw:', rawError);
+
+    useToastStore.getState().addToast(friendlyMessage, 'error');
+    setError(friendlyMessage);
+    setVodLoadingInfo(null);
+    isPlayLoadingRef.current = false;
+
+    if (onVodPlaybackErrorRef.current) {
+      onVodPlaybackErrorRef.current(currentVod, friendlyMessage);
+    } else {
+      await handleStopRef.current?.();
+    }
+  }, [setError, setVodLoadingInfo]);
+
+  const triggerCatchupPlaybackError = useCallback(async (rawError?: string) => {
+    if (!catchupInfoRef.current) return;
+    const effectiveError = rawError || (lastHttpErrorRef.current && Date.now() - lastHttpErrorRef.current.timestamp < 6000 ? lastHttpErrorRef.current.message : null) || 'Catchup stream unavailable';
+    const friendlyMessage = formatPlaybackErrorMessage(effectiveError);
+    logError('[Playback] Catchup playback failure:', friendlyMessage, 'raw:', rawError);
+
+    useToastStore.getState().addToast(friendlyMessage, 'error');
+    setError(friendlyMessage);
+    await handleStopRef.current?.();
+  }, [setError]);
+
   // Retry state for Live TV stream recovery
   const [retryState, setRetryState] = useState<RetryState | null>(null);
 
   // Failover state for Live TV stream recovery
   const [failoverState, setFailoverState] = useState<FailoverState | null>(null);
 
-  // Clear loader overlay when playback starts or an error is encountered
-  const loaderLastPositionRef = useRef(position);
-  const isPlayLoadingRef = useRef(false);
   useEffect(() => {
     if (vodLoadingInfo) {
       if (error) {
@@ -569,6 +659,9 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
       }
     }
     loaderLastPositionRef.current = position;
+    if (position > 1) {
+      lastHttpErrorRef.current = null;
+    }
   }, [position, error, vodLoadingInfo]);
 
   // Configurable retry settings — loaded from storage, stored in refs so
@@ -1531,18 +1624,29 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
 
     let unlistenEnded: (() => void) | null = null;
     let unlistenEndFileError: (() => void) | null = null;
+    let unlistenEndFile: (() => void) | null = null;
     let unlistenHttpError: (() => void) | null = null;
     let unlistenMpvError: (() => void) | null = null;
     let disposed = false;
 
     import('@tauri-apps/api/event').then(({ listen }) => {
       listen('mpv-stream-ended', async () => {
-        if (!useEventBasedReconnectRef.current) {
-          logInfo('[Retry] Ignoring mpv-stream-ended event (event-based reconnect disabled)');
+        logInfo('[Playback] Received mpv-stream-ended event');
+        if (await maybeRetryTrailerStream()) {
           return;
         }
-        logInfo('[Retry] Received mpv-stream-ended event');
-        if (await maybeRetryTrailerStream()) {
+        // If VOD stream died before playback was established (position 0 and duration 0)
+        if ((vodInfoRef.current || isPlayLoadingRef.current) && positionRef.current === 0 && durationRef.current === 0) {
+          let errorMsg = '';
+          if (lastHttpErrorRef.current && Date.now() - lastHttpErrorRef.current.timestamp < 6000) {
+            errorMsg = lastHttpErrorRef.current.message;
+          }
+          triggerVodPlaybackError(errorMsg || 'Stream ended unexpectedly before playback');
+          return;
+        }
+
+        if (!useEventBasedReconnectRef.current) {
+          logInfo('[Retry] Ignoring mpv-stream-ended event (event-based reconnect disabled)');
           return;
         }
         handleStreamDied();
@@ -1551,19 +1655,95 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
         else unlistenEnded = fn;
       });
 
-      listen('mpv-end-file-error', () => {
+      listen('mpv-end-file-error', async (e: any) => {
+        const payload = typeof e?.payload === 'string' ? e.payload : '';
+        logInfo('[Playback] Received mpv-end-file-error event:', payload);
+
+        if (vodInfoRef.current || isPlayLoadingRef.current) {
+          if (await maybeRetryTrailerStream()) {
+            return;
+          }
+          let errorMsg = payload;
+          if (lastHttpErrorRef.current && Date.now() - lastHttpErrorRef.current.timestamp < 6000) {
+            errorMsg = lastHttpErrorRef.current.message;
+          }
+          triggerVodPlaybackError(errorMsg);
+          return;
+        }
+
+        if (catchupInfoRef.current) {
+          let errorMsg = payload;
+          if (lastHttpErrorRef.current && Date.now() - lastHttpErrorRef.current.timestamp < 6000) {
+            errorMsg = lastHttpErrorRef.current.message;
+          }
+          triggerCatchupPlaybackError(errorMsg);
+          return;
+        }
+
         if (!useEventBasedReconnectRef.current) {
           logInfo('[Retry] Ignoring mpv-end-file-error event (event-based reconnect disabled)');
           return;
         }
-        logInfo('[Retry] Received mpv-end-file-error event');
         handleStreamDied();
       }).then((fn) => {
         if (disposed) fn();
         else unlistenEndFileError = fn;
       });
 
-      listen('mpv-http-error', () => {
+      listen('mpv-end-file', async (e: any) => {
+        const data = e?.payload as { reason?: string; fileError?: string } | undefined;
+        if (data?.reason === 'error') {
+          logInfo('[Playback] Received mpv-end-file with reason=error:', data.fileError);
+          if (vodInfoRef.current || isPlayLoadingRef.current) {
+            if (await maybeRetryTrailerStream()) {
+              return;
+            }
+            let errorMsg = data.fileError || '';
+            if (lastHttpErrorRef.current && Date.now() - lastHttpErrorRef.current.timestamp < 6000) {
+              errorMsg = lastHttpErrorRef.current.message;
+            }
+            triggerVodPlaybackError(errorMsg);
+            return;
+          }
+          if (catchupInfoRef.current) {
+            let errorMsg = data.fileError || '';
+            if (lastHttpErrorRef.current && Date.now() - lastHttpErrorRef.current.timestamp < 6000) {
+              errorMsg = lastHttpErrorRef.current.message;
+            }
+            triggerCatchupPlaybackError(errorMsg);
+            return;
+          }
+        }
+      }).then((fn) => {
+        if (disposed) fn();
+        else unlistenEndFile = fn;
+      });
+
+      listen('mpv-http-error', async (e: any) => {
+        const payload = typeof e?.payload === 'string' ? e.payload : '';
+        if (payload) {
+          lastHttpErrorRef.current = { message: payload, timestamp: Date.now() };
+        }
+
+        // For VOD: check if this is a fatal HTTP error
+        if (vodInfoRef.current || isPlayLoadingRef.current) {
+          if (await maybeRetryTrailerStream()) {
+            return;
+          }
+          const lower = payload.toLowerCase();
+          if (
+            lower.includes('503') ||
+            lower.includes('500') ||
+            lower.includes('502') ||
+            lower.includes('504') ||
+            lower.includes('404') ||
+            (!isIgnoringHttpErrors() && (lower.includes('403') || lower.includes('401')))
+          ) {
+            triggerVodPlaybackError(payload);
+            return;
+          }
+        }
+
         if (!useEventBasedReconnectRef.current) {
           logInfo('[Retry] Ignoring mpv-http-error event (event-based reconnect disabled)');
           return;
@@ -1579,12 +1759,17 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
         else unlistenHttpError = fn;
       });
 
-      listen('mpv-error', () => {
+      listen('mpv-error', (e: any) => {
+        const payload = typeof e?.payload === 'string' ? e.payload : '';
+        logInfo('[Playback] Received mpv-error event:', payload);
+        if (vodInfoRef.current || isPlayLoadingRef.current) {
+          triggerVodPlaybackError(payload);
+          return;
+        }
         if (!useEventBasedReconnectRef.current) {
           logInfo('[Retry] Ignoring mpv-error event (event-based reconnect disabled)');
           return;
         }
-        logInfo('[Retry] Received mpv-error event');
         handleStreamDied();
       }).then((fn) => {
         if (disposed) fn();
@@ -1596,10 +1781,11 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
       disposed = true;
       unlistenEnded?.();
       unlistenEndFileError?.();
+      unlistenEndFile?.();
       unlistenHttpError?.();
       unlistenMpvError?.();
     };
-  }, [handleStreamDied, isIgnoringHttpErrors, maybeRetryTrailerStream]);
+  }, [handleStreamDied, isIgnoringHttpErrors, maybeRetryTrailerStream, triggerVodPlaybackError, triggerCatchupPlaybackError]);
 
   // ── Live recording duration updater ────────────────────────────────────────
   // When playing a recording that's still being recorded, dynamically update
@@ -2537,25 +2723,30 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
         catchupDays: (channel as any).catchup_days,
         epgChannelId: channel.epg_channel_id || channel.stream_id,
       });
-    } catch (e) {
+    } catch (e: any) {
       console.error('Failed to resolve catchup source:', e);
-      setError(i18n.t('player:failedToResolveCatchupStream'));
+      const errMsg = i18n.t('player:failedToResolveCatchupStream');
+      setError(errMsg);
+      triggerCatchupPlaybackError(errMsg);
       return;
     }
 
     const isLocal = isLocalUrl(resolved.url);
     if (isLocal) {
       setIgnoreHttpErrors(true);
-    }      const result = await tryLoadWithFallbacks(resolved.url, false, resolved.userAgent);
-      if (!result.success) {
+    }
+    const result = await tryLoadWithFallbacks(resolved.url, false, resolved.userAgent);
+    if (!result.success) {
       if (isLocal) setIgnoreHttpErrors(false);
-      setError(translateNativeError(result.error) || i18n.t('player:failedToLoadCatchupStream'));
+      const errMsg = translateNativeError(result.error) || i18n.t('player:failedToLoadCatchupStream');
+      setError(errMsg);
+      triggerCatchupPlaybackError(errMsg);
     } else {
       setCurrentChannel(channel);
       setCatchupInfo({ channelId: channel.stream_id, programTitle, startTime: adjustedStartTimeMs, duration: adjustedDurationMinutes, programDesc });
       setPlaying(true);
     }
-  }, [vodInfo, position, duration, clearPendingSeeks]);
+  }, [vodInfo, position, duration, clearPendingSeeks, triggerCatchupPlaybackError]);
 
   const handleCatchupSeek = useCallback(async (channel: StoredChannel, programTitle: string, startTimeMs: number, durationMinutes: number, seekSeconds: number, programDesc?: string) => {
     seekingRef.current = true;
@@ -2574,6 +2765,8 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
     clearPendingSeeks();
     setVodLoadingInfo(info);
     isPlayLoadingRef.current = true;
+    lastHttpErrorRef.current = null;
+    vodErrorHandledRef.current = false;
 
     // Reset playback state immediately so the new stream never inherits stale
     // position/duration from the previously loaded file. Otherwise a brief
@@ -2598,16 +2791,23 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
         }
       }
       resolved = await resolvePlayUrl(info.source_id, info.url);
-    } catch (err) {
+    } catch (err: any) {
       logError('Failed to resolve Source info:', err);
-      setError(i18n.t('common:contextMenu.failedResolveStreamUrl'));
+      const rawMsg = err?.message || String(err);
+      const friendlyMsg = formatPlaybackErrorMessage(rawMsg) || i18n.t('common:contextMenu.failedResolveStreamUrl');
+      setError(friendlyMsg);
       setVodLoadingInfo(null);
+      isPlayLoadingRef.current = false;
+      triggerVodPlaybackError(friendlyMsg);
       return false;
     }
 
     if (resolved.url.startsWith('infoHash:')) {
-      setError(i18n.t('player:torrentRequiresTorrServer'));
+      const msg = i18n.t('player:torrentRequiresTorrServer');
+      setError(msg);
       setVodLoadingInfo(null);
+      isPlayLoadingRef.current = false;
+      triggerVodPlaybackError(msg);
       return false;
     }
 
@@ -2650,10 +2850,14 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
       }
     }
     const result = await tryLoadWithFallbacks(jellyfinPlayUrl, false, resolved.userAgent);
-      if (!result.success) {
+    if (!result.success) {
       setIgnoreHttpErrors(false);
-      setError(translateNativeError(result.error) || i18n.t('player:failedToLoadStream'));
+      const rawMsg = (result as any).error;
+      const friendlyMsg = formatPlaybackErrorMessage(translateNativeError(rawMsg) || rawMsg || i18n.t('player:failedToLoadStream'));
+      setError(friendlyMsg);
       setVodLoadingInfo(null);
+      isPlayLoadingRef.current = false;
+      triggerVodPlaybackError(friendlyMsg);
       return false;
     } else {
       const workingUrl = result.url;
@@ -3101,6 +3305,7 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
     userPausedRef.current = false;
     setFailoverState(null);
   }, [vodInfo, position, duration, clearPendingSeeks]);
+  handleStopRef.current = handleStop;
 
   const handleSeek = useCallback(async (seconds: number) => {
     seekingRef.current = true;
