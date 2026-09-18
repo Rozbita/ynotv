@@ -223,6 +223,9 @@ export function formatPlaybackErrorMessage(rawError?: string | null): string {
   if (lower.includes('503') || lower.includes('service unavailable')) {
     return 'Playback failed: Provider storage offline (HTTP 503)';
   }
+  if (lower.includes('405') || lower.includes('method not allowed')) {
+    return 'Playback failed: Provider rejected stream request (HTTP 405)';
+  }
   if (lower.includes('404') || lower.includes('not found')) {
     return 'Playback failed: File not found on server (HTTP 404)';
   }
@@ -252,6 +255,11 @@ export function formatPlaybackErrorMessage(rawError?: string | null): string {
   }
   if (lower.includes('loading failed')) {
     return 'Playback failed: Server could not open stream file';
+  }
+
+  const httpMatch = rawError.match(/\b([45]\d{2})\b/);
+  if (httpMatch) {
+    return `Playback failed: Server returned HTTP ${httpMatch[1]}`;
   }
 
   if (rawError.startsWith('Playback failed:')) return rawError;
@@ -587,6 +595,11 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
     vodInfoRef.current = vodInfo;
   }, [vodInfo]);
 
+  const vodLoadingInfoRef = useRef(vodLoadingInfo);
+  useEffect(() => {
+    vodLoadingInfoRef.current = vodLoadingInfo;
+  }, [vodLoadingInfo]);
+
   const catchupInfoRef = useRef(catchupInfo);
   useEffect(() => {
     catchupInfoRef.current = catchupInfo;
@@ -600,12 +613,17 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
   const lastHttpErrorRef = useRef<{ message: string; timestamp: number } | null>(null);
   const vodErrorHandledRef = useRef(false);
   const handleStopRef = useRef<(() => Promise<void>) | null>(null);
+  const vodLoadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Clear loader overlay when playback starts or an error is encountered
   const loaderLastPositionRef = useRef(position);
   const isPlayLoadingRef = useRef(false);
 
   const triggerVodPlaybackError = useCallback(async (rawError?: string) => {
+    if (vodLoadingTimeoutRef.current) {
+      clearTimeout(vodLoadingTimeoutRef.current);
+      vodLoadingTimeoutRef.current = null;
+    }
     const currentVod = vodInfoRef.current;
     if (!currentVod && !isPlayLoadingRef.current) return;
     if (vodErrorHandledRef.current) return;
@@ -651,16 +669,28 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
       if (error) {
         setVodLoadingInfo(null);
         isPlayLoadingRef.current = false;
+        if (vodLoadingTimeoutRef.current) {
+          clearTimeout(vodLoadingTimeoutRef.current);
+          vodLoadingTimeoutRef.current = null;
+        }
       } else if (isPlayLoadingRef.current) {
         loaderLastPositionRef.current = position;
         isPlayLoadingRef.current = false;
       } else if (position !== loaderLastPositionRef.current) {
         setVodLoadingInfo(null);
+        if (vodLoadingTimeoutRef.current) {
+          clearTimeout(vodLoadingTimeoutRef.current);
+          vodLoadingTimeoutRef.current = null;
+        }
       }
     }
     loaderLastPositionRef.current = position;
-    if (position > 1) {
+    if (position > 0) {
       lastHttpErrorRef.current = null;
+      if (vodLoadingTimeoutRef.current) {
+        clearTimeout(vodLoadingTimeoutRef.current);
+        vodLoadingTimeoutRef.current = null;
+      }
     }
   }, [position, error, vodLoadingInfo]);
 
@@ -1725,20 +1755,23 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
           lastHttpErrorRef.current = { message: payload, timestamp: Date.now() };
         }
 
-        // For VOD: check if this is a fatal HTTP error
+        // For VOD: fatal HTTP errors (405, 404, 503, etc.) must immediately terminate loading
         if (vodInfoRef.current || isPlayLoadingRef.current) {
           if (await maybeRetryTrailerStream()) {
             return;
           }
           const lower = payload.toLowerCase();
-          if (
+          const hasHttpErrorCode = /\b[45]\d{2}\b/.test(lower);
+          const isFatal =
+            lower.includes('405') ||
+            lower.includes('404') ||
+            lower.includes('410') ||
             lower.includes('503') ||
             lower.includes('500') ||
             lower.includes('502') ||
             lower.includes('504') ||
-            lower.includes('404') ||
-            (!isIgnoringHttpErrors() && (lower.includes('403') || lower.includes('401')))
-          ) {
+            (!isIgnoringHttpErrors() && (hasHttpErrorCode || lower.includes('403') || lower.includes('401')));
+          if (isFatal) {
             triggerVodPlaybackError(payload);
             return;
           }
@@ -2768,6 +2801,17 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
     lastHttpErrorRef.current = null;
     vodErrorHandledRef.current = false;
 
+    if (vodLoadingTimeoutRef.current) {
+      clearTimeout(vodLoadingTimeoutRef.current);
+      vodLoadingTimeoutRef.current = null;
+    }
+    vodLoadingTimeoutRef.current = setTimeout(() => {
+      if (vodLoadingInfoRef.current || isPlayLoadingRef.current) {
+        logWarn('[Playback] VOD loading timed out after 12s');
+        triggerVodPlaybackError(lastHttpErrorRef.current?.message || 'Connection timed out: Server did not respond');
+      }
+    }, 12000);
+
     // Reset playback state immediately so the new stream never inherits stale
     // position/duration from the previously loaded file. Otherwise a brief
     // window exists where position/duration still reflect the old episode
@@ -3274,6 +3318,10 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
     setCurrentChannel(null);
     setVodInfo(null); // Clear vodInfo on stop
     setVodLoadingInfo(null);
+    if (vodLoadingTimeoutRef.current) {
+      clearTimeout(vodLoadingTimeoutRef.current);
+      vodLoadingTimeoutRef.current = null;
+    }
     setCatchupInfo(null);
     setError(null);
     setLoadingState('idle');
