@@ -976,6 +976,7 @@ function App() {
   // ==========================================================================
   // Playback (needs callbacks from useLayoutPersistence)
   // ==========================================================================
+  const vodPlaybackErrorHandlerRef = useRef<((failedVod: import('./types/media').VodPlayInfo | null, errorMsg: string) => void) | undefined>(undefined);
   const playback = usePlayback({
     rememberLastChannels,
     reopenLastOnStartup,
@@ -984,6 +985,7 @@ function App() {
     syncMpvGeometry,
     notifyMainLoaded,
     mpvListeners: mpv, // Pass shared MPV listeners to avoid duplicate state
+    onVodPlaybackError: (failedVod, errorMsg) => vodPlaybackErrorHandlerRef.current?.(failedVod, errorMsg),
   });
 
   const {
@@ -2027,6 +2029,15 @@ function useTmdbPresencePoster(
       setPlaybackSourceView(null);
     }
   }, [vodInfo, handleStopRaw, setActiveView, playbackSourceView, jellyfinEnabled]);
+
+  // Wire the VOD error handler ref so usePlayback can call it without
+  // suffering from stale closures. Assigned after handleStop and setActiveView
+  // are both available.
+  vodPlaybackErrorHandlerRef.current = (failedVod, _errorMsg) => {
+    const fallbackView = failedVod?.type === 'series' ? 'series' : 'movies';
+    const targetView = playbackSourceView || fallbackView;
+    void handleStop(targetView);
+  };
 
   // Jellyfin handoff: play the captured direct-stream URL through the app's
   // normal VOD pipeline (same as any movie) so the frontend's own player takes
