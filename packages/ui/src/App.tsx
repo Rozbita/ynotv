@@ -5873,6 +5873,36 @@ function useTmdbPresencePoster(
                 {vodLoadingInfo.year}
               </div>
             ) : null}
+            <div
+              className="vod-loading-overlay__status"
+              style={{
+                marginTop: '20px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '8px 18px',
+                background: 'rgba(0, 0, 0, 0.5)',
+                backdropFilter: 'blur(8px)',
+                borderRadius: '24px',
+                border: '1px solid rgba(255, 255, 255, 0.12)',
+                color: 'rgba(255, 255, 255, 0.85)',
+                fontSize: '13px',
+                fontWeight: 500,
+                letterSpacing: '0.3px',
+              }}
+            >
+              <div
+                style={{
+                  width: '14px',
+                  height: '14px',
+                  border: '2px solid rgba(255, 255, 255, 0.25)',
+                  borderTopColor: '#6366f1',
+                  borderRadius: '50%',
+                  animation: 'spin 0.8s linear infinite',
+                }}
+              />
+              <span>Connecting to stream...</span>
+            </div>
           </div>
         </div>
       )}
