@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { clearSubtitleIntent } from '../utils/subtitleIntent';
 
 export type LayoutMode = 'main' | 'pip' | '2x2' | 'bigbottom' | 'sbs';
 export type MultiviewEngineMode = 'mpv_canvas' | 'hls';
@@ -201,6 +202,12 @@ export function useMultiview() {
         const newMainUrl = slot.channelUrl;
         const newMainName = slot.channelName;
         const newMainSourceName = slot.sourceName;
+
+        // The main player is about to carry a different channel's stream, and
+        // this load bypasses usePlayback (which would normally clear it on a
+        // channel change). Drop the subtitle the user picked so the post-reload
+        // restore cannot apply its track id to the swapped-in channel.
+        clearSubtitleIntent();
 
         // Load the secondary stream on Main MPV
         try {

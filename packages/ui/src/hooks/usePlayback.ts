@@ -18,6 +18,12 @@ import type { useMpvListeners } from './useMpvListeners';
 import { logInfo, logWarn, logError } from '../utils/logger';
 import { toSubSourceLang, fromSubSourceLang, LANG_MAP } from '../services/subsource';
 import { snapshotPlaylistProgress } from '../utils/playlistPlayback';
+import {
+  clearSubtitleIntent,
+  getSubtitleIntent,
+  planSubtitleAutoSelect,
+  restorableSubtitleTrackId,
+} from '../utils/subtitleIntent';
 import i18n, { translateNativeError } from '../i18n';
 
 /**
@@ -1275,6 +1281,14 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
     const dying = currentChannelRef.current;
     if (!dying || failoverSwitchingRef.current) return false;
 
+    // Switching to another stream drops the track the user picked: it belonged
+    // to the channel that just died, and the post-reload restore must not
+    // re-apply that id to a channel where it may mean another language entirely.
+    // A candidate that turns out to be the same channel (rotating back to a
+    // group's primary, which is how a plain retry of a group member arrives
+    // here) keeps the choice, so the restore can put the track back.
+    if (nextChannel.stream_id !== dying.stream_id) clearSubtitleIntent();
+
     failoverAttemptRef.current += 1;
     failoverActiveRef.current = true;
     failoverSwitchingRef.current = true;
@@ -1852,6 +1866,7 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
     hasAutoSelectedSubRef.current = false;
     hasAutoSelectedAudioRef.current = false;
     subAutoSelectEverCompletedRef.current = false;
+    clearSubtitleIntent();
     lastSubTracksCountRef.current = 0;
     lastAudioTracksCountRef.current = 0;
     isStalkerVodRef.current = false;
@@ -2154,6 +2169,15 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
   );
 
   const autoSelectSubtitle = useCallback(async (providedSubTracks?: any[]) => {
+    // A track the user picked (including Off) is authoritative for this stream:
+    // re-applying the configured default over it is the bug this guard exists
+    // for. The intent is cleared when a different stream takes over.
+    if (getSubtitleIntent() !== null) {
+      hasAutoSelectedSubRef.current = true;
+      subAutoSelectEverCompletedRef.current = true;
+      return;
+    }
+
     // Jellyfin supplies the authoritative selected/default subtitle.
     if (vodInfoRef.current?.source_id === 'jellyfin') {
       const currentVod = vodInfoRef.current;
@@ -2262,6 +2286,7 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
     if (!Bridge.isTauri) return;
 
     let unlistenRestart: (() => void) | null = null;
+    let unlistenFileLoaded: (() => void) | null = null;
     let disposed = false;
 
     import('@tauri-apps/api/event').then(({ listen }) => {
@@ -2298,11 +2323,40 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
         if (disposed) fn();
         else unlistenRestart = fn;
       });
+
+      // Rust disables subtitles (`sid=no`) on every file load, which is why mpv
+      // does not auto-enable half a dozen CC services at once. A retry or a
+      // reload of the *same* stream therefore drops a track the user chose, and
+      // auto-select will not bring it back (it has already settled). Re-apply it
+      // once the reloaded stream exposes its track list again; a different
+      // stream clears the intent, so this can never follow a channel change.
+      listen('mpv-file-loaded', async () => {
+        const requestedId = restorableSubtitleTrackId(getSubtitleIntent());
+        if (requestedId === null) return;
+
+        for (let attempt = 0; attempt < 10; attempt += 1) {
+          if (disposed || restorableSubtitleTrackId(getSubtitleIntent()) !== requestedId) return;
+
+          const trackList = await Bridge.getTrackList().catch(() => []);
+          if ((trackList as any[]).some((t: any) => t.type === 'sub' && t.id === requestedId)) {
+            logInfo(`[Subtitle] Restoring track ${requestedId} after a stream reload`);
+            await Bridge.setSubtitleTrack(requestedId).catch(() => {});
+            return;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+
+        logInfo(`[Subtitle] Track ${requestedId} is not present after the reload; leaving subtitles as mpv loaded them`);
+      }).then((fn) => {
+        if (disposed) fn();
+        else unlistenFileLoaded = fn;
+      });
     });
 
     return () => {
       disposed = true;
       unlistenRestart?.();
+      unlistenFileLoaded?.();
     };
   }, [autoSelectSubtitle]);
 
@@ -2373,27 +2427,38 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
         const subTracks = trackList.filter((t: any) => t.type === 'sub');
         const audioTracks = trackList.filter((t: any) => t.type === 'audio');
 
+        const subtitlePlan = planSubtitleAutoSelect({
+          intent: getSubtitleIntent(),
+          trackCountChanged: subTracks.length !== lastSubTracksCountRef.current,
+          jellyfinWantsSubtitle: vodInfoRef.current?.source_id === 'jellyfin' &&
+            vodInfoRef.current.jellyfinSubtitleStreamId !== -1 &&
+            vodInfoRef.current.jellyfinSubtitleStreamId != null,
+          hasSubtitleTracks: subTracks.length > 0,
+          anySubtitleSelected: subTracks.some((t: any) => t.selected),
+          attempts: autoSelectAttemptsRef.current,
+          autoSelectSettled: subAutoSelectEverCompletedRef.current,
+        });
+
         if (subTracks.length !== lastSubTracksCountRef.current) {
-          logInfo(`[Playback] Subtitle track count changed from ${lastSubTracksCountRef.current} to ${subTracks.length}. Resetting auto-select state.`);
-          lastSubTracksCountRef.current = subTracks.length;
           // During the initial settling window (first 15 attempts / ~7.5s),
           // ANY track count change MUST reset auto-select so the final track set
-          // is evaluated with the correct track IDs.
-          if (!subAutoSelectEverCompletedRef.current || autoSelectAttemptsRef.current < 15) {
-            hasAutoSelectedSubRef.current = false;
-          }
+          // is evaluated with the correct track IDs — unless the user has since
+          // picked a track themselves, in which case there is nothing to evaluate.
+          logInfo(subtitlePlan.resetSubtitleAutoSelect
+            ? `[Playback] Subtitle track count changed from ${lastSubTracksCountRef.current} to ${subTracks.length}. Resetting auto-select state.`
+            : `[Playback] Subtitle track count changed from ${lastSubTracksCountRef.current} to ${subTracks.length}; keeping the current subtitle selection.`);
+          lastSubTracksCountRef.current = subTracks.length;
         }
 
-        // For Jellyfin: if a subtitle was requested (not None) but MPV currently has no subtitle selected
-        // (e.g. MKV demuxer reset sid to no / 0 upon loading), retry selection during initial settling window
-        if (
-          vodInfoRef.current?.source_id === 'jellyfin' &&
-          vodInfoRef.current.jellyfinSubtitleStreamId !== -1 &&
-          vodInfoRef.current.jellyfinSubtitleStreamId != null &&
-          subTracks.length > 0 &&
-          !subTracks.some((t: any) => t.selected) &&
-          autoSelectAttemptsRef.current < 15
-        ) {
+        // For Jellyfin: if a subtitle was requested (not None) but MPV currently
+        // has no subtitle selected (e.g. MKV demuxer reset sid to no / 0 upon
+        // loading), retry selection during the initial settling window.
+        if (subtitlePlan.settleSubtitleAutoSelect) {
+          // The user's choice settles the subtitle half of auto-selection, so the
+          // poll can stop re-evaluating it and wind down.
+          hasAutoSelectedSubRef.current = true;
+          subAutoSelectEverCompletedRef.current = true;
+        } else if (subtitlePlan.resetSubtitleAutoSelect) {
           hasAutoSelectedSubRef.current = false;
         }
 
@@ -2802,6 +2867,7 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
       hasAutoSelectedSubRef.current = false;
       hasAutoSelectedAudioRef.current = false;
       subAutoSelectEverCompletedRef.current = false;
+      clearSubtitleIntent();
       lastSubTracksCountRef.current = 0;
       lastAudioTracksCountRef.current = 0;
       startAutoSelectPolling();
@@ -3081,6 +3147,7 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
     hasAutoSelectedSubRef.current = false;
     hasAutoSelectedAudioRef.current = false;
     subAutoSelectEverCompletedRef.current = false;
+    clearSubtitleIntent();
     lastSubTracksCountRef.current = 0;
     lastAudioTracksCountRef.current = 0;
 

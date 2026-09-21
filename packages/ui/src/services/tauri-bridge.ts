@@ -9,6 +9,7 @@ import { appLogDir, join } from '@tauri-apps/api/path';
 import { debug as logDebug, info as logInfo, warn as logWarn, error as logError } from '@tauri-apps/plugin-log';
 import i18n, { translateNativeError } from '../i18n';
 import { useSettingsStore } from '../stores/settingsStore';
+import { setSubtitleIntent } from '../utils/subtitleIntent';
 
 // Store instance for Tauri
 let store: Store | null = null;
@@ -515,6 +516,10 @@ export const Bridge = {
     },
 
     async cycleSubtitle() {
+        // Cycling to the next track is a choice the user made, so record it: the
+        // settling poll must not re-apply the configured default over it. mpv
+        // picks the id, so a reload cannot restore this one — the key press can.
+        setSubtitleIntent({ id: null });
         return invoke('mpv_cycle_sub');
     },
 
@@ -631,8 +636,24 @@ export const Bridge = {
         return invoke('mpv_set_audio', { id });
     },
 
-    async setSubtitleTrack(id: number) {
+    /**
+     * Select a subtitle track.
+     *
+     * `userInitiated` marks the call as the user's own choice, which makes it
+     * authoritative for the rest of the stream: the settling poll stops applying
+     * the configured default (or turning subtitles off) over it. Only the track
+     * and subtitle modals, the CC picker and the cycle hotkey pass it; the
+     * player's own auto-selection deliberately does not.
+     */
+    async setSubtitleTrack(id: number, options?: { userInitiated?: boolean }) {
         activeSubtitleTrackId = id;
+        if (options?.userInitiated) {
+            // Recorded before the command lands so a poll tick already in flight
+            // cannot apply the default in between. Kept even if the command
+            // fails: the user asked for this track, and mpv refusing it is not a
+            // request to fall back to the setting.
+            setSubtitleIntent({ id });
+        }
         const res = await invoke('mpv_set_subtitle', { id });
         if (id > 0) {
             // Force rendering on. A user-supplied --sub-visibility=no in custom
