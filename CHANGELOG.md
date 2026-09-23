@@ -1,5 +1,40 @@
 # Changelog
 
+## v2.5.6
+
+### Added
+
+- **Redesigned EPG Editor** - The EPG Editor has been overhauled with a cleaner layout for easier use, and EPG matching has been reworked to be more reliable. 
+- **Lock a channel to a specific EPG source** - Selecting a guide in the EPG Editor locks that channel to that feed, so a higher-priority global source can't replace your choice on the next sync. Channels filled by a Global EPG are locked the same way. A new `🔒 Matches` tab lists every locked match in a playlist. Recommended to rematch your channels if you matched before and it wasn't saving.
+- **Open EPG Editor directly from Live TV** - A pencil button in the EPG toolbar opens the editor scoped to the category you're currently viewing. Clicking a channel jumps straight into that channel's editor. 
+- **Match EPG by your renamed channel name** - If you've renamed a channel, it can now match its guide using your custom name instead of the provider's original. This prevents a channel that was matching incorrectly by its raw provider name from continuing to pull in the wrong guide. A TVG-ID override or a feed lock still takes priority.
+- **Smarter automatic EPG matching** - Automatch Missing can now ignore common provider decorations like `|DE|`, `HD`, `FHD`, `HEVC`, `RAW`, or `BACKUP` before matching (with support for adding your own words), so Xtream and Stalker channels match without needing to be renamed. When a channel name could match more than one EPG entry, it's listed for you to pick from instead of being guessed.
+- **Stalker server VOD search** - Search for VODs through the source server without loading categories first, enable in `Settings → Source → Stalker Preferences`.
+- **Reconnect strategy for recordings** - How recordings handle a dropped connection can now be configured under `Settings → DVR → Stream Compatibility`. `Auto` (default) recovers from dropped connections, stalls, and network errors. `Aggressive` also retries when a stream ends unexpectedly, for providers that need it. `Off` disables reconnecting entirely for servers that reject retry attempts.
+- **Advanced FFmpeg arguments for recordings** - Custom input and output FFmpeg arguments can be added for all recordings under `Settings → DVR → Stream Compatibility`, useful for providers that require specific flags such as custom headers, a larger probe size, or a bitstream filter. Arguments that would conflict with the recorder are rejected before saving.
+- **Media info badges for Xtream movies and series** - Movie and series detail pages now display stream resolution, video and audio codec, bitrate, audio channels, container format, and estimated file size as badges. Details already reported by the provider are used as-is; file size is only fetched over the network when the provider didn't include it.
+- **Rename channels and categories in place** - Manage Channels and Manage Categories now include a pencil button (or double-click the name) to rename an entry without opening a separate dialog. One click restores the original source name.
+- **Delete all failover groups** - The Failover Groups dialog now has a `Delete All` button with a confirmation step for quickly clearing all failover groups at once.
+- **Failed automatic VOD sync notifications** - When an automatic VOD refresh fails due to bad credentials, an HTTP error, or a provider being unavailable, a notification toast now appears naming the source and the error.
+- **Backups now include Sports and EPG match data** - Export files now include Sports team channel links, Sports favorites, EPG feed locks, the "match by my channel name" flag, and the latest UI layout keys.
+
+### Fixed
+
+- **Recordings failing on some HLS channels** - Channels using non-standard segment extensions (such as `.css` or `.webp`) no longer trigger a reconnect at the end of every segment, which was flooding the provider and causing HTTP 403 rate-limit errors. 
+- **Recording duration limit reported as ignored** - The duration limit is now passed in the correct position in the FFmpeg command, resolving a warning that the option may be ignored. Record-until-stopped recordings are unaffected.
+- **Guide data missing for some channels** - EPG channel IDs that differ only in letter case now match correctly. All names a feed declares for a channel are now used (not just the first).
+- **Channels showing no programs after a sync** - A channel whose guide came from another playlist's EPG could be left empty after a sync and stay that way until manually re-matched. The post-sync process now only clears a channel's programs when it has replacement data ready to write.
+- **Wrong EPG feed showing for a channel** - When multiple playlists shared the same TVG-ID, the EPG Editor's program preview, Apply, and Reset could resolve to whichever playlist happened to come first - sometimes previewing another feed's schedule entirely. Each action now resolves within the specific feed you selected, and Reset correctly restores the provider's own guide.
+- **Subtitles being switched or turned off after selecting them** - A subtitle you select is now kept, instead of being overridden moments later by the default subtitle language setting or turned off when that default is set to Off. 
+- **Audio visualizer not appearing with the embedded libmpv player** - The audio visualizer for live audio and radio streams was only working with the standalone player. It now works correctly with libmpv as well.
+- **No error shown when a movie or episode fails to play on the embedded libmpv player** - When a VOD stream failed (e.g. a 404 or 403 error, or a dead provider), the loading overlay would simply disappear with no explanation on the libmpv player. The specific error is now displayed so you can see what went wrong.
+- **Stalker series only showing the first 14 episodes** - A Stalker series was only ever loading the first page of a season, capping the episode list at the portal's page size (typically 14). Seasons and episode lists are now fetched in full.
+- **Movie and series lists not remembering scroll position** - Scroll position was previously only restored when using the Back button from a detail page. Each list (All, Favorites, Recent, Local, custom groups) now saves its own position and returns to it after playing something or switching lists.
+- **Live Now Buffer Offset not applying until restart** - Changing the Live Now Buffer Offset slider under `Settings → Cache` now takes effect immediately without needing to restart the app.
+- **Category sidebar sliding open unexpectedly during search** - With Auto-hide Category Sidebar enabled, the sidebar will no longer pop out unintentionally while searching.
+- **Custom app icon not updating shortcuts** - Changing the app icon now also updates the Start Menu, taskbar, and desktop shortcuts, so pinned shortcuts no longer keep showing the previous icon.
+
+
 ## v2.5.5
 
 ### Fixed
@@ -7,7 +42,7 @@
 - **App icon disappearing** - Fixed a bug where app icon would disappear, showing a blank default icon. 
 - **Stalker VOD Categories not loading past 1st 14 items** - Fixed a bug where only the first 14 items where shown
 
-### v2.5.4
+## v2.5.4
 
 ### Added
 
