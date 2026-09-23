@@ -260,7 +260,7 @@ export async function searchAllStalkerPortals(params: {
     let done = 0;
     const results = await Promise.allSettled(
         sources.map(source =>
-            searchStalkerServer({ source, type, query, fromPage: 0, maxPages })
+            searchStalkerServer({ source, type, query, categoryId: null, fromPage: 0, maxPages })
                 .finally(() => {
                     done++;
                     onProgress?.({ done, total: sources.length });
