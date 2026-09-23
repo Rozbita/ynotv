@@ -3,6 +3,8 @@ name: Release Tauri App
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
       # v-assets is a non-app release that only hosts binary dependencies
