@@ -1,6 +1,7 @@
 name: Release Tauri App
 
 on:
+  workflow_dispatch:
   push:
     tags:
       - 'v*'
