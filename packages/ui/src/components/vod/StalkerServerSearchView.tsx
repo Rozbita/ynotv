@@ -10,6 +10,7 @@ import {
     getStalkerSearchCategoryNames,
     getStalkerSearchSources,
     searchStalkerServer,
+    searchAllStalkerPortals,
     SEARCH_BATCH_PAGES,
     SEARCH_CATEGORY_LINE_PX,
     SEARCH_HARD_MAX_PAGES,
@@ -63,7 +64,13 @@ export function StalkerServerSearchView({ type, onOpenItem }: StalkerServerSearc
     const requestIdRef = useRef(0);
 
     const { sourceId, categoryId, query, result, pagesLoaded } = slice;
+    const isAllSources = sourceId === '*';
     const source = useMemo(() => sources?.find(s => s.id === sourceId) ?? null, [sources, sourceId]);
+    /** Map of source id → display name for per-card labels in All-portals mode. */
+    const sourceMap = useMemo(
+        () => Object.fromEntries((sources ?? []).map(s => [s.id, s.name])),
+        [sources]
+    );
 
     // Load the portal list once; keep the last pick so a reopen lands where the user left off.
     useEffect(() => {
@@ -74,7 +81,11 @@ export function StalkerServerSearchView({ type, onOpenItem }: StalkerServerSearc
             setSources(list);
             if (list.length > 0) {
                 const current = useStalkerSearchStore.getState().byType[type].sourceId;
-                const next = current && list.some(s => s.id === current) ? current : list[0].id;
+                // Preserve '*' (All portals) if the user had selected it; otherwise
+                // fall back to the first portal in the list.
+                const next = (current === '*' || (current && list.some(s => s.id === current)))
+                    ? current
+                    : list[0].id;
                 if (next !== current) patch(type, { sourceId: next });
             }
         })();
@@ -124,9 +135,12 @@ export function StalkerServerSearchView({ type, onOpenItem }: StalkerServerSearc
     const runSearch = useCallback(
         async (opts: { fromPage: number; maxPages: number; append: boolean }) => {
             const current = useStalkerSearchStore.getState().byType[type];
-            const activeSource = sources?.find(s => s.id === current.sourceId) ?? null;
             const q = current.query.trim();
-            if (!activeSource || !q) return;
+            if (!q) return;
+            // Guard: for single-portal mode we need an active source.
+            const activeSource = sources?.find(s => s.id === current.sourceId) ?? null;
+            if (current.sourceId !== '*' && !activeSource) return;
+
             // Two searches can be in flight at once (a slow "Load all" and a new query).
             // Only the newest one may touch the store or the loading flags, otherwise the
             // slower answer overwrites the newer result set on arrival.
@@ -135,30 +149,51 @@ export function StalkerServerSearchView({ type, onOpenItem }: StalkerServerSearc
             setError(null);
             setProgress(i18n.t('common:searching'));
             try {
-                const page = await searchStalkerServer({
-                    source: activeSource,
-                    type,
-                    query: q,
-                    // Resuming has to stay on the phrase the first page settled on: the
-                    // verbatim→longest-word retry only runs on page 0, so sending the raw
-                    // query again would ask for the phrase that already returned nothing.
-                    phrase: opts.append ? current.result?.phrase : undefined,
-                    // Same reasoning as `phrase`: a series search decides between the
-                    // `series` and `vod` endpoints on page 0, so a resume that let it
-                    // decide again could splice the other endpoint's page into the walk.
-                    endpoint: opts.append ? current.result?.endpoint : undefined,
-                    categoryId: current.categoryId === '*' ? null : current.categoryId,
-                    fromPage: opts.fromPage,
-                    maxPages: opts.maxPages,
-                    onProgress: info => {
-                        if (requestId !== requestIdRef.current) return;
-                        setProgress(
-                            info.total != null
-                                ? i18n.t('vod:loadingPageOf', { current: info.page, total: Math.max(1, Math.ceil(info.total / STALKER_PAGE_SIZE)) })
-                                : i18n.t('vod:loadingPage', { current: info.page })
-                        );
-                    },
-                });
+                let page: StalkerServerSearchPage;
+
+                if (current.sourceId === '*') {
+                    // ── All-portals mode ──────────────────────────────────────────
+                    // Fire every portal in parallel; progress shows how many have
+                    // responded so far.
+                    page = await searchAllStalkerPortals({
+                        sources: sources ?? [],
+                        type,
+                        query: q,
+                        maxPages: opts.maxPages,
+                        onProgress: info => {
+                            if (requestId !== requestIdRef.current) return;
+                            setProgress(
+                                `${i18n.t('common:searching')} (${info.done}/${info.total})`
+                            );
+                        },
+                    });
+                } else {
+                    // ── Single-portal mode (existing behaviour) ───────────────────
+                    page = await searchStalkerServer({
+                        source: activeSource!,
+                        type,
+                        query: q,
+                        // Resuming has to stay on the phrase the first page settled on: the
+                        // verbatim→longest-word retry only runs on page 0, so sending the raw
+                        // query again would ask for the phrase that already returned nothing.
+                        phrase: opts.append ? current.result?.phrase : undefined,
+                        // Same reasoning as `phrase`: a series search decides between the
+                        // `series` and `vod` endpoints on page 0, so a resume that let it
+                        // decide again could splice the other endpoint's page into the walk.
+                        endpoint: opts.append ? current.result?.endpoint : undefined,
+                        categoryId: current.categoryId === '*' ? null : current.categoryId,
+                        fromPage: opts.fromPage,
+                        maxPages: opts.maxPages,
+                        onProgress: info => {
+                            if (requestId !== requestIdRef.current) return;
+                            setProgress(
+                                info.total != null
+                                    ? i18n.t('vod:loadingPageOf', { current: info.page, total: Math.max(1, Math.ceil(info.total / STALKER_PAGE_SIZE)) })
+                                    : i18n.t('vod:loadingPage', { current: info.page })
+                            );
+                        },
+                    });
+                }
 
                 if (requestId !== requestIdRef.current) return;
 
@@ -240,8 +275,14 @@ export function StalkerServerSearchView({ type, onOpenItem }: StalkerServerSearc
                     <span>{i18n.t('vod:stalkerServerSearchSource')}</span>
                     <select
                         value={sourceId}
-                        onChange={e => patch(type, { sourceId: e.target.value, result: null, pagesLoaded: 0 })}
+                        onChange={e => {
+                            const next = e.target.value;
+                            // Switching to/from All resets category to whole-library.
+                            patch(type, { sourceId: next, categoryId: '*', result: null, pagesLoaded: 0 });
+                        }}
                     >
+                        {/* All-portals option */}
+                        <option value="*">{i18n.t('common:all')}</option>
                         {(sources ?? []).map(s => (
                             <option key={s.id} value={s.id}>{s.name}</option>
                         ))}
@@ -250,12 +291,14 @@ export function StalkerServerSearchView({ type, onOpenItem }: StalkerServerSearc
 
                 <label className="stalker-search-field">
                     <span>{i18n.t('vod:stalkerServerSearchCategory')}</span>
+                    {/* Category is per-portal; disable it when All portals is selected. */}
                     <select
-                        value={categoryId}
+                        value={isAllSources ? '*' : categoryId}
+                        disabled={isAllSources}
                         onChange={e => patch(type, { categoryId: e.target.value, result: null, pagesLoaded: 0 })}
                     >
                         <option value="*">{i18n.t('common:all')}</option>
-                        {categories.map(c => (
+                        {!isAllSources && categories.map(c => (
                             <option key={c.id} value={c.id}>{c.name}</option>
                         ))}
                     </select>
@@ -272,7 +315,7 @@ export function StalkerServerSearchView({ type, onOpenItem }: StalkerServerSearc
                     />
                 </label>
 
-                <button type="submit" className="stalker-search-go" disabled={loading || !query.trim() || !source}>
+                <button type="submit" className="stalker-search-go" disabled={loading || !query.trim() || (!isAllSources && !source)}>
                     {loading ? progress ?? i18n.t('common:searching') : i18n.t('vod:editMetadataTmdbSearchBtn')}
                 </button>
             </form>
@@ -339,10 +382,15 @@ export function StalkerServerSearchView({ type, onOpenItem }: StalkerServerSearc
                                 index={index}
                                 onClick={onOpenItem}
                                 size="medium"
-                                sourceName={source?.name}
-                                // The scoped category is preferred so a card agrees with the
-                                // picker above it when the row is also in other categories.
-                                categoryLabels={categoryLabelsFor(
+                                // In All-portals mode, derive the portal name from the item's
+                                // own source_id so each card labels the right portal.
+                                sourceName={isAllSources
+                                    ? (sourceMap[(item as any).source_id] ?? undefined)
+                                    : source?.name
+                                }
+                                // Category labels are per-portal; skip them in All mode since
+                                // categoryNames only covers the last selected single portal.
+                                categoryLabels={isAllSources ? [] : categoryLabelsFor(
                                     (item as StoredMovie).category_ids,
                                     categoryNames,
                                     categoryId === '*' ? null : categoryId
@@ -356,13 +404,15 @@ export function StalkerServerSearchView({ type, onOpenItem }: StalkerServerSearc
             <div className="stalker-search-footer">
                 {/* No count here on purpose: while pages remain the provider's total is an
                     over-count (it includes rows this list filters out), so naming it would
-                    promise a number the results can never reach. */}
-                {loadAllOfferable && (
+                    promise a number the results can never reach.
+                    Show More / Load All are hidden in All-portals mode: each portal already
+                    returned its first batch; per-portal cursors are not tracked here. */}
+                {!isAllSources && loadAllOfferable && (
                     <button className="stalker-search-more" onClick={loadAll} disabled={loading}>
                         {i18n.t('vod:stalkerServerSearchLoadAllResults')}
                     </button>
                 )}
-                {!!result && result.hasMore && !hitHardCap && (
+                {!isAllSources && !!result && result.hasMore && !hitHardCap && (
                     <button className="stalker-search-more" onClick={showMore} disabled={loading}>
                         {i18n.t('vod:stalkerServerSearchMore')}
                     </button>
