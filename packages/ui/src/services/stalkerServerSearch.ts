@@ -238,6 +238,72 @@ async function withCredentials(source: StalkerSearchSource): Promise<StalkerSear
     return source;
 }
 
+/**
+ * Search every enabled Stalker portal in parallel and merge the results into
+ * a single page.  Each portal's first batch is fetched independently; a portal
+ * that is offline or returns an error is skipped so the rest still surface.
+ *
+ * "Show More" / "Load All" are not offered in this mode: tracking per-portal
+ * pagination cursors would require a richer store shape, and the first batch
+ * (SEARCH_BATCH_PAGES pages ≈ 56 items) per portal is enough for a discovery
+ * search across multiple providers.
+ */
+export async function searchAllStalkerPortals(params: {
+    sources: StalkerSearchSource[];
+    type: 'movies' | 'series';
+    query: string;
+    maxPages?: number;
+    onProgress?: (info: { done: number; total: number }) => void;
+}): Promise<StalkerServerSearchPage> {
+    const { sources, type, query, maxPages = SEARCH_BATCH_PAGES, onProgress } = params;
+
+    let done = 0;
+    const results = await Promise.allSettled(
+        sources.map(source =>
+            searchStalkerServer({ source, type, query, fromPage: 0, maxPages })
+                .finally(() => {
+                    done++;
+                    onProgress?.({ done, total: sources.length });
+                })
+        )
+    );
+
+    // Merge all fulfilled pages; use rowId to deduplicate (same title on two portals
+    // will have different source_id-namespaced ids, so genuine duplicates don't collapse).
+    const seen = new Set<string>();
+    const rows: Array<StoredMovie | StoredSeries> = [];
+    let total = 0;
+
+    for (const r of results) {
+        if (r.status !== 'fulfilled') continue;
+        const page = r.value;
+        total += page.total;
+        for (const row of page.rows) {
+            const id = (row as StoredSeries).series_id ?? (row as StoredMovie).stream_id;
+            if (!seen.has(id)) {
+                seen.add(id);
+                rows.push(row);
+            }
+        }
+    }
+
+    // Build a synthetic page that the existing view can render without changes.
+    // hasMore is always false: we don't track per-portal cursors in this mode.
+    return {
+        rows,
+        total,
+        shown: rows.length,
+        nextPage: 0,
+        hasMore: false,
+        unsupported: false,
+        // phrase / matchKind / endpoint are per-portal; use sensible defaults for
+        // the merged result (the view only reads them for fallback notice banners).
+        phrase: query,
+        matchKind: 'exact' as any,
+        endpoint: 'vod' as any,
+    };
+}
+
 /** Search the portal and store what comes back, so results are playable as-is. */
 export async function searchStalkerServer(params: StalkerServerSearchParams): Promise<StalkerServerSearchPage> {
     const source = await withCredentials(params.source);
