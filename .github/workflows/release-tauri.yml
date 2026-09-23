@@ -101,8 +101,8 @@ jobs:
           VITE_TRAKT_CLIENT_SECRET: ${{ secrets.TRAKT_CLIENT_SECRET }}
           VITE_OPENSUBTITLES_API_KEY: ${{ secrets.OPENSUBTITLES_API_KEY }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: 'Release ${{ github.ref_name }}'
+          tagName: ${{ startsWith(github.ref_name, 'v') && github.ref_name || 'v2.5.7' }}
+          releaseName: 'Release ${{ startsWith(github.ref_name, 'v') && github.ref_name || 'v2.5.7' }}'
           releaseBody: ${{ steps.release-notes.outputs.body }}
           prerelease: false
 
