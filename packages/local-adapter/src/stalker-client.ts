@@ -665,6 +665,7 @@ export class StalkerClient {
 
                 } catch (error: any) {
                     lastError = error;
+                    if (deadlineAt && Date.now() >= deadlineAt) throw error;
                     if (attempt < STALKER_MAX_RETRIES) {
                         await new Promise(r => setTimeout(r, 500 * Math.pow(2, attempt - 1)));
                     }
@@ -715,6 +716,7 @@ export class StalkerClient {
 
                 console.error(`[Stalker] Handshake attempt ${attempt} failed:`, error.message || error);
 
+                if (deadlineAt && Date.now() >= deadlineAt) throw error;
                 if (attempt < STALKER_MAX_HANDSHAKE_ATTEMPTS) {
                     await new Promise(resolve => setTimeout(resolve, STALKER_HANDSHAKE_RETRY_DELAY_MS * attempt));
                 } else {
