@@ -24,6 +24,8 @@ export const SEARCH_BATCH_PAGES = 4;
 export const SEARCH_LOAD_ALL_MAX_PAGES = 15;
 /** Never walk further than this, however many times the user asks for more. */
 export const SEARCH_HARD_MAX_PAGES = 40;
+/** Maximum total time allowed for one portal during an all-portals search. */
+export const ALL_PORTALS_DEADLINE_MS = 10_000;
 
 /**
  * Height the result cards' category line adds to their info strip.
@@ -94,6 +96,8 @@ export interface StalkerServerSearchParams {
     /** The endpoint the first page settled on (`endpoint` from that call), needed to resume. */
     endpoint?: StalkerSearchEndpoint;
     onProgress?: (info: { page: number; loaded: number; total?: number }) => void;
+    /** Internal: absolute deadline for one all-portals search. */
+    deadlineAt?: number;
 }
 
 /**
@@ -260,7 +264,15 @@ export async function searchAllStalkerPortals(params: {
     let done = 0;
     const results = await Promise.allSettled(
         sources.map(source =>
-            searchStalkerServer({ source, type, query, categoryId: null, fromPage: 0, maxPages })
+            searchStalkerServer({
+                source,
+                type,
+                query,
+                categoryId: null,
+                fromPage: 0,
+                maxPages,
+                deadlineAt: Date.now() + ALL_PORTALS_DEADLINE_MS,
+            })
                 .finally(() => {
                     done++;
                     onProgress?.({ done, total: sources.length });
@@ -315,6 +327,7 @@ export async function searchStalkerServer(params: StalkerServerSearchParams): Pr
         phrase: params.phrase,
         endpoint: params.endpoint,
         onProgress: params.onProgress,
+        deadlineAt: params.deadlineAt,
     };
 
 
