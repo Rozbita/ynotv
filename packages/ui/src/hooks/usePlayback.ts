@@ -196,6 +196,11 @@ const HEALTH_POLL_INTERVAL_MS = 1000;
 const MIN_LOAD_GRACE_MS = 5000;
 const MIN_BUFFER_STARVATION_MS = 3500;
 
+// VOD/Series MPV opening is asynchronous: mpv's loadfile command returns
+// before the remote URL has actually been opened. Keep this phase bounded so
+// a dead/hanging VOD does not leave the UI waiting indefinitely.
+const VOD_MPV_LOAD_TIMEOUT_MS = 15_000;
+
 function mpvNumber(value: any): number | null {
   const data = value && typeof value === 'object' && 'data' in value ? value.data : value;
   return typeof data === 'number' && Number.isFinite(data) ? data : null;
@@ -221,6 +226,83 @@ function mpvObject(value: any): Record<string, any> | null {
  * resolves and plays those correctly; transient 403s are handled by
  * yt-dlp/mpv internally and the trailer retry in maybeRetryTrailerStream.
  */
+async function loadVideoAndWaitForOpen(
+  url: string,
+  userAgent: string | undefined,
+  timeoutMs: number,
+): Promise<{ success: boolean; error?: string }> {
+  const unlisteners: Array<() => void> = [];
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let loadStarted = false;
+  let settled = false;
+
+  const cleanup = () => {
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    for (const unlisten of unlisteners) {
+      try { unlisten(); } catch {}
+    }
+  };
+
+  return new Promise(async (resolve) => {
+    const finish = (result: { success: boolean; error?: string }) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(result);
+    };
+
+    try {
+      // start-file is emitted by the Rust MPV bridge immediately before MPV
+      // begins opening the requested playlist entry. We require this before
+      // accepting file-loaded, preventing a stale file-loaded event from a
+      // previous stream from falsely completing this load.
+      unlisteners.push(await listen('mpv-start-file', () => {
+        loadStarted = true;
+      }));
+
+      unlisteners.push(await listen('mpv-file-loaded', () => {
+        if (loadStarted) {
+          finish({ success: true });
+        }
+      }));
+
+      unlisteners.push(await listen('mpv-end-file', (event: any) => {
+        if (!loadStarted) return;
+        const payload = event?.payload ?? {};
+        const reason = String(payload.reason || '');
+        if (reason === 'error' || reason === 'network' || reason === 'eof') {
+          finish({
+            success: false,
+            error: payload.fileError || 'Stream failed to open',
+          });
+        }
+      }));
+
+      timer = setTimeout(() => {
+        logWarn('[Playback] MPV VOD/Series load timed out after 15 seconds:', url);
+        Bridge.stop().catch(() => {});
+        finish({ success: false, error: 'Stream opening timed out' });
+      }, Math.max(1, timeoutMs));
+
+      const result = await Bridge.loadVideo(url, userAgent);
+      if (!result.success) {
+        finish({
+          success: false,
+          error: translateNativeError((result as any).error) || i18n.t('player:unknownError'),
+        });
+      }
+    } catch (e: any) {
+      finish({
+        success: false,
+        error: translateNativeError(e?.message || e) || i18n.t('player:unknownError'),
+      });
+    }
+  });
+}
+
 async function tryLoadWithFallbacks(
   primaryUrl: string,
   isLive: boolean,
@@ -237,8 +319,19 @@ async function tryLoadWithFallbacks(
     }
   }
 
+  const useVodOpenTimeout = !isLive;
+  const loadDeadline = useVodOpenTimeout
+    ? Date.now() + VOD_MPV_LOAD_TIMEOUT_MS
+    : undefined;
+
   logInfo('[Playback] Loading URL:', primaryUrl);
-  const result = await Bridge.loadVideo(primaryUrl, userAgent);
+  const result = useVodOpenTimeout
+    ? await loadVideoAndWaitForOpen(
+        primaryUrl,
+        userAgent,
+        Math.max(1, (loadDeadline as number) - Date.now()),
+      )
+    : await Bridge.loadVideo(primaryUrl, userAgent);
 
   if (result.success) {
     logInfo('[Playback] Successfully loaded:', primaryUrl);
@@ -255,7 +348,23 @@ async function tryLoadWithFallbacks(
 
   for (const fallbackUrl of fallbacks) {
     logInfo('[Playback] Trying fallback:', fallbackUrl);
-    const fallbackResult = await Bridge.loadVideo(fallbackUrl, userAgent);
+
+    if (useVodOpenTimeout) {
+      const remaining = (loadDeadline as number) - Date.now();
+      if (remaining <= 0) {
+        logWarn('[Playback] VOD/Series load deadline expired before fallback:', fallbackUrl);
+        break;
+      }
+    }
+
+    const fallbackResult = useVodOpenTimeout
+      ? await loadVideoAndWaitForOpen(
+          fallbackUrl,
+          userAgent,
+          Math.max(1, (loadDeadline as number) - Date.now()),
+        )
+      : await Bridge.loadVideo(fallbackUrl, userAgent);
+
     if (fallbackResult.success) {
       logInfo('[Playback] Fallback succeeded:', fallbackUrl);
       return { success: true, url: fallbackUrl };
