@@ -10,6 +10,8 @@ import {
     STALKER_HANDSHAKE_RETRY_DELAY_MS,
 } from './stalker-constants';
 
+const VOD_STREAM_RESOLUTION_DEADLINE_MS = 15_000;
+
 export interface StalkerConfig {
     baseUrl: string;
     mac: string;
@@ -1004,7 +1006,8 @@ export class StalkerClient {
         type: 'vod' | 'series',
         baseParams: Record<string, string>,
         concurrency: number,
-        onProgress?: StalkerPageProgress
+        onProgress?: StalkerPageProgress,
+        deadlineAt?: number
     ): Promise<any[]> {
         const pageItemsMap = new Map<number, any[]>();
         const pendingFailedPages = new Set<number>();
@@ -1022,7 +1025,7 @@ export class StalkerClient {
             this.fetchStalker<any>('get_ordered_list', type, {
                 ...baseParams,
                 p: p.toString(),
-            });
+            }, null, false, deadlineAt);
 
         // --- Probe the first page (mandatory). A retry here means a transient failure doesn't
         // abort before we know whether there is anything else to fetch. ---
@@ -1332,12 +1335,14 @@ export class StalkerClient {
     private async fetchOrderedListAllItems(
         type: 'vod' | 'series',
         baseParams: Record<string, string>,
-        label: string
+        label: string,
+        deadlineAt?: number
     ): Promise<any[]> {
         const PAGE_CONCURRENCY = 4;
         try {
-            return await this.fetchOrderedListPages(type, baseParams, PAGE_CONCURRENCY);
+            return await this.fetchOrderedListPages(type, baseParams, PAGE_CONCURRENCY, undefined, deadlineAt);
         } catch (err) {
+            if (deadlineAt && Date.now() >= deadlineAt) throw err;
             console.warn(`[Stalker] ${label}: could not page through the whole list, keeping the first page:`, err);
         }
 
@@ -1346,13 +1351,14 @@ export class StalkerClient {
                 await this.fetchStalker<any>('get_ordered_list', type, {
                     ...baseParams,
                     p: String(this.pageOffset ?? 0)
-                })
+                }, null, false, deadlineAt)
             );
             if (items.length > 0) {
                 console.log(`[Stalker] ${label}: recovered ${items.length} item(s) from the first page`);
             }
             return items;
         } catch (err) {
+            if (deadlineAt && Date.now() >= deadlineAt) throw err;
             console.warn(`[Stalker] ${label}: first page could not be retrieved either:`, err);
             return [];
         }
@@ -1618,7 +1624,7 @@ export class StalkerClient {
         }));
     }
 
-    async getSeasons(seriesId: string): Promise<Season[]> {
+    async getSeasons(seriesId: string, deadlineAt?: number): Promise<Season[]> {
         await this.ensureToken();
 
         // Extract raw movie ID from seriesId
@@ -1658,7 +1664,8 @@ export class StalkerClient {
         let seasonsData = await this.fetchOrderedListAllItems(
             'series',
             { movie_id: rawMovieId, ...seasonListParams },
-            `getSeasons series ${rawMovieId}`
+            `getSeasons series ${rawMovieId}`,
+            deadlineAt
         );
         console.log(`[Stalker] getSeasons: ${seasonsData.length} item(s) via type=series`);
 
@@ -1668,7 +1675,8 @@ export class StalkerClient {
             seasonsData = await this.fetchOrderedListAllItems(
                 'vod',
                 { movie_id: rawMovieId, ...seasonListParams },
-                `getSeasons series ${rawMovieId} (type=vod fallback)`
+                `getSeasons series ${rawMovieId} (type=vod fallback)`,
+                deadlineAt
             );
             console.log(`[Stalker] getSeasons: ${seasonsData.length} item(s) via type=vod`);
         }
@@ -1729,7 +1737,8 @@ export class StalkerClient {
                             include_censored: '1',
                             censored: '1'
                         },
-                        `getSeasons episodes (series ${rawMovieId}, season ${season.id})`
+                        `getSeasons episodes (series ${rawMovieId}, season ${season.id})`,
+                        deadlineAt
                     );
 
                     if (epData.length > 0) {
@@ -1756,6 +1765,7 @@ export class StalkerClient {
                         console.warn(`[Stalker] getSeasons: Episodes response for season ${seasonNum} holds no episodes`);
                     }
                 } catch (err) {
+                    if (deadlineAt && Date.now() >= deadlineAt) throw err;
                     console.error(`[Stalker] getSeasons: Failed to fetch episodes for season ${seasonNum}:`, err);
                 }
             }
@@ -1850,8 +1860,10 @@ export class StalkerClient {
     async resolveStreamUrl(cmd: string, catchup?: StalkerCatchupOptions): Promise<string> {
         console.log('[Stalker] resolveStreamUrl called with:', cmd, 'catchup:', catchup);
 
-        // Ensure we have a valid token before resolving stream URLs
-        await this.ensureToken();
+        // One absolute deadline covers the entire VOD/Series stream-resolution operation.
+        // This includes token refresh, episode/season lookups, create_link, retries and fallbacks.
+        const deadlineAt = Date.now() + VOD_STREAM_RESOLUTION_DEADLINE_MS;
+        await this.ensureToken(false, deadlineAt);
 
         if (!cmd || typeof cmd !== 'string') {
             throw new Error('Invalid cmd parameter');
@@ -1907,7 +1919,7 @@ export class StalkerClient {
             if (seasonId && parseInt(seasonId) < 100 && !seasonId.includes(':') && !seasonId.includes('_') && !seasonId.includes('-')) {
                 console.log(`[Stalker] resolveStreamUrl: Detected season number ${seasonId} instead of database ID. Resolving season ID on-the-fly...`);
                 try {
-                    const seasons = await this.getSeasons(movieId);
+                    const seasons = await this.getSeasons(movieId, deadlineAt);
                     const matchedSeason = seasons.find(s => String(s.season_number) === String(seasonId)) || seasons[0];
                     if (matchedSeason && matchedSeason.episodes.length > 0) {
                         const ep = matchedSeason.episodes[0];
@@ -1956,7 +1968,7 @@ export class StalkerClient {
                                 p: '0',
                                 include_censored: '1',
                                 censored: '1'
-                            });
+                            }, null, false, deadlineAt);
                             let epData = epListResp?.data || epListResp;
                             if (epData?.js?.data) epData = epData.js.data;
                             if (Array.isArray(epData) && epData.length > 0) {
@@ -2003,7 +2015,7 @@ export class StalkerClient {
                     p: '1',
                     include_censored: '1',
                     censored: '1'
-                });
+                }, null, false, deadlineAt);
                 const listData = listResp?.data || listResp?.js?.data;
                 if (Array.isArray(listData) && listData.length > 0) {
                     // FIXED: Don't blindly use listData[0] - find the item that matches our movie_id
@@ -2143,7 +2155,7 @@ export class StalkerClient {
                     params['series'] = seriesEpisodeNum;
                 }
 
-                const response = await this.fetchStalker<any>('create_link', type, params);
+                const response = await this.fetchStalker<any>('create_link', type, params, null, false, deadlineAt);
                 let resultUrl = response?.url || response?.cmd || response;
 
                 if (resultUrl && typeof resultUrl === 'string') {
