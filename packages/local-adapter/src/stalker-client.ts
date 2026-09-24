@@ -83,6 +83,8 @@ export interface StalkerSearchOptions {
      */
     endpoint?: StalkerSearchEndpoint;
     onProgress?: (info: { page: number; loaded: number; total?: number }) => void;
+    /** Absolute deadline used only by all-portals search. */
+    deadlineAt?: number;
 }
 
 /** Which portal endpoint a search walk ran against. */
@@ -455,7 +457,7 @@ export class StalkerClient {
      * Ensure we have a valid token (renew if expired or force requested)
      * Uses static promise-based locking to prevent concurrent token refresh operations across instances
      */
-    async ensureToken(force: boolean = false): Promise<void> {
+    async ensureToken(force: boolean = false, deadlineAt?: number): Promise<void> {
         const sourceId = this.sourceId;
 
         if (force) {
@@ -468,7 +470,7 @@ export class StalkerClient {
         const activePromise = StalkerClient.globalRefreshPromises.get(sourceId);
         if (activePromise) {
             console.log(`[Stalker] Token refresh already in progress for source ${sourceId}, waiting...`);
-            await activePromise;
+            await this.awaitWithDeadline(activePromise, deadlineAt);
             // Sync current instance's local fields
             const shared = StalkerClient.globalTokens.get(sourceId);
             if (shared) {
@@ -496,8 +498,8 @@ export class StalkerClient {
             // Create and store the refresh promise to block concurrent calls globally for this source
             const refreshPromise = (async () => {
                 try {
-                    await this.handshake();
-                    await this.getProfile();
+                    await this.handshake(deadlineAt);
+                    await this.getProfile(deadlineAt);
                     
                     // Store the newly obtained token in the global map
                     if (this.token) {
@@ -517,7 +519,22 @@ export class StalkerClient {
             })();
 
             StalkerClient.globalRefreshPromises.set(sourceId, refreshPromise);
-            await refreshPromise;
+            await this.awaitWithDeadline(refreshPromise, deadlineAt);
+        }
+    }
+
+    private async awaitWithDeadline<T>(promise: Promise<T>, deadlineAt?: number): Promise<T> {
+        if (!deadlineAt) return promise;
+        const remaining = deadlineAt - Date.now();
+        if (remaining <= 0) throw new Error('Stalker request deadline exceeded');
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const timeout = new Promise<T>((_, reject) => {
+            timer = setTimeout(() => reject(new Error('Stalker request deadline exceeded')), remaining);
+        });
+        try {
+            return await Promise.race([promise, timeout]);
+        } finally {
+            if (timer) clearTimeout(timer);
         }
     }
 
@@ -557,7 +574,8 @@ export class StalkerClient {
         type: string = 'itv',
         extraParams: Record<string, string> = {},
         customHeaders: Record<string, string> | null = null,
-        isRetryAfterAuthRefresh: boolean = false
+        isRetryAfterAuthRefresh: boolean = false,
+        deadlineAt?: number
     ): Promise<T> {
         const params = new URLSearchParams({
             type,
@@ -582,10 +600,13 @@ export class StalkerClient {
 
             for (let attempt = 1; attempt <= STALKER_MAX_RETRIES; attempt++) {
                 try {
-                    const response = await universalFetch(url, {
+                    const remaining = deadlineAt ? deadlineAt - Date.now() : STALKER_TIMEOUT_MS;
+                    if (remaining <= 0) throw new Error('Stalker request deadline exceeded');
+                    const requestPromise = universalFetch(url, {
                         headers,
-                        timeout: STALKER_TIMEOUT_MS,
+                        timeout: deadlineAt ? Math.min(STALKER_TIMEOUT_MS, remaining) : STALKER_TIMEOUT_MS,
                     });
+                    const response = await this.awaitWithDeadline(requestPromise, deadlineAt);
 
                     if (!response.ok) {
                         if (response.status === 401 || response.status === 403) {
@@ -596,8 +617,8 @@ export class StalkerClient {
 
                             if (!isRetryAfterAuthRefresh && action !== 'handshake' && action !== 'get_profile') {
                                 console.log(`[Stalker] Retrying request ${action} with fresh token handshake...`);
-                                await this.ensureToken(true);
-                                return await this.fetchStalker<T>(action, type, extraParams, customHeaders, true);
+                                await this.ensureToken(true, deadlineAt);
+                                return await this.fetchStalker<T>(action, type, extraParams, customHeaders, true, deadlineAt);
                             }
                         }
                         if (response.status === 404) {
@@ -625,8 +646,8 @@ export class StalkerClient {
                         if (this.token && !isRetryAfterAuthRefresh && action !== 'handshake' && action !== 'get_profile') {
                             console.warn(`[Stalker] Cached token for source ${this.sourceId} returned invalid JSON/HTML from server (likely expired session). Refreshing token...`);
                             try {
-                                await this.ensureToken(true);
-                                return await this.fetchStalker<T>(action, type, extraParams, customHeaders, true);
+                                await this.ensureToken(true, deadlineAt);
+                                return await this.fetchStalker<T>(action, type, extraParams, customHeaders, true, deadlineAt);
                             } catch (refreshErr) {
                                 console.error(`[Stalker] Automatic token refresh retry failed for ${action}:`, refreshErr);
                             }
@@ -655,7 +676,7 @@ export class StalkerClient {
     }
 
 
-    async handshake(): Promise<void> {
+    async handshake(deadlineAt?: number): Promise<void> {
         console.log('[Stalker] Starting handshake...');
         const maxAttempts = 3;
 
@@ -667,8 +688,11 @@ export class StalkerClient {
                 // Working player doesn't send Authorization header in handshake, uses cookies instead
                 const response = await this.fetchStalker<{ token: string }>(
                     'handshake',
-                    'stb'
-                    // No custom headers - let getHeaders handle it via cookies
+                    'stb',
+                    {},
+                    null,
+                    false,
+                    deadlineAt
                 );
 
                 // fetchStalker already extracted 'js' key, so check response.token directly
@@ -702,7 +726,7 @@ export class StalkerClient {
         throw new Error('Handshake failed after all attempts');
     }
 
-    async getProfile(): Promise<void> {
+    async getProfile(deadlineAt?: number): Promise<void> {
         console.log('[Stalker] Getting profile to activate session...');
         if (!this.token) throw new Error('Cannot get profile without token');
 
@@ -739,7 +763,7 @@ export class StalkerClient {
         const headers = this.getHeaders(true, includeTokenInCookie);
 
         try {
-            const data = await this.fetchStalker<{ token: string }>('get_profile', 'stb', params, headers);
+            const data = await this.fetchStalker<{ token: string }>('get_profile', 'stb', params, headers, false, deadlineAt);
 
             if (data && data.token) {
                 this.token = data.token;
@@ -2398,7 +2422,7 @@ export class StalkerClient {
         options: StalkerSearchOptions,
         canShow: (item: any) => boolean
     ): Promise<{ items: any[]; total: number; nextPage: number; hasMore: boolean; unsupported: boolean; phrase: string; matchKind: StalkerSearchMatchKind; endpoint: StalkerSearchEndpoint }> {
-        await this.ensureToken();
+        await this.ensureToken(false, options.deadlineAt);
 
         const wanted = query.trim();
         const terms = wanted.split(/\s+/).filter(Boolean);
@@ -2428,7 +2452,7 @@ export class StalkerClient {
         let phrase = wanted;
         let accepted = false;
         for (const candidate of phrases) {
-            walk = await this.walkSearchPages(type, candidate, options.categoryId, fromPage, maxPages, options.onProgress);
+            walk = await this.walkSearchPages(type, candidate, options.categoryId, fromPage, maxPages, options.onProgress, options.deadlineAt);
             phrase = candidate;
             if (walk.items.length === 0) continue;
 
@@ -2477,7 +2501,7 @@ export class StalkerClient {
         // titles whose names we do not compare (portals that match on description).
         let unsupported = false;
         if (!fellBack && items.length > 0 && !items.some(item => this.itemNameMatches(item, wanted))) {
-            unsupported = await this.portalIgnoresSearch(type, options.categoryId, walk.total);
+            unsupported = await this.portalIgnoresSearch(type, options.categoryId, walk.total, options.deadlineAt);
             if (unsupported) {
                 console.warn(
                     `[Stalker] ${type} search: portal returned its unfiltered catalogue for "${wanted}" ` +
@@ -2498,7 +2522,7 @@ export class StalkerClient {
         // spending the request again on every later search.
         const joinedTried = joined !== '' && phrase !== wanted && phrase !== joined;
         if (joinedTried && this.searchWildcards === null) {
-            await this.probeWildcardSupport(type, options.categoryId, phrase);
+            await this.probeWildcardSupport(type, options.categoryId, phrase, options.deadlineAt);
         }
 
         const matchKind: StalkerSearchMatchKind = !fellBack
@@ -2567,7 +2591,8 @@ export class StalkerClient {
     private async probeWildcardSupport(
         type: 'vod' | 'series',
         categoryId: string | undefined,
-        knownToMatch: string
+        knownToMatch: string,
+        deadlineAt?: number
     ): Promise<void> {
         try {
             const raw = await this.fetchStalker<any>('get_ordered_list', type, {
@@ -2576,7 +2601,7 @@ export class StalkerClient {
                 include_censored: '1',
                 censored: '1',
                 p: String(this.pageOffset ?? 0),
-            });
+            }, null, false, deadlineAt);
             const parsed = this.extractOrderedList(raw);
             this.searchWildcards = (parsed.total_items ?? parsed.items.length) > 0;
         } catch (err) {
@@ -2602,7 +2627,8 @@ export class StalkerClient {
         categoryId: string | undefined,
         fromPage: number,
         maxPages: number,
-        onProgress?: StalkerSearchOptions['onProgress']
+        onProgress?: StalkerSearchOptions['onProgress'],
+        deadlineAt?: number
     ): Promise<StalkerSearchWalk> {
         const baseParams: Record<string, string> = {
             category: this.portalCategoryId(categoryId),
@@ -2613,7 +2639,7 @@ export class StalkerClient {
 
         const fetchPage = async (p: number) =>
             this.extractOrderedList(
-                await this.fetchStalker<any>('get_ordered_list', type, { ...baseParams, p: String(p) })
+                await this.fetchStalker<any>('get_ordered_list', type, { ...baseParams, p: String(p) }, null, false, deadlineAt)
             );
 
         let pOffset = this.pageOffset ?? 0;
@@ -2712,7 +2738,8 @@ export class StalkerClient {
     private async portalIgnoresSearch(
         type: 'vod' | 'series',
         categoryId: string | undefined,
-        searchTotal: number
+        searchTotal: number,
+        deadlineAt?: number
     ): Promise<boolean> {
         try {
             const raw = await this.fetchStalker<any>('get_ordered_list', type, {
@@ -2720,7 +2747,7 @@ export class StalkerClient {
                 include_censored: '1',
                 censored: '1',
                 p: String(this.pageOffset ?? 0),
-            });
+            }, null, false, deadlineAt);
             const unsearched = this.extractOrderedList(raw);
             return unsearched.total_items != null && unsearched.total_items === searchTotal;
         } catch (err) {
