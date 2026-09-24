@@ -307,7 +307,8 @@ async function tryLoadWithFallbacks(
   primaryUrl: string,
   isLive: boolean,
   userAgent?: string,
-  onError?: (msg: string) => void
+  onError?: (msg: string) => void,
+  enforceVodOpenTimeout = false,
 ): Promise<{ success: boolean; url: string; error?: string }> {
   logInfo('[Playback] Setting User-Agent:', userAgent || '(using default)');
 
@@ -319,7 +320,7 @@ async function tryLoadWithFallbacks(
     }
   }
 
-  const useVodOpenTimeout = !isLive;
+  const useVodOpenTimeout = enforceVodOpenTimeout && !isLive;
   const loadDeadline = useVodOpenTimeout
     ? Date.now() + VOD_MPV_LOAD_TIMEOUT_MS
     : undefined;
@@ -2823,7 +2824,13 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
         // Keep the original stream URL if it cannot be augmented.
       }
     }
-    const result = await tryLoadWithFallbacks(jellyfinPlayUrl, false, resolved.userAgent);
+    const result = await tryLoadWithFallbacks(
+      jellyfinPlayUrl,
+      false,
+      resolved.userAgent,
+      undefined,
+      isStalker,
+    );
       if (!result.success) {
       setIgnoreHttpErrors(false);
       setError(translateNativeError(result.error) || i18n.t('player:failedToLoadStream'));
