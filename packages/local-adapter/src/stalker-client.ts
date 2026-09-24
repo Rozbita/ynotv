@@ -1860,9 +1860,14 @@ export class StalkerClient {
     async resolveStreamUrl(cmd: string, catchup?: StalkerCatchupOptions): Promise<string> {
         console.log('[Stalker] resolveStreamUrl called with:', cmd, 'catchup:', catchup);
 
-        // One absolute deadline covers the entire VOD/Series stream-resolution operation.
-        // This includes token refresh, episode/season lookups, create_link, retries and fallbacks.
-        const deadlineAt = Date.now() + VOD_STREAM_RESOLUTION_DEADLINE_MS;
+        // One absolute deadline covers VOD/Series stream resolution only.
+        // Live TV and catchup keep their existing behavior.
+        const isVodOrSeriesResolution =
+            typeof cmd === 'string' &&
+            (cmd.startsWith('stalker_episode:') || cmd.startsWith('stalker_vod:') || cmd.startsWith('/media/'));
+        const deadlineAt = isVodOrSeriesResolution
+            ? Date.now() + VOD_STREAM_RESOLUTION_DEADLINE_MS
+            : undefined;
         await this.ensureToken(false, deadlineAt);
 
         if (!cmd || typeof cmd !== 'string') {
