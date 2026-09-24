@@ -104,7 +104,7 @@ jobs:
           VITE_OPENSUBTITLES_API_KEY: ${{ secrets.OPENSUBTITLES_API_KEY }}
         with:
           tagName: ${{ startsWith(github.ref_name, 'v') && github.ref_name || 'v2.5.7' }}
-          releaseName: 'Release ${{ startsWith(github.ref_name, 'v') && github.ref_name || 'v2.5.7' }}'
+          releaseName: "Release ${{ startsWith(github.ref_name, 'v') && github.ref_name || 'v2.5.7' }}"
           releaseBody: ${{ steps.release-notes.outputs.body }}
           prerelease: false
 
