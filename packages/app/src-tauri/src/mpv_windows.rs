@@ -614,7 +614,19 @@ async fn connect_ipc<R: Runtime>(
                     if let Ok(msg) = serde_json::from_str::<MpvResponse>(&line) {
                         match msg {
                             MpvResponse::Event { event, name, data } => {
-                                if event == "file-loaded" {
+                                if event == "start-file" {
+                                    // Expose MPV's start-file boundary so the VOD/Series
+                                    // loader can correlate a later file-loaded event with
+                                    // the load it just requested. This is additive and does
+                                    // not change the existing mpv-file-loaded payload.
+                                    let playlist_entry_id = data
+                                        .as_ref()
+                                        .and_then(|d| d.get("playlist_entry_id"))
+                                        .and_then(|v| v.as_i64());
+                                    let _ = app_handle.emit("mpv-start-file", json!({
+                                        "playlistEntryId": playlist_entry_id,
+                                    }));
+                                } else if event == "file-loaded" {
                                     // mpv has just finished loading a new file and auto-selected
                                     // subtitle tracks (potentially activating both embedded CEA-608
                                     // closed-captions AND a soft WebVTT track simultaneously, which
