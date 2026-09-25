@@ -780,22 +780,40 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
   const intentionallyStoppedRef = useRef(false);
   // Tracks whether we're currently playing a stalker_portal VOD over HLS (.m3u8).
   const isStalkerVodRef = useRef(false);
+  const stalkerVodLoadActiveRef = useRef(false);
   const vodLoadAttemptRef = useRef(0);
   const vodLoadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // A successful VOD load is only considered established once MPV has
-  // actually advanced playback. Bridge.loadVideo() alone only means that MPV
-  // accepted the load command.
+  // MPV's file-loaded event is the reliable boundary for a VOD that has
+  // actually opened. Do not use position > 0 here: position can remain zero
+  // briefly on a healthy stream, which would leave the watchdog armed and
+  // later stop a VOD that is already playing.
   useEffect(() => {
-    if (
-      position > 0 &&
-      isStalkerVodRef.current &&
-      vodLoadTimerRef.current
-    ) {
-      clearTimeout(vodLoadTimerRef.current);
-      vodLoadTimerRef.current = null;
-      logInfo('[Playback] Stalker VOD/Series playback established; timeout cancelled');
-    }
-  }, [position]);
+    if (!Bridge.isTauri) return;
+
+    let disposed = false;
+    let unlisten: (() => void) | null = null;
+
+    import('@tauri-apps/api/event').then(({ listen }) => {
+      listen('mpv-file-loaded', () => {
+        if (disposed || !stalkerVodLoadActiveRef.current) return;
+
+        if (vodLoadTimerRef.current) {
+          clearTimeout(vodLoadTimerRef.current);
+          vodLoadTimerRef.current = null;
+        }
+        stalkerVodLoadActiveRef.current = false;
+        logInfo('[Playback] Stalker VOD/Series file loaded; timeout cancelled');
+      }).then((fn) => {
+        if (disposed) fn();
+        else unlisten = fn;
+      });
+    });
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
 
   // Cleanup VOD load watchdog and auto-select timer on unmount.
   useEffect(() => {
@@ -2700,6 +2718,8 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
         vodLoadTimerRef.current = null;
       }
 
+      stalkerVodLoadActiveRef.current = isStalker;
+
       if (isStalker) {
         vodLoadTimerRef.current = setTimeout(() => {
           if (vodLoadAttempt !== vodLoadAttemptRef.current) return;
@@ -2707,6 +2727,7 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
           logWarn('[Playback] Stalker VOD/Series load timed out after 15 seconds');
           vodLoadAttemptRef.current += 1;
           vodLoadTimerRef.current = null;
+          stalkerVodLoadActiveRef.current = false;
           isPlayLoadingRef.current = false;
           setVodLoadingInfo(null);
           setPlaying(false);
@@ -2721,6 +2742,7 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
         return false;
       }
     } catch (err) {
+      stalkerVodLoadActiveRef.current = false;
       if (vodLoadTimerRef.current) {
         clearTimeout(vodLoadTimerRef.current);
         vodLoadTimerRef.current = null;
@@ -2732,6 +2754,7 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
     }
 
     if (resolved.url.startsWith('infoHash:')) {
+      stalkerVodLoadActiveRef.current = false;
       if (vodLoadTimerRef.current) {
         clearTimeout(vodLoadTimerRef.current);
         vodLoadTimerRef.current = null;
@@ -2791,6 +2814,7 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
     }
 
     if (!result.success) {
+      stalkerVodLoadActiveRef.current = false;
       if (vodLoadTimerRef.current) {
         clearTimeout(vodLoadTimerRef.current);
         vodLoadTimerRef.current = null;
@@ -2800,6 +2824,7 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
       setVodLoadingInfo(null);
       return false;
     } else {
+      stalkerVodLoadActiveRef.current = false;
       const workingUrl = result.url;
       
       // Use mediaId from info for progress tracking, fallback to generated ID
