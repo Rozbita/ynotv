@@ -196,9 +196,7 @@ const HEALTH_POLL_INTERVAL_MS = 1000;
 const MIN_LOAD_GRACE_MS = 5000;
 const MIN_BUFFER_STARVATION_MS = 3500;
 
-// VOD/Series MPV opening is asynchronous: mpv's loadfile command returns
-// before the remote URL has actually been opened. Keep this phase bounded so
-// a dead/hanging VOD does not leave the UI waiting indefinitely.
+// Stalker VOD/Series gets a single 15-second click-to-failure watchdog.
 const VOD_MPV_LOAD_TIMEOUT_MS = 15_000;
 
 function mpvNumber(value: any): number | null {
@@ -226,89 +224,12 @@ function mpvObject(value: any): Record<string, any> | null {
  * resolves and plays those correctly; transient 403s are handled by
  * yt-dlp/mpv internally and the trailer retry in maybeRetryTrailerStream.
  */
-async function loadVideoAndWaitForOpen(
-  url: string,
-  userAgent: string | undefined,
-  timeoutMs: number,
-): Promise<{ success: boolean; error?: string }> {
-  const unlisteners: Array<() => void> = [];
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  let loadStarted = false;
-  let settled = false;
-
-  const cleanup = () => {
-    if (timer) {
-      clearTimeout(timer);
-      timer = null;
-    }
-    for (const unlisten of unlisteners) {
-      try { unlisten(); } catch {}
-    }
-  };
-
-  return new Promise(async (resolve) => {
-    const finish = (result: { success: boolean; error?: string }) => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      resolve(result);
-    };
-
-    try {
-      // start-file is emitted by the Rust MPV bridge immediately before MPV
-      // begins opening the requested playlist entry. We require this before
-      // accepting file-loaded, preventing a stale file-loaded event from a
-      // previous stream from falsely completing this load.
-      unlisteners.push(await listen('mpv-start-file', () => {
-        loadStarted = true;
-      }));
-
-      unlisteners.push(await listen('mpv-file-loaded', () => {
-        if (loadStarted) {
-          finish({ success: true });
-        }
-      }));
-
-      unlisteners.push(await listen('mpv-end-file', (event: any) => {
-        if (!loadStarted) return;
-        const payload = event?.payload ?? {};
-        const reason = String(payload.reason || '');
-        if (reason === 'error' || reason === 'network' || reason === 'eof') {
-          finish({
-            success: false,
-            error: payload.fileError || 'Stream failed to open',
-          });
-        }
-      }));
-
-      timer = setTimeout(() => {
-        logWarn('[Playback] MPV VOD/Series load timed out after 15 seconds:', url);
-        Bridge.stop().catch(() => {});
-        finish({ success: false, error: 'Stream opening timed out' });
-      }, Math.max(1, timeoutMs));
-
-      const result = await Bridge.loadVideo(url, userAgent);
-      if (!result.success) {
-        finish({
-          success: false,
-          error: translateNativeError((result as any).error) || i18n.t('player:unknownError'),
-        });
-      }
-    } catch (e: any) {
-      finish({
-        success: false,
-        error: translateNativeError(e?.message || e) || i18n.t('player:unknownError'),
-      });
-    }
-  });
-}
-
 async function tryLoadWithFallbacks(
   primaryUrl: string,
   isLive: boolean,
   userAgent?: string,
   onError?: (msg: string) => void,
-  enforceVodOpenTimeout = false,
+  _enforceVodOpenTimeout = false,
 ): Promise<{ success: boolean; url: string; error?: string }> {
   logInfo('[Playback] Setting User-Agent:', userAgent || '(using default)');
 
@@ -320,19 +241,10 @@ async function tryLoadWithFallbacks(
     }
   }
 
-  const useVodOpenTimeout = enforceVodOpenTimeout && !isLive;
-  const loadDeadline = useVodOpenTimeout
-    ? Date.now() + VOD_MPV_LOAD_TIMEOUT_MS
-    : undefined;
-
+  // Keep the normal MPV load lifecycle. Stalker VOD timeout is enforced by
+  // handlePlayVod's watchdog instead of waiting for MPV file events here.
   logInfo('[Playback] Loading URL:', primaryUrl);
-  const result = useVodOpenTimeout
-    ? await loadVideoAndWaitForOpen(
-        primaryUrl,
-        userAgent,
-        Math.max(1, (loadDeadline as number) - Date.now()),
-      )
-    : await Bridge.loadVideo(primaryUrl, userAgent);
+  const result = await Bridge.loadVideo(primaryUrl, userAgent);
 
   if (result.success) {
     logInfo('[Playback] Successfully loaded:', primaryUrl);
@@ -350,21 +262,7 @@ async function tryLoadWithFallbacks(
   for (const fallbackUrl of fallbacks) {
     logInfo('[Playback] Trying fallback:', fallbackUrl);
 
-    if (useVodOpenTimeout) {
-      const remaining = (loadDeadline as number) - Date.now();
-      if (remaining <= 0) {
-        logWarn('[Playback] VOD/Series load deadline expired before fallback:', fallbackUrl);
-        break;
-      }
-    }
-
-    const fallbackResult = useVodOpenTimeout
-      ? await loadVideoAndWaitForOpen(
-          fallbackUrl,
-          userAgent,
-          Math.max(1, (loadDeadline as number) - Date.now()),
-        )
-      : await Bridge.loadVideo(fallbackUrl, userAgent);
+    const fallbackResult = await Bridge.loadVideo(fallbackUrl, userAgent);
 
     if (fallbackResult.success) {
       logInfo('[Playback] Fallback succeeded:', fallbackUrl);
@@ -883,11 +781,17 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
   const intentionallyStoppedRef = useRef(false);
   // Tracks whether we're currently playing a stalker_portal VOD over HLS (.m3u8).
   const isStalkerVodRef = useRef(false);
-  // Cleanup autoSelectTimer on unmount
+  const vodLoadAttemptRef = useRef(0);
+  const vodLoadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Cleanup VOD load watchdog and auto-select timer on unmount.
   useEffect(() => {
     return () => {
       if (autoSelectTimerRef.current) {
         clearInterval(autoSelectTimerRef.current);
+      }
+      if (vodLoadTimerRef.current) {
+        clearTimeout(vodLoadTimerRef.current);
+        vodLoadTimerRef.current = null;
       }
     };
   }, []);
@@ -2772,8 +2676,40 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
           console.warn('[usePlayback] Failed to lookup source details:', e);
         }
       }
+
+      const isStalker = sourceData?.type === 'stalker';
+      const vodLoadAttempt = ++vodLoadAttemptRef.current;
+
+      if (vodLoadTimerRef.current) {
+        clearTimeout(vodLoadTimerRef.current);
+        vodLoadTimerRef.current = null;
+      }
+
+      if (isStalker) {
+        vodLoadTimerRef.current = setTimeout(() => {
+          if (vodLoadAttempt !== vodLoadAttemptRef.current) return;
+
+          logWarn('[Playback] Stalker VOD/Series load timed out after 15 seconds');
+          vodLoadAttemptRef.current += 1;
+          vodLoadTimerRef.current = null;
+          isPlayLoadingRef.current = false;
+          setVodLoadingInfo(null);
+          setPlaying(false);
+          setError(i18n.t('player:failedToLoadStream'));
+          Bridge.stop().catch(() => {});
+        }, VOD_MPV_LOAD_TIMEOUT_MS);
+      }
+
       resolved = await resolvePlayUrl(info.source_id, info.url);
+
+      if (vodLoadAttempt !== vodLoadAttemptRef.current) {
+        return false;
+      }
     } catch (err) {
+      if (vodLoadTimerRef.current) {
+        clearTimeout(vodLoadTimerRef.current);
+        vodLoadTimerRef.current = null;
+      }
       logError('Failed to resolve Source info:', err);
       setError(i18n.t('common:contextMenu.failedResolveStreamUrl'));
       setVodLoadingInfo(null);
@@ -2781,6 +2717,10 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
     }
 
     if (resolved.url.startsWith('infoHash:')) {
+      if (vodLoadTimerRef.current) {
+        clearTimeout(vodLoadTimerRef.current);
+        vodLoadTimerRef.current = null;
+      }
       setError(i18n.t('player:torrentRequiresTorrServer'));
       setVodLoadingInfo(null);
       return false;
@@ -2831,7 +2771,17 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
       undefined,
       isStalker,
     );
-      if (!result.success) {
+
+    if (vodLoadAttempt !== vodLoadAttemptRef.current) {
+      return false;
+    }
+
+    if (vodLoadTimerRef.current) {
+      clearTimeout(vodLoadTimerRef.current);
+      vodLoadTimerRef.current = null;
+    }
+
+    if (!result.success) {
       setIgnoreHttpErrors(false);
       setError(translateNativeError(result.error) || i18n.t('player:failedToLoadStream'));
       setVodLoadingInfo(null);
