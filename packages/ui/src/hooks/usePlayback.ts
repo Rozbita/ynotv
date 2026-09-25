@@ -229,7 +229,6 @@ async function tryLoadWithFallbacks(
   isLive: boolean,
   userAgent?: string,
   onError?: (msg: string) => void,
-  _enforceVodOpenTimeout = false,
 ): Promise<{ success: boolean; url: string; error?: string }> {
   logInfo('[Playback] Setting User-Agent:', userAgent || '(using default)');
 
@@ -783,6 +782,21 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
   const isStalkerVodRef = useRef(false);
   const vodLoadAttemptRef = useRef(0);
   const vodLoadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // A successful VOD load is only considered established once MPV has
+  // actually advanced playback. Bridge.loadVideo() alone only means that MPV
+  // accepted the load command.
+  useEffect(() => {
+    if (
+      position > 0 &&
+      isStalkerVodRef.current &&
+      vodLoadTimerRef.current
+    ) {
+      clearTimeout(vodLoadTimerRef.current);
+      vodLoadTimerRef.current = null;
+      logInfo('[Playback] Stalker VOD/Series playback established; timeout cancelled');
+    }
+  }, [position]);
+
   // Cleanup VOD load watchdog and auto-select timer on unmount.
   useEffect(() => {
     return () => {
@@ -2770,19 +2784,17 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
       false,
       resolved.userAgent,
       undefined,
-      isStalker,
     );
 
     if (vodLoadAttempt !== vodLoadAttemptRef.current) {
       return false;
     }
 
-    if (vodLoadTimerRef.current) {
-      clearTimeout(vodLoadTimerRef.current);
-      vodLoadTimerRef.current = null;
-    }
-
     if (!result.success) {
+      if (vodLoadTimerRef.current) {
+        clearTimeout(vodLoadTimerRef.current);
+        vodLoadTimerRef.current = null;
+      }
       setIgnoreHttpErrors(false);
       setError(translateNativeError(result.error) || i18n.t('player:failedToLoadStream'));
       setVodLoadingInfo(null);
