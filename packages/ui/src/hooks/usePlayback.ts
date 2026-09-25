@@ -2666,6 +2666,7 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
 
     let resolved;
     let sourceData: { type?: string } | undefined;
+    let vodLoadAttempt = 0;
     try {
       // Look up source type so we can decide whether to suppress HTTP errors
       if (window.storage && info.source_id && info.source_id !== 'stremio' && info.source_id !== 'trailer') {
@@ -2678,7 +2679,7 @@ export function usePlayback(options: UsePlaybackOptions): PlaybackState {
       }
 
       const isStalker = sourceData?.type === 'stalker';
-      const vodLoadAttempt = ++vodLoadAttemptRef.current;
+      vodLoadAttempt = ++vodLoadAttemptRef.current;
 
       if (vodLoadTimerRef.current) {
         clearTimeout(vodLoadTimerRef.current);
